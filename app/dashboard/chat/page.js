@@ -6,7 +6,6 @@ import { callGemini, MODELS, getGeminiLiveProxyUrl } from "@/lib/callWorker";
 import { deductCredits } from "@/lib/credits";
 import { GeminiLiveClient, VOICE_OPTIONS } from "@/lib/geminiLiveClient";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
-import { searchSemanticScholar } from "@/lib/semanticScholar";
 
 // ── Constants ────────────────────────────────────────────────
 const CREDIT_PER_MSG = 1;
@@ -31,7 +30,6 @@ export default function ChatDosenAIPage() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [useSearchGrounding, setUseSearchGrounding] = useState(false);
   const [expandedThinking, setExpandedThinking] = useState({}); // Track which thinking blocks are expanded
   const chatEndRef = useRef(null);
 
@@ -151,27 +149,14 @@ export default function ChatDosenAIPage() {
 
     try {
       await deductCredits(user.uid, CREDIT_PER_MSG);
-      // Optional search grounding: perform Semantic Scholar search and include short references
-      let extraSystem = "";
-      if (useSearchGrounding) {
-        try {
-          const papers = await searchSemanticScholar(userMsg, { limit: 4 });
-          if (papers && papers.length > 0) {
-            const refs = papers.map(p => `- ${p.title} (${(p.authors||[]).slice(0,3).join(', ')}${p.year?`, ${p.year}`:''})\n  ${p.url || ''}`).join('\n');
-            extraSystem = `Referensi singkat (Semantic Scholar):\n${refs}\nGunakan referensi ini sebagai konteks saat menjawab jika relevan.`;
-          }
-        } catch (err) {
-          console.warn("Grounding search failed:", err.message);
-        }
-      }
-
       let aiText = await callGemini({
         history: newMessages,
-        systemInstruction: extraSystem ? `${SYSTEM_INSTRUCTION}\n\n${extraSystem}` : SYSTEM_INSTRUCTION,
+        systemInstruction: SYSTEM_INSTRUCTION,
         model: MODELS.lite,
         group: CHAT_GROUPS,
         temperature: 0.6,
         thinkingConfig: { thinkingBudget: 0 },
+        useSearchGrounding: true,
       });
       // Extract thinking blocks dari response
       const { thinking, content } = extractThinkingBlocks(aiText);
@@ -547,13 +532,6 @@ export default function ChatDosenAIPage() {
           </div>
 
           <form id="chat-form" onSubmit={handleSendChat} style={{ padding: "0.85rem 1rem", borderTop: "1px solid var(--border)", display: "flex", gap: "0.6rem", backgroundColor: "var(--surface)" }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                <input type="checkbox" checked={useSearchGrounding} onChange={e => setUseSearchGrounding(e.target.checked)} />
-                <span>Grounding (Semantic)</span>
-              </label>
-            </div>
-
             <input
               id="chat-input"
               type="text" value={input} onChange={e => setInput(e.target.value)}

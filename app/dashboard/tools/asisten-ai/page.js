@@ -75,7 +75,7 @@ Gunakan tag <h4>, <h5>, <ul>, <li>, dan <a> dengan rapi agar mudah dibaca.
 
       const aiResponse = await callGemini({
         prompt: prompt,
-        model: MODELS.lite, // Sesuai legacy: gemini-3.1-flash-lite
+        model: MODELS.primary,
         group: API_GROUP,
         temperature: 0.7,
       });
@@ -144,7 +144,7 @@ Berikan hasil murni dalam format HTML dengan setiap paragraf dibungkus dalam tag
 
       const aiResponse = await callGemini({
         prompt: promptText,
-        model: MODELS.secondary, // gemini-2.5-flash
+        model: MODELS.primary,
         group: API_GROUP,
         temperature: 0.7,
       });

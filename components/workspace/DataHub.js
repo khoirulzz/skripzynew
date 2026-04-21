@@ -14,8 +14,8 @@ export function DataHub({ workspaceId }) {
       
       {/* Header Hub */}
       <div style={{ marginBottom: "2rem" }}>
-        <h1 style={{ fontSize: "2rem", fontWeight: 700, margin: "0 0 0.5rem 0", display: "flex", gap: "0.75rem", alignItems: "center" }}>
-          <PremiumIcon name="database" size={32} className="text-primary" />
+        <h1 style={{ fontSize: "1.5rem", fontWeight: 700, margin: "0 0 0.5rem 0", display: "flex", gap: "0.75rem", alignItems: "center" }}>
+          <PremiumIcon name="database" size={30} className="text-primary" />
           Manajemen Data Penelitian
         </h1>
         <p className="text-muted" style={{ margin: 0, fontSize: "1rem" }}>

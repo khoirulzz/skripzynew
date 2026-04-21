@@ -26,6 +26,9 @@ export default function SimulasiSidangPage() {
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [skripsiTitle, setSkripsiTitle] = useState("");
   const [dosenProfile, setDosenProfile] = useState("kritis");
+  const [sidangMode, setSidangMode] = useState("skripsi"); // "proposal" or "skripsi"
+  const [uploadedDocUrl, setUploadedDocUrl] = useState(null);
+  const [uploading, setUploading] = useState(false);
   const [setupLoading, setSetupLoading] = useState(false);
   const [setupError, setSetupError] = useState("");
 
@@ -96,11 +99,15 @@ export default function SimulasiSidangPage() {
       
       const profileInfo = DOSEN_PROFILES.find(p => p.id === dosenProfile);
       
-      // Initial System Greeting
-      const systemInstruction = `Kamu adalah dosen penguji sidang skripsi. Karaktermu: ${profileInfo.label} (${profileInfo.desc}). 
-Mahasiswa sedang mempresentasikan skripsi berjudul: "${skripsiTitle}".
+      // Initial System Greeting with document reference
+      let systemInstruction = `Kamu adalah dosen penguji sidang ${sidangMode === "proposal" ? "proposal" : "skripsi"}. Karaktermu: ${profileInfo.label} (${profileInfo.desc}). 
+Mahasiswa sedang mempresentasikan ${sidangMode === "proposal" ? "proposal" : "skripsi"} berjudul: "${skripsiTitle}".`;
 
-Aturan main:
+      if (uploadedDocUrl) {
+        systemInstruction += `\n\nDokumen reference ${sidangMode === "proposal" ? "proposal" : "skripsi"}: ${uploadedDocUrl}\nGunakan dokumen ini sebagai referensi untuk membuat pertanyaan yang relevan dan mendalam.`;
+      }
+
+      systemInstruction += `\n\nAturan main:
 1. Mulailah percakapan dengan menyapa mahasiswa singkat dan berikan 1 pertanyaan kritis pertama tentang judul/latar belakang.
 2. Tunggu balasan mahasiswa. 
 3. Balaslah selalu dengan obrolan lisan layaknya dosen penguji (singkat, 2-3 kalimat saja).
@@ -110,7 +117,7 @@ Aturan main:
       const aiResponse = await callGemini({
         prompt: "Halo dosen penguji, saya siap untuk diuji.",
         systemInstruction: systemInstruction,
-        model: MODELS.lite, // Lite merespons lebih cepat, cocok untuk chat
+        model: MODELS.primary,
         group: API_GROUP,
         temperature: profileInfo.temp,
       });
@@ -146,12 +153,18 @@ Aturan main:
 
     try {
       const profileInfo = DOSEN_PROFILES.find(p => p.id === dosenProfile);
-      const systemInstruction = `Kamu adalah dosen penguji sidang skripsi. Karaktermu: ${profileInfo.label}. Judul skripsi mahasiswa: "${skripsiTitle}". Selalu respon maksimal 3 kalimat secara lisan alamiah.`;
+      let systemInstruction = `Kamu adalah dosen penguji sidang ${sidangMode === "proposal" ? "proposal" : "skripsi"}. Karaktermu: ${profileInfo.label}. Judul ${sidangMode === "proposal" ? "proposal" : "skripsi"} mahasiswa: "${skripsiTitle}".`;
+      
+      if (uploadedDocUrl) {
+        systemInstruction += `\n\nReferensi dokumen: ${uploadedDocUrl}\nGunakannya untuk membuat pertanyaan yang lebih mendalam dan relevan.`;
+      }
+      
+      systemInstruction += `\n\nSelalu respon maksimal 3 kalimat secara lisan alamiah.`;
 
       const aiResponse = await callGemini({
         history: newHistory,
         systemInstruction: systemInstruction,
-        model: MODELS.lite, // Lebih interaktif untuk chat
+        model: MODELS.primary,
         group: API_GROUP,
         temperature: profileInfo.temp,
       });
@@ -192,6 +205,55 @@ Aturan main:
     setIsSessionActive(false);
     setMessages([]);
     setSkripsiTitle("");
+    setUploadedDocUrl(null);
+  };
+
+  const handleDocumentUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== "application/pdf") {
+      alert("Hanya file PDF yang didukung.");
+      return;
+    }
+
+    setUploading(true);
+    try {
+      // Get Cloudinary signature from worker
+      const sigResponse = await fetch(`${process.env.NEXT_PUBLIC_WORKER_URL}/api/cloudinary-sign`, {
+        method: "POST",
+        headers: { "x-skripzy-secret": process.env.NEXT_PUBLIC_WORKER_SECRET || "skripzy1234" },
+      });
+
+      if (!sigResponse.ok) throw new Error("Gagal mendapatkan signature Cloudinary");
+
+      const { signature, timestamp, cloudName, apiKey } = await sigResponse.json();
+
+      // Upload to Cloudinary
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("signature", signature);
+      formData.append("timestamp", timestamp);
+      formData.append("api_key", apiKey);
+      formData.append("folder", "Sidang");
+      formData.append("resource_type", "auto");
+
+      const uploadResponse = await fetch(
+        `https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`,
+        { method: "POST", body: formData }
+      );
+
+      if (!uploadResponse.ok) throw new Error("Upload Cloudinary gagal");
+
+      const uploaded = await uploadResponse.json();
+      setUploadedDocUrl(uploaded.secure_url);
+      alert(`✅ Dokumen berhasil diupload!\nDosen AI akan merujuk dokumen ini saat menguji.`);
+    } catch (err) {
+      console.error("Upload error:", err);
+      alert(`❌ Gagal upload dokumen: ${err.message}`);
+    } finally {
+      setUploading(false);
+    }
   };
 
   return (
@@ -240,38 +302,81 @@ Aturan main:
                </div>
             )}
 
+            {/* Mode Selection: Proposal vs Skripsi */}
             <div className="form-group">
-              <label className="form-label">Judul Lengkap Penelitian Anda</label>
+              <label className="form-label">Jenis Sidang</label>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1rem" }}>
+                {["proposal", "skripsi"].map(mode => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setSidangMode(mode)}
+                    disabled={plan === "free"}
+                    style={{
+                      textAlign: "center", padding: "1rem", borderRadius: "10px",
+                      border: sidangMode === mode ? "2px solid #EC4899" : "2px solid var(--border)",
+                      backgroundColor: sidangMode === mode ? "rgba(236,72,153,0.05)" : "transparent",
+                      cursor: plan === "free" ? "not-allowed" : "pointer", 
+                      opacity: plan === "free" ? 0.6 : 1,
+                      fontWeight: 600,
+                      color: sidangMode === mode ? "#DB2777" : "var(--text-main)",
+                      textTransform: "capitalize"
+                    }}
+                  >
+                    📋 Sidang {mode === "proposal" ? "Proposal" : "Skripsi"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Judul Lengkap {sidangMode === "proposal" ? "Proposal" : "Skripsi"} Anda</label>
               <textarea 
                 className="form-input" 
                 rows="3" 
-                placeholder="Contoh: Pegaruh Algoritma Rekomendasi Terhadap Peningkatan Konsumsi Konten Video Pendek..."
+                placeholder={sidangMode === "proposal" ? "Contoh: Proposal Pengaruh Algoritma Rekomendasi..." : "Contoh: Penelitian Pengaruh Algoritma Rekomendasi..."}
                 value={skripsiTitle}
                 onChange={e => setSkripsiTitle(e.target.value)}
                 disabled={plan === "free"}
               />
             </div>
 
-            <div className="form-group mb-6">
-              <label className="form-label">Pilih Karakter Penguji (Dosen AI)</label>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-                {DOSEN_PROFILES.map(d => (
-                  <button
-                    key={d.id} type="button"
-                    onClick={() => setDosenProfile(d.id)}
-                    disabled={plan === "free"}
-                    style={{
-                      textAlign: "left", padding: "1rem", borderRadius: "10px",
-                      border: dosenProfile === d.id ? "2px solid #EC4899" : "2px solid var(--border)",
-                      backgroundColor: dosenProfile === d.id ? "rgba(236,72,153,0.05)" : "transparent",
-                      cursor: plan === "free" ? "not-allowed" : "pointer", opacity: plan === "free" ? 0.6 : 1
-                    }}
-                  >
-                    <div style={{ fontWeight: 700, fontSize: "0.95rem", color: dosenProfile === d.id ? "#DB2777" : "var(--text-main)", marginBottom: "0.25rem" }}>{d.label}</div>
-                    <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", lineHeight: 1.4 }}>{d.desc}</div>
-                  </button>
-                ))}
-              </div>
+            {/* Document Upload */}
+            <div className="form-group">
+              <label className="form-label">Upload Dokumen {sidangMode === "proposal" ? "Proposal" : "Skripsi"} (Opsional)</label>
+              <label style={{
+                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                padding: "1.5rem 1rem", border: "2px dashed var(--border)", borderRadius: "8px",
+                cursor: uploading ? "not-allowed" : "pointer", 
+                backgroundColor: uploadedDocUrl ? "rgba(16, 185, 129, 0.05)" : "var(--surface-hover)", 
+                gap: "0.5rem", textAlign: "center",
+                opacity: uploading ? 0.6 : 1,
+                transition: "all 0.2s"
+              }}>
+                {uploadedDocUrl ? (
+                  <>
+                    <PremiumIcon name="checkCircle" size={24} style={{ color: "var(--success)" }} />
+                    <span style={{ fontSize: "0.8rem", color: "var(--text-main)", fontWeight: 600 }}>✅ Dokumen Terupload</span>
+                    <span style={{ fontSize: "0.65rem", color: "var(--text-muted)" }}>Dosen AI akan merujuk dokumen ini</span>
+                    <a href={uploadedDocUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: "0.7rem", color: "var(--primary)", textDecoration: "underline", marginTop: "0.25rem" }}>
+                      Lihat Dokumen
+                    </a>
+                  </>
+                ) : (
+                  <>
+                    <PremiumIcon name={uploading ? "loader" : "uploadCloud"} size={24} className={uploading ? "animate-spin" : ""} style={{ color: "var(--text-muted)" }} />
+                    <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>{uploading ? "Mengupload..." : "Upload PDF Dokumen"}</span>
+                    <span style={{ fontSize: "0.65rem", color: "var(--text-muted)", opacity: 0.7 }}>Drag & drop atau klik untuk memilih file</span>
+                  </>
+                )}
+                <input 
+                  type="file" 
+                  accept=".pdf" 
+                  style={{ display: "none" }} 
+                  onChange={handleDocumentUpload}
+                  disabled={uploading}
+                />
+              </label>
             </div>
 
             <div style={{ display: "flex", justifyContent: "flex-end" }}>

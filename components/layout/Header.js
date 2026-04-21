@@ -1,10 +1,10 @@
 "use client";
-
 import { useAuth } from "@/components/providers/AuthProvider";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
+import Link from "next/link";
 
 /**
  * Header component
@@ -94,7 +94,8 @@ export function Header({ onMenuClick = null, isMobile = false }) {
         >
           <PremiumIcon name="coins" size={14} className="text-primary" />
           <span>{userData?.credits || 0}{!isMobile && " Credits"}</span>
-          <button
+          <Link
+            href="dashboard/langganan"
             className="btn btn-primary"
             title="Top Up Credits"
             style={{
@@ -104,10 +105,13 @@ export function Header({ onMenuClick = null, isMobile = false }) {
               borderRadius: "50%",
               minWidth: "auto",
               lineHeight: 1,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
             }}
           >
             +
-          </button>
+          </Link>
         </div>
 
         {!isMobile && <ThemeToggle />}

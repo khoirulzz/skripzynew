@@ -152,7 +152,7 @@ export default function ChatDosenAIPage() {
       let aiText = await callGemini({
         history: newMessages,
         systemInstruction: SYSTEM_INSTRUCTION,
-        model: MODELS.lite,
+        model: MODELS.primary,
         group: CHAT_GROUPS,
         temperature: 0.6,
         thinkingConfig: { thinkingBudget: 0 },
@@ -306,7 +306,7 @@ export default function ChatDosenAIPage() {
         let aiText = await callGemini({
           history, 
           systemInstruction: SYSTEM_INSTRUCTION, 
-          model: MODELS.lite, 
+          model: MODELS.primary, 
           group: CALL_GROUPS,
           thinkingConfig: { thinkingBudget: 0 },
         });

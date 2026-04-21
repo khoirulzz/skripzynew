@@ -77,21 +77,21 @@ export default function SkripsiListPage() {
           </button>
         </div>
       ) : (
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4" style={{ overflow: "hidden" }}>
           {workspaces.map(ws => (
-            <Link key={ws.id} href={`/dashboard/skripsi/${ws.id}`} className="glass-panel btn-ghost p-6" style={{ display: "block", textAlign: "left", borderRadius: "12px", transition: "transform 0.2s" }}>
-              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "1rem" }}>
-                <div style={{ padding: "0.5rem", backgroundColor: "rgba(79, 70, 229, 0.1)", borderRadius: "8px" }}>
+            <Link key={ws.id} href={`/dashboard/skripsi/${ws.id}`} className="glass-panel btn-ghost p-6" style={{ display: "block", textAlign: "left", borderRadius: "12px", transition: "transform 0.2s", overflow: "hidden", wordWrap: "break-word", minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "1rem", minWidth: 0 }}>
+                <div style={{ padding: "0.5rem", backgroundColor: "rgba(79, 70, 229, 0.1)", borderRadius: "8px", flexShrink: 0 }}>
                   <PremiumIcon name="fileText" className="text-primary" size={24} />
                 </div>
-                <span style={{ fontSize: "0.75rem", padding: "2px 8px", backgroundColor: "var(--surface-hover)", borderRadius: "10px", color: "var(--text-muted)", fontWeight: 500 }}>
+                <span style={{ fontSize: "0.75rem", padding: "2px 8px", backgroundColor: "var(--surface-hover)", borderRadius: "10px", color: "var(--text-muted)", fontWeight: 500, whiteSpace: "nowrap", marginLeft: "0.5rem", flexShrink: 0 }}>
                   {ws.status || "Draft"}
                 </span>
               </div>
-              <h3 style={{ fontSize: "1.1rem", margin: "0 0 0.5rem 0", color: "var(--text-main)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <h3 style={{ fontSize: "1.1rem", margin: "0 0 0.5rem 0", color: "var(--text-main)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
                 {ws.title || "Tanpa Judul"}
               </h3>
-              <p style={{ fontSize: "0.875rem", margin: 0, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", height: "2.6rem" }}>
+              <p style={{ fontSize: "0.875rem", margin: 0, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", height: "2.6rem", wordWrap: "break-word" }}>
                 {ws.topic || "Belum ada topik..."}
               </p>
               <div style={{ marginTop: "1.5rem", fontSize: "0.75rem", color: "var(--text-muted)" }}>

@@ -38,11 +38,14 @@ export default function ReferensiCerdasPage() {
       const results = await searchSemanticScholar(query, { limit: 10, yearRange });
       setPapers(results);
       if (results.length === 0) {
-        setError("Tidak ditemukan hasil yang cocok dengan kata kunci tersebut.");
+        setError("Tidak ditemukan hasil yang cocok dengan kata kunci tersebut. Coba ubah kata kunci atau tahun pencarian.");
       }
     } catch (err) {
       console.error(err);
-      setError("Gagal menghubungi server Semantic Scholar. Silakan coba sesaat lagi.");
+      setError(
+        `Gagal menghubungi Semantic Scholar API. ${err.message}. ` +
+        `Pastikan koneksi internet stabil. API Documentation: https://www.semanticscholar.org/product/api`
+      );
     } finally {
       setLoading(false);
     }
@@ -73,7 +76,7 @@ Tuliskan 1 paragraf inti (apa masalahnya, metode yang dipakai, dan hasilnya), se
 
       const aiResponse = await callGemini({
         prompt,
-        model: MODELS.lite,
+        model: MODELS.primary,
         group: API_GROUP,
         temperature: 0.5,
       });
@@ -132,8 +135,19 @@ Tuliskan 1 paragraf inti (apa masalahnya, metode yang dipakai, dan hasilnya), se
 
       {/* Hasil & Error */}
       {error && (
-        <div style={{ padding: "1rem", backgroundColor: "rgba(239, 68, 68, 0.1)", color: "var(--danger)", borderRadius: "8px", textAlign: "center", marginBottom: "1rem" }}>
-          {error}
+        <div style={{ padding: "1rem", backgroundColor: "rgba(239, 68, 68, 0.1)", color: "var(--danger)", borderRadius: "8px", marginBottom: "1rem", display: "flex", gap: "1rem", alignItems: "flex-start" }}>
+          <PremiumIcon name="alertCircle" size={18} style={{ flexShrink: 0, marginTop: "2px" }} />
+          <div style={{ flex: 1 }}>
+            <p style={{ margin: 0, fontSize: "0.9rem" }}>{error}</p>
+            <div style={{ marginTop: "0.5rem", display: "flex", gap: "0.5rem", flexWrap: "wrap", fontSize: "0.8rem" }}>
+              <button className="btn btn-outline" style={{ padding: "0.3rem 0.6rem", fontSize: "0.75rem" }} onClick={() => { setError(""); setQuery(""); }}>
+                Coba Lagi
+              </button>
+              <a href="https://www.semanticscholar.org/product/api" target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem", color: "var(--primary)", textDecoration: "none", fontSize: "0.75rem", fontWeight: 600 }}>
+                📖 Dokumentasi API
+              </a>
+            </div>
+          </div>
         </div>
       )}
 

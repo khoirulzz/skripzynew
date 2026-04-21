@@ -80,7 +80,7 @@ export default function AIDetectorPage() {
       const raw = await callGemini({
         prompt: input,
         systemInstruction: SYSTEM_INSTRUCTION,
-        model: MODELS.secondary, // 2.5 flash sudah cukup untuk deteksi
+        model: MODELS.primary,
         group: API_GROUP,
         temperature: 0.1, // Harus strict dan konsisten
       });

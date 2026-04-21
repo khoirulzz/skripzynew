@@ -91,6 +91,7 @@ export default function WorkspaceEditorPage({ params }) {
   const [notFound, setNotFound] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [drawerWidth, setDrawerWidth] = useState(350);
+  const [isMobile, setIsMobile] = useState(false);
 
   // ---- Resizer logic ----
   const handleMouseDown = useCallback((e) => {
@@ -109,6 +110,15 @@ export default function WorkspaceEditorPage({ params }) {
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
   }, [drawerWidth]);
+
+  // Mobile detection
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    const resizeListener = () => checkMobile();
+    window.addEventListener("resize", resizeListener);
+    return () => window.removeEventListener("resize", resizeListener);
+  }, []);
 
   // Local buffer for editor contents (keyed by chapter key, e.g. contentBab1)
   const [contentBuffer, setContentBuffer] = useState({});
@@ -368,13 +378,59 @@ export default function WorkspaceEditorPage({ params }) {
       {/* Right Drawer */}
       {appMode === "editor" && isDrawerOpen && (
         <>
-          {/* Drag Handle */}
+          {/* Mobile Backdrop Overlay */}
+          {isMobile && (
+            <div
+              onClick={() => setIsDrawerOpen(false)}
+              style={{
+                position: "fixed",
+                inset: 0,
+                backgroundColor: "rgba(0,0,0,0.6)",
+                backdropFilter: "blur(4px)",
+                zIndex: 40,
+                cursor: "pointer",
+              }}
+            />
+          )}
+
+          {/* Drag Handle (Desktop only) */}
+          {!isMobile && (
+            <div
+              onMouseDown={handleMouseDown}
+              style={{ width: "6px", cursor: "col-resize", backgroundColor: "var(--surface-hover)", zIndex: 50, flexShrink: 0 }}
+              title="Tarik untuk memperlebar Reference Hub"
+            />
+          )}
+
+          {/* Drawer Container */}
           <div
-            onMouseDown={handleMouseDown}
-            style={{ width: "6px", cursor: "col-resize", backgroundColor: "var(--surface-hover)", zIndex: 50, flexShrink: 0 }}
-            title="Tarik untuk memperlebar Reference Hub"
-          />
-          <div style={{ width: `${drawerWidth}px`, borderLeft: "1px solid var(--border)", backgroundColor: "var(--background)", flexShrink: 0, display: "flex", flexDirection: "column", height: "100%" }}>
+            style={{
+              ...(isMobile
+                ? {
+                    position: "fixed",
+                    right: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: "100%",
+                    maxWidth: "400px",
+                    zIndex: 50,
+                    animation: "slideInRight 0.3s ease-out",
+                  }
+                : {
+                    width: `${drawerWidth}px`,
+                    borderLeft: "1px solid var(--border)",
+                    flexShrink: 0,
+                    display: "flex",
+                    flexDirection: "column",
+                    height: "100%",
+                  }),
+              backgroundColor: "var(--background)",
+              boxShadow: isMobile ? "0 -2px 16px rgba(0,0,0,0.2)" : "none",
+              borderLeft: isMobile ? "none" : "1px solid var(--border)",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
             <ReferenceManager workspaceId={id} onClose={() => setIsDrawerOpen(false)} />
           </div>
         </>

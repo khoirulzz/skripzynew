@@ -9,7 +9,7 @@ import Link from "next/link";
 
 // ── Konstanta ────────────────────────────────────────────────
 const CREDIT_COST = 2;
-const API_GROUP = "group_3"; // Grup yg dipakai parafrase
+const API_GROUP = "group_1"; // Grup yg dipakai parafrase
 
 const GAYA_LIST = [
   {

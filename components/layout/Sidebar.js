@@ -25,7 +25,7 @@ export function Sidebar({ isCollapsed = false, toggleCollapse, isMobile = false 
   };
 
   const navItems = [
-    { name: "Workspace Hub", path: "/dashboard", icon: "home", exact: true },
+    { name: "Dashboard", path: "/dashboard", icon: "home", exact: true },
     { name: "Skripsi", path: "/dashboard/skripsi", icon: "fileText" },
     { name: "Jurnal", path: "/dashboard/jurnal", icon: "database" },
     { name: "Dosen AI", path: "/dashboard/chat", icon: "messageSquare" },

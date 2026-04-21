@@ -8,10 +8,10 @@ import { PremiumIcon } from "@/components/ui/PremiumIcon";
 import Link from "next/link";
 
 const CREDIT_COST = 2;
-const API_GROUP   = "group_4";
+const API_GROUP   = "group_3";
 const CHAR_LIMIT  = 3000;
 
-const SYSTEM_INSTRUCTION = `Kamu adalah ahli bahasa Indonesia dan pemeriksa tata bahasa profesional. Tugas kamu adalah menganalisis teks yang diberikan dan mengidentifikasi serta memperbaiki kesalahan gramatikal.
+const SYSTEM_INSTRUCTION = `Kamu adalah ahli bahasa Indonesia dan bahasa inggris, serta pemeriksa tata bahasa profesional. Tugas kamu adalah menganalisis teks yang diberikan dan mengidentifikasi serta memperbaiki kesalahan gramatikal.
 
 Berikan respons HANYA dalam format JSON berikut (tanpa markdown code block, langsung JSON murni):
 {

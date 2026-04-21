@@ -8,7 +8,7 @@ import { PremiumIcon } from "@/components/ui/PremiumIcon";
 import Link from "next/link";
 
 const CREDIT_COST = 3;
-const API_GROUP   = "group_3";
+const API_GROUP   = "group_1";
 
 // Intensitas Humanisasi — makin tinggi makin "manusiawi" tapi makin jauh dari aslinya
 const INTENSITAS_LIST = [

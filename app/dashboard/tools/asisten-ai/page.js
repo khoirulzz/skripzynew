@@ -58,20 +58,22 @@ export default function AsistenAIPage() {
 
       const prompt = `Anda adalah ahli metodologi penelitian. Tugas Anda menganalisis daftar referensi penelitian berikut, lalu:
 
-1.  Sajikan ulang daftar referensi yang dianalisis. <b>Judul penelitian HARUS dijadikan link (tag <a>) yang bisa diklik menuju URL aslinya</b>, lengkap dengan penulis dan tahun.
-2.  Identifikasi <b>research gap</b> dari kumpulan referensi tersebut.
-3.  Identifikasi Potensi <b>Novelty</b> (kebaruan) yang belum banyak dibahas.
-4.  Buat 3 rekomendasi judul baru yang mengandung unsur novelty tersebut.
-5.  Untuk setiap judul rekomendasi, berikan 2 rumusan masalah yang relevan.
-6.  Jangan gunakan format markdown \`\`\`html atau tanda \`\`\` apapun. Hasilkan output bersih yang siap ditampilkan di browser sebagai HTML.
+    1) Ringkas setiap artikel menjadi 1-2 kalimat (tujuan, metode, hasil) sebagai konteks singkat sebelum analisis.
 
-Sajikan dalam format HTML rapi. LANGSUNG TAMPILKAN HASIL TANPA KALIMAT PENGANTAR ATAU PENUTUP.
+    2) Sajikan ulang daftar referensi yang dianalisis. <b>Judul penelitian HARUS dijadikan link (tag <a>) yang bisa diklik menuju URL aslinya</b>, lengkap dengan penulis dan tahun.
+    3) Identifikasi <b>research gap</b> dari kumpulan referensi tersebut.
+    4) Identifikasi Potensi <b>Novelty</b> (kebaruan) yang belum banyak dibahas.
+    5) Buat 3 rekomendasi judul baru yang mengandung unsur novelty tersebut.
+    6) Untuk setiap judul rekomendasi, berikan 2 rumusan masalah yang relevan.
+    7) Jangan gunakan format markdown atau blok kode apapun. Hasilkan output bersih yang siap ditampilkan di browser sebagai HTML.
 
-Berikut adalah data untuk dianalisis:
-${referencesText}
+    Sajikan dalam format HTML rapi. LANGSUNG TAMPILKAN HASIL TANPA KALIMAT PENGANTAR ATAU PENUTUP.
 
-Gunakan tag <h4>, <h5>, <ul>, <li>, dan <a> dengan rapi agar mudah dibaca.
-`;
+    Berikut adalah data untuk dianalisis:
+    ${referencesText}
+
+    Gunakan tag <h4>, <h5>, <ul>, <li>, dan <a> dengan rapi agar mudah dibaca.
+    `;
 
       const aiResponse = await callGemini({
         prompt: prompt,

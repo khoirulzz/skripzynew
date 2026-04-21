@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Gemini API Checker</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f5f6f8;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 800px;
+            background: #ffffff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        h2 {
+            margin-bottom: 15px;
+        }
+
+        label {
+            font-weight: bold;
+        }
+
+        input {
+            width: 100%;
+            padding: 10px;
+            margin-top: 5px;
+            margin-bottom: 15px;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+            font-size: 14px;
+        }
+
+        button {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 6px;
+            background: #4CAF50;
+            color: white;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #43a047;
+        }
+
+        #output {
+            margin-top: 20px;
+            padding: 15px;
+            background: #fafafa;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            line-height: 1.6;
+            font-size: 14px;
+        }
+
+        .success {
+            color: green;
+            font-weight: bold;
+        }
+
+        .error {
+            color: red;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <h2>🔍 Check API Key + Kualitas Output</h2>
+
+        <label>API Key</label>
+        <input type="text" id="apiKey" placeholder="Masukkan API Key kamu">
+
+        <label>Model</label>
+        <input type="text" id="model" value="gemini-1.5-flash">
+
+        <button onclick="checkApi()">Check</button>
+
+        <div id="output"></div>
+    </div>
+
+    <script>
+        async function checkApi() {
+            const apiKey = document.getElementById("apiKey").value.trim();
+            const model = document.getElementById("model").value.trim();
+            const output = document.getElementById("output");
+
+            if (!apiKey || !model) {
+                output.innerHTML = "<span class='error'>❌ API Key dan Model wajib diisi</span>";
+                return;
+            }
+
+            output.innerText = "⏳ Checking...";
+
+            try {
+                const res = await fetch(
+                    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            contents: [
+                                {
+                                    parts: [
+                                        {
+                                            text: "Tulis dua paragraf tentang pentingnya literasi digital di kehidupan sehari-hari. Gunakan bahasa Indonesia yang santai tapi tetap rapi, seperti orang menjelaskan dengan jelas tanpa terkesan menggurui. Buat kalimatnya mengalir dan alami, hindari pola kalimat yang terlalu khas tulisan AI."
+                                        }
+                                    ]
+                                }
+                            ]
+                        })
+                    }
+                );
+
+                const data = await res.json();
+
+                if (res.ok) {
+                    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                    output.innerHTML = `
+<span class="success">✅ API KEY AKTIF</span>
+
+=== HASIL GENERATE ===
+
+${text || "Tidak ada teks"}
+          `;
+                } else {
+                    output.innerHTML = `
+<span class="error">❌ ERROR</span>
+
+${JSON.stringify(data, null, 2)}
+          `;
+                }
+
+            } catch (err) {
+                output.innerHTML = `
+<span class="error">❌ Gagal koneksi</span>
+
+${err.message}
+        `;
+            }
+        }
+    </script>
+
+</body>
+
+</html>

@@ -1,0 +1,37 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ── Users: setiap user hanya bisa baca/tulis data miliknya sendiri ──
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // ── Workspaces: hanya bisa diakses oleh pemiliknya (userId field) ──
+    match /workspaces/{workspaceId} {
+      // allow read mencakup get dan list
+      allow read: if request.auth != null && (
+        // Untuk query (list), Firestore akan memvalidasi apakah query memiliki filter userId
+        // Untuk get (single document), resource.data.userId harus cocok
+        resource.data.userId == request.auth.uid
+      );
+      
+      allow create: if request.auth != null 
+        && request.resource.data.userId == request.auth.uid;
+        
+      allow update, delete: if request.auth != null 
+        && resource.data.userId == request.auth.uid;
+    }
+    
+    // ── System stats: hanya bisa di-update oleh user yang login ──
+    match /system_stats/{doc} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+    
+    // ── Admin-only: blokir akses langsung dari client ──
+    match /admin/{doc} {
+      allow read, write: if false;
+    }
+  }
+}

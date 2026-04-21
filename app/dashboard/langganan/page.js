@@ -156,7 +156,7 @@ export default function LanggananPage() {
         <section>
           <div style={{ marginBottom: "1.5rem" }}>
             <h2 style={{ fontSize: "1.2rem", margin: "0 0 0.2rem" }}>Pilih Paket Unggulan</h2>
-            <p className="text-muted" style={{ fontSize: "0.875rem", margin: 0 }}>Buka kunci semua limit fitur cerdas Skripzy sesuai kebutuhan.</p>
+            <p className="text-muted" style={{ fontSize: "0.875rem", margin: 0 }}>Upgrade akunmu untuk menikmati semua fitur spesial Skripzy.</p>
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "1.5rem" }}>
@@ -212,8 +212,8 @@ export default function LanggananPage() {
         {/* SECTION: TOP UP KREDIT */}
         <section>
           <div style={{ marginBottom: "1.5rem" }}>
-            <h2 style={{ fontSize: "1.2rem", margin: "0 0 0.2rem" }}>Isi Ulang Kredit AI</h2>
-            <p className="text-muted" style={{ fontSize: "0.875rem", margin: 0 }}>Kredit tidak hangus, digunakan per aksi di fitur Quick Tools.</p>
+            <h2 style={{ fontSize: "1.2rem", margin: "0 0 0.2rem" }}>Refill Kredit AI</h2>
+            <p className="text-muted" style={{ fontSize: "0.875rem", margin: 0 }}>Paket free kehabisan kredit? atau ingin nambah kredit di Pro & Plus? Ngeteng aja.</p>
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "1.5rem" }}>

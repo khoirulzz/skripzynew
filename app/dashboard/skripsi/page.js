@@ -79,7 +79,7 @@ export default function SkripsiListPage() {
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4" style={{ overflow: "hidden" }}>
           {workspaces.map(ws => (
-            <Link key={ws.id} href={`/dashboard/skripsi/${ws.id}`} className="glass-panel btn-ghost p-6" style={{ display: "block", textAlign: "left", borderRadius: "12px", transition: "transform 0.2s", overflow: "hidden", wordWrap: "break-word", minWidth: 0 }}>
+            <Link key={ws.id} href={`/dashboard/skripsi/edit?id=${ws.id}`} className="glass-panel btn-ghost p-6" style={{ display: "block", textAlign: "left", borderRadius: "12px", transition: "transform 0.2s", overflow: "hidden", wordWrap: "break-word", minWidth: 0 }}>
               <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "1rem", minWidth: 0 }}>
                 <div style={{ padding: "0.5rem", backgroundColor: "rgba(79, 70, 229, 0.1)", borderRadius: "8px", flexShrink: 0 }}>
                   <PremiumIcon name="fileText" className="text-primary" size={24} />

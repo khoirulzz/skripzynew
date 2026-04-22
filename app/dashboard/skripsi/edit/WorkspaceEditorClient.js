@@ -7,7 +7,7 @@ import { useAuth } from "@/components/providers/AuthProvider";
 import { TiptapEditor } from "@/components/editor/TiptapEditor";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
 import Link from "next/link";
-import { use } from "react";
+import { useSearchParams } from "next/navigation";
 import { ReferenceManager } from "@/components/workspace/ReferenceManager";
 import { ChapterAiAssistant } from "@/components/workspace/ChapterAiAssistant";
 import { DataHub } from "@/components/workspace/DataHub";
@@ -78,8 +78,9 @@ function StatusDropdown({ currentStatus, onSelect }) {
 // ===========================================================================
 // Main Page
 // ===========================================================================
-export default function WorkspaceEditorPage({ params }) {
-  const { id } = use(params);
+export default function WorkspaceEditorPage() {
+  const searchParams = useSearchParams();
+  const id = searchParams.get('id');
   const { user } = useAuth();
 
   const [appMode, setAppMode] = useState("editor");

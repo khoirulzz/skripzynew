@@ -83,13 +83,16 @@ export default function AIDetectorPage() {
         systemInstruction: SYSTEM_INSTRUCTION,
         model: MODELS.primary,
         group: API_GROUP,
-        temperature: 0.1, // Harus strict dan konsisten
+        temperature: 0.1,
+        responseMimeType: "application/json",
       });
 
-      const jsonMatch = raw.match(/\\{[\\s\\S]*\\}/);
-      if (!jsonMatch) throw new Error("Format respons tidak valid. Coba lagi.");
+      let jsonStr = raw.trim();
+      if (jsonStr.startsWith("```json")) {
+        jsonStr = jsonStr.replace(/^```json/, "").replace(/```$/, "").trim();
+      }
       
-      const parsed = JSON.parse(jsonMatch[0]);
+      const parsed = JSON.parse(jsonStr);
       setResult(parsed);
     } catch (err) {
       await refundCredits(user.uid, CREDIT_COST).catch(() => {});

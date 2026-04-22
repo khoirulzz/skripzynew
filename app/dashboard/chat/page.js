@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import ReactMarkdown from "react-markdown";
-import { callGemini, MODELS, getGeminiLiveProxyUrl } from "@/lib/callWorker";
+import { callGemini, callGeminiStream, MODELS, getGeminiLiveProxyUrl } from "@/lib/callWorker";
 import { deductCredits } from "@/lib/credits";
 import { GeminiLiveClient, VOICE_OPTIONS } from "@/lib/geminiLiveClient";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
@@ -85,7 +85,6 @@ export default function ChatDosenAIPage() {
     // Split by double newlines untuk process sebagai paragraphs
     const paragraphs = text.split(/\n\s*\n+/);
 
-    // Thinking keywords yang kita cari
     const thinkingKeywords = [
       "Crafting", "Refining", "Reflecting", "Planning", "Thinking",
       "Formulating", "Considering", "Analyzing", "Developing", "Creating",
@@ -93,14 +92,10 @@ export default function ChatDosenAIPage() {
       "Reviewing", "Revising", "Adjusting", "Enhancing", "Optimizing"
     ];
 
-    // Create regex pattern from keywords
     const keywordPattern = new RegExp(`^\\*\\*(${thinkingKeywords.join("|")})[\\w\\s]*\\*\\*`, "i");
 
-    // Process setiap paragraph
     for (let para of paragraphs) {
       const trimmedPara = para.trim();
-
-      // Check if paragraph starts with thinking indicator
       if (keywordPattern.test(trimmedPara)) {
         thinking.push(trimmedPara);
       } else if (trimmedPara.length > 0) {
@@ -108,21 +103,19 @@ export default function ChatDosenAIPage() {
       }
     }
 
-    // Also extract XML thinking tags
-    const xmlThinkingPattern = /<thinking>[\s\S]*?<\/thinking>/g;
-    const content = contentLines.join("\n\n");
-    const xmlMatches = content.match(xmlThinkingPattern);
-
-    if (xmlMatches) {
-      const xmlThinking = xmlMatches.map(m => m.replace(/<\/?thinking>/g, "")).join("\n\n");
-      thinking.push(xmlThinking);
-    }
-
-    // Remove XML tags from final content
-    const finalContent = content.replace(xmlThinkingPattern, "").replace(/\n\s*\n+/g, "\n\n").trim();
+    const contentStr = contentLines.join("\n\n");
+    // Match both fully closed <thinking>...</thinking> OR unclosed <thinking>... to end of string (for streaming)
+    const xmlThinkingPattern = /<thinking>([\s\S]*?)(<\/thinking>|$)/gi;
+    
+    let finalThinkingStr = thinking.join("\n\n").trim();
+    
+    const finalContent = contentStr.replace(xmlThinkingPattern, (match, p1) => {
+      finalThinkingStr += "\n\n" + p1.trim();
+      return "";
+    }).trim();
 
     return {
-      thinking: thinking.join("\n\n").trim(),
+      thinking: finalThinkingStr.trim(),
       content: finalContent
     };
   };
@@ -188,7 +181,9 @@ export default function ChatDosenAIPage() {
         ? `${SYSTEM_INSTRUCTION}\n\nIMPORTANT: Internet access is ENABLED. Use the Google Search tool to provide real-time information.`
         : SYSTEM_INSTRUCTION;
 
-      const response = await callGemini({
+      let streamStarted = false;
+
+      const response = await callGeminiStream({
         history: newMessages,
         systemInstruction: currentSystemInstruction,
         model: targetModel,
@@ -196,25 +191,60 @@ export default function ChatDosenAIPage() {
         temperature: 0.6,
         thinkingConfig: { thinkingBudget: 0 },
         useSearchGrounding: isSearchNeeded,
-        returnMetadata: isSearchNeeded
+        returnMetadata: isSearchNeeded,
+        onStream: (chunk) => {
+          const { thinking, content } = extractThinkingBlocks(chunk);
+          
+          if (!streamStarted && content.trim()) {
+            streamStarted = true;
+            setLoading(false); // Sembunyikan dots setelah teks mulai masuk
+          }
+
+          setMessages(prev => {
+            const lastMsg = prev[prev.length - 1];
+            if (lastMsg && lastMsg.role === "model" && lastMsg.isStreaming) {
+              const up = [...prev];
+              up[up.length - 1] = {
+                ...lastMsg,
+                text: content,
+                thinking: thinking
+              };
+              return up;
+            } else {
+              return [...prev, {
+                role: "model",
+                text: content,
+                thinking: thinking,
+                isStreaming: true
+              }];
+            }
+          });
+        }
       });
 
-      // Defensive check: handle both object and string responses
+      // Finalize message object with full JSON metadata (sources)
       const aiText = (response && typeof response === "object") ? response.text : (response || "");
       const metadata = (response && typeof response === "object") ? response.groundingMetadata : null;
 
-      // Extract thinking blocks dari response
       const { thinking, content } = extractThinkingBlocks(aiText);
       const sources = extractGroundingSources(metadata);
 
-      setMessages(prev => [...prev, { 
-        role: "model", 
-        text: content, 
-        thinking, 
-        isGrounded: isSearchNeeded,
-        sources 
-      }]);
-      
+      setMessages(prev => {
+        const up = [...prev];
+        const lastIdx = up.length - 1;
+        if (up[lastIdx]?.role === "model") {
+          up[lastIdx] = {
+            role: "model",
+            text: content,
+            thinking,
+            isGrounded: isSearchNeeded,
+            sources,
+            isStreaming: false
+          };
+        }
+        return up;
+      });
+
       // Reset mode search setelah satu pesan terkirim agar hemat kuota
       setWebSearchActive(false);
 
@@ -423,7 +453,7 @@ export default function ChatDosenAIPage() {
   }, []);
 
   return (
-    <div className="animate-fade-in" style={{ width: "100%", maxWidth: "980px", margin: "0 auto", minHeight: "calc(100vh - 120px)", display: "flex", flexDirection: "column", padding: "0 1rem" }}>
+    <div id="chat-container" className="animate-fade-in" style={{ width: "100%", maxWidth: "980px", margin: "0 auto", minHeight: "calc(100vh - 120px)", display: "flex", flexDirection: "column", padding: "0 1rem" }}>
 
       {/* Inject Keyframes Animasi Soundwave */}
       <style dangerouslySetInnerHTML={{
@@ -462,11 +492,16 @@ export default function ChatDosenAIPage() {
           font-weight: 700;
         }
         @media (max-width: 768px) {
-          #chat-header { flex-direction: column; align-items: flex-start; }
-          #chat-bubble-wrapper { max-width: 90% !important; margin: 0 0.25rem; }
-          #chat-form { padding: 0.6rem 0.5rem !important; }
+          #chat-container { padding: 0 0.4rem !important; }
+          #chat-header { flex-direction: column; align-items: flex-start; gap: 0.5rem; margin-top: 0.5rem; }
+          #chat-bubble-wrapper { max-width: 95% !important; margin: 0; }
+          #chat-form { padding: 0.5rem 0.4rem !important; gap: 0.4rem !important; }
           #chat-input { padding: 0.6rem 0.85rem !important; font-size: 0.85rem !important; }
-          #chat-send-btn { width: 36px; height: 36px; }
+          #chat-send-btn { width: 38px; height: 38px; }
+          .chat-bubble-content { padding: 0.6rem 0.85rem !important; }
+          .chat-avatar { width: 28px !important; height: 28px !important; }
+          .chat-avatar svg { width: 14px !important; height: 14px !important; }
+          .chat-gap { gap: 0.35rem !important; }
         }
       `}} />
 
@@ -548,11 +583,11 @@ export default function ChatDosenAIPage() {
 
               return (
                 <div key={idx} id="chat-bubble-wrapper" style={{ alignSelf: isUser ? "flex-end" : "flex-start", maxWidth: "85%" }}>
-                  <div style={{
-                    display: "flex", gap: "0.6rem",
+                  <div className="chat-gap" style={{
+                    display: "flex", gap: "0.5rem",
                     flexDirection: isUser ? "row-reverse" : "row"
                   }}>
-                    <div style={{
+                    <div className="chat-avatar" style={{
                       width: "32px", height: "32px", borderRadius: "50%", flexShrink: 0,
                       display: "flex", alignItems: "center", justifyContent: "center",
                       backgroundColor: isUser ? "var(--primary)" : "rgba(99,102,241,0.1)",
@@ -562,7 +597,7 @@ export default function ChatDosenAIPage() {
                     }}>
                       <PremiumIcon name={isUser ? "user" : "sparkles"} size={16} />
                     </div>
-                    <div style={{
+                    <div className="chat-bubble-content" style={{
                       padding: "0.75rem 1rem", borderRadius: "14px",
                       borderTopRightRadius: isUser ? "4px" : "14px",
                       borderTopLeftRadius: !isUser ? "4px" : "14px",
@@ -619,37 +654,6 @@ export default function ChatDosenAIPage() {
                       )}
                     </div>
                   </div>
-
-                  {/* Thinking Block Dropdown */}
-                  {hasThinking && (
-                    <div style={{ marginTop: "0.5rem", marginLeft: isUser ? "0" : "2.8rem" }}>
-                      <button
-                        onClick={() => setExpandedThinking(prev => ({ ...prev, [`msg-${idx}`]: !isExpanded }))}
-                        style={{
-                          display: "flex", alignItems: "center", gap: "0.3rem",
-                          padding: "0.3rem 0.6rem", borderRadius: "6px",
-                          border: "1px solid var(--border)", backgroundColor: "transparent",
-                          color: "var(--text-muted)", fontSize: "0.75rem",
-                          cursor: "pointer", transition: "all 0.2s"
-                        }}
-                      >
-                        <PremiumIcon name={isExpanded ? "chevronDown" : "chevronRight"} size={12} />
-                        💭 Thinking
-                      </button>
-
-                      {isExpanded && (
-                        <div style={{
-                          marginTop: "0.4rem", padding: "0.7rem 0.85rem",
-                          borderRadius: "10px", border: "1px solid var(--border)",
-                          backgroundColor: "rgba(99,102,241,0.05)", fontSize: "0.8rem",
-                          color: "var(--text-muted)", lineHeight: 1.5, whiteSpace: "pre-wrap",
-                          maxHeight: "200px", overflowY: "auto"
-                        }}>
-                          {msg.thinking}
-                        </div>
-                      )}
-                    </div>
-                  )}
                 </div>
               );
             })}

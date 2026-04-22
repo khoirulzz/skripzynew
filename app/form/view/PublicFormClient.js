@@ -1,11 +1,12 @@
-// d:\Projek\Skripzy2\app\form\[id]\page.js
+// d:\Projek\Skripzy2\app\form\view\page.js
 "use client";
 
-import { use } from "react";
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 
-export default function PublicFormPage({ params }) {
-  const { id } = use(params);
+export default function PublicFormPage() {
+  const searchParams = useSearchParams();
+  const id = searchParams.get('id');
   
   // Karena ini mock, kita asumsikan form schema dirender dengan data hardcode yang identik dengan builder
   const [submitted, setSubmitted] = useState(false);

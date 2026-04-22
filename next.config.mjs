@@ -1,9 +1,7 @@
-/** @type {import('next').NextConfig} */
 const nextConfig = {
   /* config options here */
-  experimental: {
-    allowedDevOrigins: ['127.0.0.1', 'localhost'],
-  },
+  output: process.env.NODE_ENV === "production" ? "export" : undefined,
+  trailingSlash: true,
 };
 
 export default nextConfig;

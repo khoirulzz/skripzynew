@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import ReactMarkdown from "react-markdown";
-import { callGemini } from "@/lib/callWorker";
+import { callGeminiStream } from "@/lib/callWorker";
 import { deductCredits, refundCredits, getCharLimit } from "@/lib/credits";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
 import Link from "next/link";
@@ -82,14 +82,15 @@ export default function HumanizerPage() {
     try {
       await deductCredits(user.uid, CREDIT_COST);
 
-      const result = await callGemini({
+      await callGeminiStream({
         prompt: input,
         systemInstruction: buildSystemInstruction(intensitas, style),
         group: API_GROUP,
         temperature: selectedIntensitas.temp,
+        onStream: (chunk) => {
+          setOutput(chunk);
+        }
       });
-
-      setOutput(result);
     } catch (err) {
       await refundCredits(user.uid, CREDIT_COST).catch(() => {});
       setError(err.message || "Terjadi kesalahan. Silakan coba lagi.");
@@ -181,7 +182,7 @@ export default function HumanizerPage() {
                   </button>
                 )}
               </div>
-              {loading ? (
+              {loading && !output ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
                   {[95, 80, 100, 75, 60].map((w, i) => (
                     <div key={i} className="animate-pulse" style={{ height: "15px", width: `${w}%`, backgroundColor: "rgba(245,158,11,0.2)", borderRadius: "4px" }} />

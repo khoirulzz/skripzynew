@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import ReactMarkdown from "react-markdown";
-import { callGemini } from "@/lib/callWorker";
+import { callGeminiStream } from "@/lib/callWorker";
 import { deductCredits, refundCredits, getCharLimit } from "@/lib/credits";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
 import Link from "next/link";
@@ -145,14 +145,16 @@ export default function ParafrasePage() {
     try {
       await deductCredits(user.uid, CREDIT_COST);
 
-      const result = await callGemini({
+      await callGeminiStream({
         prompt: input,
         systemInstruction: selectedGaya.system,
         group: API_GROUP,
         temperature: selectedLevel.temp,
+        onStream: (chunk) => {
+          setOutput(chunk);
+        }
       });
-
-      setOutput(result);
+      // The state output is progressively updated via onStream
     } catch (err) {
       await refundCredits(user.uid, CREDIT_COST).catch(() => {});
       setError(err.message || "Terjadi kesalahan. Silakan coba lagi.");
@@ -242,7 +244,7 @@ export default function ParafrasePage() {
                 )}
               </div>
 
-              {loading ? (
+              {loading && !output ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
                   {[100, 85, 70, 90, 75].map((w, i) => (
                     <div key={i} className="animate-pulse" style={{ height: "14px", width: `${w}%`, backgroundColor: "var(--surface-hover)", borderRadius: "4px" }} />

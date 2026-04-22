@@ -84,13 +84,17 @@ export default function CekGrammarPage() {
         systemInstruction: SYSTEM_INSTRUCTION,
         group: API_GROUP,
         temperature: 0.2, // Grammar butuh strict
+        responseMimeType: "application/json",
       });
 
-      // Parse JSON – AI tidak selalu 100% clean, ambil yang antara { dan }
-      const jsonMatch = raw.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) throw new Error("Format respons AI tidak valid. Coba lagi.");
-
-      const parsed = JSON.parse(jsonMatch[0]);
+      // Parse JSON – respons sudah berbentuk JSON murni berkat MimeType config API Gemini
+      // Tipe keamanan (Safety Parsing) in case AI wraps inside markdown blocks:
+      let jsonStr = raw.trim();
+      if (jsonStr.startsWith("```json")) {
+        jsonStr = jsonStr.replace(/^```json/, "").replace(/```$/, "").trim();
+      }
+      
+      const parsed = JSON.parse(jsonStr);
       setResult(parsed);
     } catch (err) {
       await refundCredits(user.uid, CREDIT_COST).catch(() => {});

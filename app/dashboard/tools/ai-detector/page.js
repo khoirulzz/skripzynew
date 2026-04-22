@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
+import ReactMarkdown from "react-markdown";
 import { callGemini, MODELS } from "@/lib/callWorker";
 import { deductCredits, refundCredits, getCharLimit } from "@/lib/credits";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
@@ -202,13 +203,11 @@ export default function AIDetectorPage() {
               
               <div style={{ backgroundColor: "var(--surface-hover)", padding: "1.25rem", borderRadius: "10px", flex: 1 }}>
                 <h4 style={{ fontSize: "0.9rem", fontWeight: 600, margin: "0 0 1rem 0", color: "var(--text-main)" }}>📋 Analisis Linguistik</h4>
-                <ul style={{ margin: 0, paddingLeft: "1.5rem", fontSize: "0.85rem", lineHeight: 1.7, color: "var(--text-muted)" }}>
-                  {result.analysis?.map((item, idx) => (
-                    <li key={idx} style={{ marginBottom: "0.75rem" }}>
-                      <span style={{ color: "var(--text-main)" }}>{item}</span>
-                    </li>
-                  ))}
-                </ul>
+                <div className="markdown-body">
+                  <ReactMarkdown>
+                    {result.analysis?.map(item => `- ${item}`).join('\n')}
+                  </ReactMarkdown>
+                </div>
               </div>
             </div>
           )}

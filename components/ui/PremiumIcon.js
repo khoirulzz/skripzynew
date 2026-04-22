@@ -6,7 +6,7 @@ import {
   Bold, Italic, List, ListOrdered, Quote, Heading2, Heading3,
   ArrowLeft, Save, Sparkles, Plus, X, Check, ChevronDown, BookOpen,
   BarChart2, MessageSquare, Volume, Upload, AlertCircle, Radio, BookMarked, Mic, Wand2,
-  Menu, LayoutTemplate, Copy, Trash, Circle, Type, ChevronDownSquare, PieChart, DownloadCloud, BrainCircuit, Box, CheckCircle, Coins, ChartNoAxesCombined, SquarePen
+  Menu, LayoutTemplate, Copy, Trash, Globe, Circle, Type, ChevronDownSquare, PieChart, DownloadCloud, BrainCircuit, Box, CheckCircle, Coins, ChartNoAxesCombined, SquarePen
 } from "lucide-react";
 
 // Register all icons used in the app here
@@ -66,6 +66,7 @@ const icons = {
   checkCircle: CheckCircle,
   squarePen: SquarePen,
   chartNoAxesCombined: ChartNoAxesCombined,
+  globe: Globe,
 };
 
 export function PremiumIcon({ name, size = 24, className = "", ...rest }) {

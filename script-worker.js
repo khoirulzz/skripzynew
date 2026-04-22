@@ -105,6 +105,141 @@ export default {
                 return fetch(targetUrl, request);
             }
 
+            // ──── ENDPOINT: SEARCH REFERENCE - CORE API ────
+            if (url.pathname === "/api/search/core" && request.method === "POST") {
+                const { query, limit = 10, yearFrom, yearTo } = await request.json();
+                
+                if (!query) {
+                    return new Response(JSON.stringify({ error: "Query required", results: [] }), {
+                        status: 400,
+                        headers: createCorsHeaders(),
+                    });
+                }
+
+                const coreApiKey = env.CORE_API_KEY;
+                if (!coreApiKey) {
+                    return new Response(JSON.stringify({ error: "Core API key not configured", results: [] }), {
+                        status: 500,
+                        headers: createCorsHeaders(),
+                    });
+                }
+
+                try {
+                    let coreUrl = `https://api.core.ac.uk/v3/search/works?q=${encodeURIComponent(query)}&limit=${Math.min(limit, 100)}&api_key=${coreApiKey}`;
+                    
+                    // Add year filtering if provided
+                    if (yearFrom && yearTo) {
+                        coreUrl += `&yearFrom=${yearFrom}&yearTo=${yearTo}`;
+                    }
+                    
+                    console.log(`[Core API] Fetching: ${query} (${yearFrom}-${yearTo})`);
+                    const coreResponse = await fetch(coreUrl, { method: "GET" });
+                    
+                    if (!coreResponse.ok) {
+                        const errorText = await coreResponse.text();
+                        throw new Error(`Core API returned ${coreResponse.status}: ${errorText}`);
+                    }
+
+                    const coreData = await coreResponse.json();
+                    const results = (coreData.results || []).slice(0, limit);
+
+                    return new Response(JSON.stringify({ results }), {
+                        status: 200,
+                        headers: createCorsHeaders(),
+                    });
+                } catch (e) {
+                    console.error("[Core API Error]", e.message);
+                    return new Response(JSON.stringify({ error: e.message, results: [] }), {
+                        status: 500,
+                        headers: createCorsHeaders(),
+                    });
+                }
+            }
+
+            // ──── ENDPOINT: SEARCH REFERENCE - OPENALEX API ────
+            if (url.pathname === "/api/search/openalex" && request.method === "POST") {
+                const { query, limit = 10, yearFrom, yearTo } = await request.json();
+                
+                if (!query) {
+                    return new Response(JSON.stringify({ error: "Query required", results: [] }), {
+                        status: 400,
+                        headers: createCorsHeaders(),
+                    });
+                }
+
+                try {
+                    let openalexUrl = `https://api.openalex.org/works?search=${encodeURIComponent(query)}&per_page=${Math.min(limit, 50)}`;
+                    
+                    // Add year filtering if provided
+                    if (yearFrom && yearTo) {
+                        const yearFilter = `publication_year:${yearFrom}-${yearTo}`;
+                        openalexUrl += `&filter=${encodeURIComponent(yearFilter)}`;
+                    }
+                    
+                    console.log(`[OpenAlex API] Fetching: ${query} (${yearFrom}-${yearTo})`);
+                    const openalexResponse = await fetch(openalexUrl, { method: "GET" });
+                    
+                    if (!openalexResponse.ok) {
+                        const errorText = await openalexResponse.text();
+                        throw new Error(`OpenAlex API returned ${openalexResponse.status}: ${errorText}`);
+                    }
+
+                    const openalexData = await openalexResponse.json();
+                    const results = (openalexData.results || []).slice(0, limit);
+
+                    return new Response(JSON.stringify({ results }), {
+                        status: 200,
+                        headers: createCorsHeaders(),
+                    });
+                } catch (e) {
+                    console.error("[OpenAlex API Error]", e.message);
+                    return new Response(JSON.stringify({ error: e.message, results: [] }), {
+                        status: 500,
+                        headers: createCorsHeaders(),
+                    });
+                }
+            }
+
+            // ──── ENDPOINT: SEARCH REFERENCE - UNPAYWALL API ────
+            if (url.pathname === "/api/search/unpaywall" && request.method === "POST") {
+                const { query, limit = 10, yearFrom, yearTo } = await request.json();
+                
+                if (!query) {
+                    return new Response(JSON.stringify({ error: "Query required", results: [] }), {
+                        status: 400,
+                        headers: createCorsHeaders(),
+                    });
+                }
+
+                try {
+                    // Unpaywall doesn't support direct search well, use simple approach
+                    const unpaywallEmail = "officialskripzy@gmail.com";
+                    let unpaywallUrl = `https://api.unpaywall.org/v2/search?query=${encodeURIComponent(query)}&email=${encodeURIComponent(unpaywallEmail)}&limit=${Math.min(limit, 50)}`;
+                    
+                    console.log(`[Unpaywall API] Fetching: ${query}`);
+                    const unpaywallResponse = await fetch(unpaywallUrl, { method: "GET" });
+                    
+                    if (!unpaywallResponse.ok) {
+                        const errorText = await unpaywallResponse.text();
+                        throw new Error(`Unpaywall API returned ${unpaywallResponse.status}: ${errorText}`);
+                    }
+
+                    const unpaywallData = await unpaywallResponse.json();
+                    const results = (unpaywallData.results || []).slice(0, limit);
+
+                    return new Response(JSON.stringify({ results }), {
+                        status: 200,
+                        headers: createCorsHeaders(),
+                    });
+                } catch (e) {
+                    console.error("[Unpaywall API Error]", e.message);
+                    return new Response(JSON.stringify({ error: e.message, results: [] }), {
+                        status: 500,
+                        headers: createCorsHeaders(),
+                    });
+                }
+            }
+
             // ──── ENDPOINT REST API (GENERATE CONTENT BIASA) ────
             const groupHeader = request.headers.get("x-api-group") || "group_4";
             const requestedGroups = groupHeader.split(",").map((item) => item.trim()).filter(Boolean);

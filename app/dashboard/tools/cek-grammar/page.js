@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
+import ReactMarkdown from "react-markdown";
 import { callGemini } from "@/lib/callWorker";
 import { deductCredits, refundCredits } from "@/lib/credits";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
@@ -228,7 +229,9 @@ export default function CekGrammarPage() {
                           {copiedFix ? "Tersalin!" : "Salin"}
                         </button>
                       </div>
-                      <p style={{ margin: 0, lineHeight: 1.8, fontSize: "0.9rem", whiteSpace: "pre-wrap" }}>{result.teks_diperbaiki}</p>
+                      <div className="markdown-body">
+                        <ReactMarkdown>{result.teks_diperbaiki}</ReactMarkdown>
+                      </div>
                     </div>
                   )}
                 </div>

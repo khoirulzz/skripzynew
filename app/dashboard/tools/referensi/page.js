@@ -2,9 +2,11 @@
 
 import { useState } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
-import { searchSemanticScholar, buildApaCitation } from "@/lib/semanticScholar";
+import ReactMarkdown from "react-markdown";
+import { searchPapersWithFallback, getYearRange, getErrorMessage } from "@/lib/referenceApis";
 import { callGemini, MODELS } from "@/lib/callWorker";
 import { deductCredits, refundCredits } from "@/lib/credits";
+import AnimatedLoadingScreen from "@/components/workspace/AnimatedLoadingScreen";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
 import Link from "next/link";
 
@@ -20,6 +22,7 @@ export default function ReferensiCerdasPage() {
   
   const [papers, setPapers] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [apiAttempt, setApiAttempt] = useState("core");
   const [error, setError] = useState("");
   
   const [summaries, setSummaries] = useState({}); // { paperId: summaryText }
@@ -33,19 +36,19 @@ export default function ReferensiCerdasPage() {
     setError("");
     setPapers([]);
     setSummaries({});
+    setApiAttempt("core");
 
     try {
-      const results = await searchSemanticScholar(query, { limit: 10, yearRange });
-      setPapers(results);
-      if (results.length === 0) {
+      const result = await searchPapersWithFallback(query, { limit: 10, yearRange });
+      setPapers(result.papers);
+      setApiAttempt(result.source);
+      
+      if (result.papers.length === 0) {
         setError("Tidak ditemukan hasil yang cocok dengan kata kunci tersebut. Coba ubah kata kunci atau tahun pencarian.");
       }
     } catch (err) {
       console.error(err);
-      setError(
-        `Gagal menghubungi Semantic Scholar API. ${err.message}. ` +
-        `Pastikan koneksi internet stabil. API Documentation: https://www.semanticscholar.org/product/api`
-      );
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -98,7 +101,7 @@ Tuliskan 1 paragraf inti (apa masalahnya, metode yang dipakai, dan hasilnya), se
         <Link href="/dashboard" style={{ color: "var(--text-muted)" }}><PremiumIcon name="arrowLeft" size={20} /></Link>
         <div>
           <h1 style={{ fontSize: "1.5rem", margin: 0 }}>Referensi Cerdas</h1>
-          <p style={{ margin: 0, fontSize: "0.875rem" }}>Cari sumber ilmiah global & ringkas instan (Semantic Scholar)</p>
+          <p style={{ margin: 0, fontSize: "0.875rem" }}>Cari sumber ilmiah global & ringkas instan (Core + OpenAlex + Unpaywall)</p>
         </div>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.4rem 0.85rem", backgroundColor: "var(--surface-hover)", borderRadius: "var(--radius-lg)", fontSize: "0.8rem", fontWeight: 600 }}>
           <span>Kredit:</span><span style={{ color: "var(--text-main)"}}>{credits}</span>
@@ -143,23 +146,20 @@ Tuliskan 1 paragraf inti (apa masalahnya, metode yang dipakai, dan hasilnya), se
               <button className="btn btn-outline" style={{ padding: "0.3rem 0.6rem", fontSize: "0.75rem" }} onClick={() => { setError(""); setQuery(""); }}>
                 Coba Lagi
               </button>
-              <a href="https://www.semanticscholar.org/product/api" target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem", color: "var(--primary)", textDecoration: "none", fontSize: "0.75rem", fontWeight: 600 }}>
-                📖 Dokumentasi API
-              </a>
             </div>
           </div>
         </div>
       )}
 
       {loading && (
-        <div style={{ textAlign: "center", padding: "3rem", color: "var(--text-muted)" }}>
-           <PremiumIcon name="zap" size={40} className="animate-pulse" style={{ margin: "0 auto 1rem", color: "var(--primary)" }} />
-           <p>Mencari database jurnal global...</p>
-        </div>
+        <AnimatedLoadingScreen isLoading={loading} apiAttempt={apiAttempt} />
       )}
 
       {papers.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+          <div style={{ padding: "0.75rem 1rem", backgroundColor: "rgba(99, 102, 241, 0.1)", borderRadius: "8px", fontSize: "0.85rem", color: "var(--primary)" }}>
+            ✓ Ditemukan {papers.length} referensi dari {apiAttempt === 'core' ? 'Core UK API' : apiAttempt === 'openalex' ? 'OpenAlex' : 'Unpaywall'}
+          </div>
           {papers.map(paper => {
             const hasSummary = !!summaries[paper.id];
             const isSummarizing = !!loadingSum[paper.id];
@@ -167,17 +167,17 @@ Tuliskan 1 paragraf inti (apa masalahnya, metode yang dipakai, dan hasilnya), se
             return (
               <div key={paper.id} className="glass-panel p-6" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
                 <div>
-                  <h3 style={{ fontSize: "1.1rem", margin: "0 0 0.5rem 0" }}>
-                    <a href={paper.url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--primary)", textDecoration: "none" }}>
+                  <h3 style={{ fontSize: "1.1rem", margin: "0 0 0.5rem 0", fontWeight: 700 }}>
+                    <a href={paper.displayUrl || paper.url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--primary)", textDecoration: "none" }}>
                       {paper.title}
                     </a>
                   </h3>
                   <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>
-                    {paper.authors.join(", ")} • {paper.year || "Tahun tidak diketahui"} {paper.venue ? `• ${paper.venue}` : ""}
+                    {paper.authorString} • {paper.year || "Tahun tidak diketahui"} {paper.venue ? `• ${paper.venue}` : ""}
                   </div>
                   
-                  {paper.openAccessUrl && (
-                    <a href={paper.openAccessUrl} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem", fontSize: "0.75rem", backgroundColor: "rgba(16, 185, 129, 0.1)", color: "var(--success)", padding: "2px 8px", borderRadius: "10px", textDecoration: "none", fontWeight: 600, marginBottom: "0.75rem" }}>
+                  {paper.hasFullText && (
+                    <a href={paper.displayUrl} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem", fontSize: "0.75rem", backgroundColor: "rgba(16, 185, 129, 0.1)", color: "var(--success)", padding: "2px 8px", borderRadius: "10px", textDecoration: "none", fontWeight: 600, marginBottom: "0.75rem" }}>
                       <PremiumIcon name="fileText" size={12} /> Full-text PDF Tersedia
                     </a>
                   )}
@@ -187,10 +187,10 @@ Tuliskan 1 paragraf inti (apa masalahnya, metode yang dipakai, dan hasilnya), se
                   </p>
                 </div>
 
-                {/* Sitasi APA */}
+                {/* Sitasi */}
                 <div style={{ backgroundColor: "var(--surface-hover)", padding: "0.75rem 1rem", borderRadius: "8px", fontSize: "0.8rem", borderLeft: "3px solid var(--border)" }}>
-                  <span style={{ fontWeight: 600, marginRight: "0.5rem", color: "var(--text-muted)"}}>Sitasi (APA):</span>
-                  {buildApaCitation(paper)}
+                  <span style={{ fontWeight: 600, marginRight: "0.5rem", color: "var(--text-muted)"}}>Sitasi:</span>
+                  {paper.authorString} ({paper.year}). {paper.title}. {paper.venue || 'Sumber tidak diketahui'}.
                 </div>
 
                 {/* Action Summarize */}
@@ -213,8 +213,8 @@ Tuliskan 1 paragraf inti (apa masalahnya, metode yang dipakai, dan hasilnya), se
                     <h4 style={{ fontSize: "0.9rem", color: "var(--primary)", display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
                       <PremiumIcon name="sparkles" size={16} /> Hasil Ringkasan AI
                     </h4>
-                    <div style={{ fontSize: "0.9rem", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
-                      {summaries[paper.id]}
+                    <div className="markdown-body">
+                      <ReactMarkdown>{summaries[paper.id]}</ReactMarkdown>
                     </div>
                   </div>
                 )}

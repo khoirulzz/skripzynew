@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
+import ReactMarkdown from "react-markdown";
 import { callGemini, MODELS } from "@/lib/callWorker";
 import { deductCredits } from "@/lib/credits";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
@@ -431,9 +432,13 @@ Mahasiswa sedang mempresentasikan ${sidangMode === "proposal" ? "proposal" : "sk
                     color: isUser ? "#fff" : "var(--text-main)",
                     padding: "0.85rem 1.25rem", borderRadius: "16px", 
                     borderTopRightRadius: isUser ? 0 : "16px", borderTopLeftRadius: !isUser ? 0 : "16px",
-                    lineHeight: 1.6, fontSize: "0.95rem", whiteSpace: "pre-wrap"
+                    lineHeight: 1.6, fontSize: "0.95rem"
                   }}>
-                    {msg.text}
+                    {isUser ? msg.text : (
+                      <div className="markdown-body" style={{ color: "inherit" }}>
+                        <ReactMarkdown>{msg.text}</ReactMarkdown>
+                      </div>
+                    )}
                   </div>
                 </div>
               );

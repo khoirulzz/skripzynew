@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
+import ReactMarkdown from "react-markdown";
 import { callGemini, MODELS, getGeminiLiveProxyUrl } from "@/lib/callWorker";
 import { deductCredits } from "@/lib/credits";
 import { GeminiLiveClient, VOICE_OPTIONS } from "@/lib/geminiLiveClient";
@@ -13,11 +14,11 @@ const CREDIT_CALL_START = 3;
 const CHAT_GROUPS = "group_4,group_1";
 const CALL_GROUPS = "group_4,group_1";
 
-const SYSTEM_INSTRUCTION = `Kamu adalah "Dosen AI at" di platform Skripzy, asisten akademik berbahasa Indonesia.
+const SYSTEM_INSTRUCTION = `Kamu adalah "Dosen AI" di platform Skripzy, asisten akademik berbahasa Indonesia.
 Peranmu:
 - Menjawab pertanyaan seputar metodologi penelitian, struktur skripsi, teknik penulisan ilmiah, analisis data, serta hal lain yang relevan dengan karya ilmiah.
 - Berbicara layaknya dosen pembimbing yang sabar dan suportif, namun tetap akademis.
-- Jawab dalam 2-4 kalimat yang padat dan langsung ke inti. Jangan bertele-tele.
+- Fleksibilitas Jawaban: Jika pertanyaan bersifat umum atau "small talk", jawablah dengan singkat (2-4 kalimat). Namun, jika pertanyaan bersifat teknis, meminta penjelasan metode, atau jika kamu melakukan pencarian internet yang membutuhkan ringkasan mendalam, berikan jawaban yang lebih komprehensif, terstruktur, dan detail sesuai kebutuhan informasi tersebut.
 - Jika pertanyaan di luar konteks akademik/penelitian, tolak dengan sopan.
 - Gunakan bahasa Indonesia formal tapi komunikatif`;
 
@@ -30,6 +31,8 @@ export default function ChatDosenAIPage() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [searching, setSearching] = useState(false); // UI indicator saat API sedang bekerja
+  const [webSearchActive, setWebSearchActive] = useState(false); // State pemicu manual
   const [expandedThinking, setExpandedThinking] = useState({}); // Track which thinking blocks are expanded
   const chatEndRef = useRef(null);
 
@@ -38,11 +41,11 @@ export default function ChatDosenAIPage() {
   const [callTranscript, setCallTranscript] = useState([]);
   const recognitionRef = useRef(null);
   const callEndRef = useRef(null);
-  
+
   const [selectedVoice, setSelectedVoice] = useState("Aoede");
   const [expandedVoiceOptions, setExpandedVoiceOptions] = useState(false);
-  const [useLiveMode, setUseLiveMode] = useState(true); 
-  
+  const [useLiveMode, setUseLiveMode] = useState(true);
+
   const liveClientRef = useRef(null);
   const micStreamRef = useRef(null);
   const audioProcessorRef = useRef(null);
@@ -75,28 +78,28 @@ export default function ChatDosenAIPage() {
    */
   const extractThinkingBlocks = (text) => {
     if (!text) return { thinking: "", content: text };
-    
+
     let thinking = [];
     let contentLines = [];
-    
+
     // Split by double newlines untuk process sebagai paragraphs
     const paragraphs = text.split(/\n\s*\n+/);
-    
+
     // Thinking keywords yang kita cari
     const thinkingKeywords = [
-      "Crafting", "Refining", "Reflecting", "Planning", "Thinking", 
+      "Crafting", "Refining", "Reflecting", "Planning", "Thinking",
       "Formulating", "Considering", "Analyzing", "Developing", "Creating",
       "Preparing", "Constructing", "Generating", "Composing", "Drafting",
       "Reviewing", "Revising", "Adjusting", "Enhancing", "Optimizing"
     ];
-    
+
     // Create regex pattern from keywords
     const keywordPattern = new RegExp(`^\\*\\*(${thinkingKeywords.join("|")})[\\w\\s]*\\*\\*`, "i");
-    
+
     // Process setiap paragraph
     for (let para of paragraphs) {
       const trimmedPara = para.trim();
-      
+
       // Check if paragraph starts with thinking indicator
       if (keywordPattern.test(trimmedPara)) {
         thinking.push(trimmedPara);
@@ -104,24 +107,46 @@ export default function ChatDosenAIPage() {
         contentLines.push(trimmedPara);
       }
     }
-    
+
     // Also extract XML thinking tags
     const xmlThinkingPattern = /<thinking>[\s\S]*?<\/thinking>/g;
     const content = contentLines.join("\n\n");
     const xmlMatches = content.match(xmlThinkingPattern);
-    
+
     if (xmlMatches) {
       const xmlThinking = xmlMatches.map(m => m.replace(/<\/?thinking>/g, "")).join("\n\n");
       thinking.push(xmlThinking);
     }
-    
+
     // Remove XML tags from final content
     const finalContent = content.replace(xmlThinkingPattern, "").replace(/\n\s*\n+/g, "\n\n").trim();
-    
-    return { 
-      thinking: thinking.join("\n\n").trim(), 
-      content: finalContent 
+
+    return {
+      thinking: thinking.join("\n\n").trim(),
+      content: finalContent
     };
+  };
+
+  /**
+   * Extract unique sources from Gemini grounding metadata
+   */
+  const extractGroundingSources = (metadata) => {
+    if (!metadata || !metadata.groundingChunks) return [];
+
+    const sources = [];
+    const seenUris = new Set();
+
+    metadata.groundingChunks.forEach(chunk => {
+      if (chunk.web && chunk.web.uri && !seenUris.has(chunk.web.uri)) {
+        sources.push({
+          title: chunk.web.title || "Sumber Informasi",
+          url: chunk.web.uri
+        });
+        seenUris.add(chunk.web.uri);
+      }
+    });
+
+    return sources;
   };
 
   const speak = useCallback((text, onEnd) => {
@@ -145,39 +170,77 @@ export default function ChatDosenAIPage() {
     setInput("");
     const newMessages = [...messages, { role: "user", text: userMsg }];
     setMessages(newMessages);
+    
+    // Gunakan state manual webSearchActive sebagai penentu mode
+    const isSearchNeeded = webSearchActive;
+
     setLoading(true);
+    if (isSearchNeeded) setSearching(true);
 
     try {
       await deductCredits(user.uid, CREDIT_PER_MSG);
-      let aiText = await callGemini({
+
+      // Gunakan model grounding (Gemini 2.0) jika mode search aktif
+      const targetModel = isSearchNeeded ? MODELS.grounding : MODELS.lite;
+      
+      // Inject instruksi tambahan jika sedang browsing agar AI tidak cuma "janji"
+      const currentSystemInstruction = isSearchNeeded 
+        ? `${SYSTEM_INSTRUCTION}\n\nIMPORTANT: Internet access is ENABLED. Use the Google Search tool to provide real-time information.`
+        : SYSTEM_INSTRUCTION;
+
+      const response = await callGemini({
         history: newMessages,
-        systemInstruction: SYSTEM_INSTRUCTION,
-        model: MODELS.lite,
+        systemInstruction: currentSystemInstruction,
+        model: targetModel,
         group: CHAT_GROUPS,
         temperature: 0.6,
         thinkingConfig: { thinkingBudget: 0 },
-        useSearchGrounding: true,
+        useSearchGrounding: isSearchNeeded,
+        returnMetadata: isSearchNeeded
       });
+
+      // Defensive check: handle both object and string responses
+      const aiText = (response && typeof response === "object") ? response.text : (response || "");
+      const metadata = (response && typeof response === "object") ? response.groundingMetadata : null;
+
       // Extract thinking blocks dari response
       const { thinking, content } = extractThinkingBlocks(aiText);
-      setMessages(prev => [...prev, { role: "model", text: content, thinking }]);
+      const sources = extractGroundingSources(metadata);
+
+      setMessages(prev => [...prev, { 
+        role: "model", 
+        text: content, 
+        thinking, 
+        isGrounded: isSearchNeeded,
+        sources 
+      }]);
+      
+      // Reset mode search setelah satu pesan terkirim agar hemat kuota
+      setWebSearchActive(false);
+
     } catch (err) {
-      setMessages(prev => [...prev, { role: "model", text: `⚠️ Error: ${err.message}` }]);
+      console.error("[ChatDosen] Error:", err);
+      // Pesan error ramah pengguna
+      setMessages(prev => [...prev, { 
+        role: "model", 
+        text: "⚠️ Waduh, sepertinya sesi pencarian internet sedang padat atau ada gangguan koneksi. \n\nCoba kirim ulang pesan Anda atau matikan mode pencarian (ikon globe) jika masalah berlanjut ya!" 
+      }]);
     } finally {
       setLoading(false);
+      setSearching(false);
     }
   };
 
   const startCall = async () => {
     if (!user) return;
-    if (credits < CREDIT_CALL_START) { 
-      alert("Kredit tidak cukup untuk memulai panggilan."); return; 
+    if (credits < CREDIT_CALL_START) {
+      alert("Kredit tidak cukup untuk memulai panggilan."); return;
     }
 
     try {
       await deductCredits(user.uid, CREDIT_CALL_START);
-    } catch (err) { 
-      alert(err.message); return; 
+    } catch (err) {
+      alert(err.message); return;
     }
 
     setCallActive(true);
@@ -226,11 +289,11 @@ export default function ChatDosenAIPage() {
       setTimeout(() => {
         liveClient.sendText("Halo, tolong sapa saya dan perkenalkan dirimu dengan ramah sebagai dosen AI pembimbing saya.");
       }, 500);
-      
+
     } catch (error) {
       console.error("[StartCall] Failed:", error);
-      setCallTranscript(prev => [...prev, { 
-        role: "model", text: `⚠️ Gagal memulai: ${error.message}` 
+      setCallTranscript(prev => [...prev, {
+        role: "model", text: `⚠️ Gagal memulai: ${error.message}`
       }]);
       setCallStatus("error");
     }
@@ -251,7 +314,7 @@ export default function ChatDosenAIPage() {
 
       processor.onaudioprocess = (e) => {
         const float32Data = e.inputBuffer.getChannelData(0);
-        
+
         // Konversi PCM Float32 ke PCM Int16
         const pcm16 = new Int16Array(float32Data.length);
         for (let i = 0; i < float32Data.length; i++) {
@@ -264,7 +327,7 @@ export default function ChatDosenAIPage() {
         let binary = '';
         const chunkSize = 0x8000;
         for (let i = 0; i < uint8.length; i += chunkSize) {
-            binary += String.fromCharCode.apply(null, uint8.subarray(i, i + chunkSize));
+          binary += String.fromCharCode.apply(null, uint8.subarray(i, i + chunkSize));
         }
         const base64Data = btoa(binary);
 
@@ -273,7 +336,7 @@ export default function ChatDosenAIPage() {
       };
 
       source.connect(processor);
-      processor.connect(audioCtx.destination); 
+      processor.connect(audioCtx.destination);
       audioProcessorRef.current = { audioCtx, source, processor };
 
     } catch (err) {
@@ -295,7 +358,7 @@ export default function ChatDosenAIPage() {
     if (!recognitionRef.current) return;
     setCallStatus("listening");
     const recognition = recognitionRef.current;
-    
+
     recognition.onresult = async (event) => {
       const transcript = event.results[0][0].transcript?.trim();
       if (!transcript) { startListeningLegacy(); return; }
@@ -305,9 +368,9 @@ export default function ChatDosenAIPage() {
 
       try {
         let aiText = await callGemini({
-          history, 
-          systemInstruction: SYSTEM_INSTRUCTION, 
-          model: MODELS.primary, 
+          history,
+          systemInstruction: SYSTEM_INSTRUCTION,
+          model: MODELS.primary,
           group: CALL_GROUPS,
           thinkingConfig: { thinkingBudget: 0 },
         });
@@ -322,18 +385,18 @@ export default function ChatDosenAIPage() {
         setTimeout(() => startListeningLegacy(), 2000);
       }
     };
-    try { window.speechSynthesis?.cancel(); recognition.start(); } catch (err) {}
+    try { window.speechSynthesis?.cancel(); recognition.start(); } catch (err) { }
   }, [callActive, speak]);
 
   const endCall = () => {
     setCallActive(false);
     setCallStatus("idle");
-    
+
     if (liveClientRef.current) {
       liveClientRef.current.disconnect();
       liveClientRef.current = null;
     }
-    
+
     if (audioProcessorRef.current) {
       const { audioCtx, source, processor } = audioProcessorRef.current;
       processor.disconnect();
@@ -361,12 +424,42 @@ export default function ChatDosenAIPage() {
 
   return (
     <div className="animate-fade-in" style={{ width: "100%", maxWidth: "980px", margin: "0 auto", minHeight: "calc(100vh - 120px)", display: "flex", flexDirection: "column", padding: "0 1rem" }}>
-      
+
       {/* Inject Keyframes Animasi Soundwave */}
-      <style dangerouslySetInnerHTML={{__html: `
+      <style dangerouslySetInnerHTML={{
+        __html: `
         @keyframes soundWave {
           0%, 100% { height: 4px; }
           50% { height: 24px; }
+        }
+        @keyframes spinSlow {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        .animate-spin-slow {
+          animation: spinSlow 3s linear infinite;
+        }
+        .markdown-body {
+          font-size: 0.9rem;
+          line-height: 1.6;
+        }
+        .markdown-body p {
+          margin-bottom: 0.75rem;
+        }
+        .markdown-body ul, .markdown-body ol {
+          margin-bottom: 1rem;
+          padding-left: 1.25rem;
+          display: flex;
+          flex-direction: column;
+          gap: 0.4rem;
+        }
+        .markdown-body li {
+          margin-bottom: 0.2rem;
+          list-style-type: disc;
+        }
+        .markdown-body strong {
+          color: inherit;
+          font-weight: 700;
         }
         @media (max-width: 768px) {
           #chat-header { flex-direction: column; align-items: flex-start; }
@@ -434,25 +527,25 @@ export default function ChatDosenAIPage() {
         <div className="glass-panel" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
           <div style={{ flex: 1, overflowY: "auto", padding: "1.25rem 1rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
             {messages.length === 0 && (
-                <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "1rem", color: "var(--text-muted)" }}>
-                  <div style={{ width: "64px", height: "64px", borderRadius: "50%", background: "linear-gradient(135deg, rgba(99,102,241,0.1), rgba(139,92,246,0.1))", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 8px rgba(99,102,241,0.1)" }}>
-                    <PremiumIcon name="messageSquare" size={28} style={{ color: "var(--primary)" }} />
-                  </div>
-                  <div style={{ textAlign: "center" }}>
-                    <p style={{ margin: 0, fontSize: "0.95rem", textAlign: "center", maxWidth: "280px", lineHeight: 1.5, color: "var(--text-main)", fontWeight: 500 }}>
-                      Mulai percakapan dengan Dosen AI
-                    </p>
-                    <p style={{ margin: "0.4rem 0 0 0", fontSize: "0.8rem", color: "var(--text-muted)" }}>
-                      Tanyakan seputar skripsi Anda
-                    </p>
-                  </div>
+              <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "1rem", color: "var(--text-muted)" }}>
+                <div style={{ width: "64px", height: "64px", borderRadius: "50%", background: "linear-gradient(135deg, rgba(99,102,241,0.1), rgba(139,92,246,0.1))", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 8px rgba(99,102,241,0.1)" }}>
+                  <PremiumIcon name="messageSquare" size={28} style={{ color: "var(--primary)" }} />
                 </div>
+                <div style={{ textAlign: "center" }}>
+                  <p style={{ margin: 0, fontSize: "0.95rem", textAlign: "center", maxWidth: "280px", lineHeight: 1.5, color: "var(--text-main)", fontWeight: 500 }}>
+                    Mulai percakapan dengan Dosen AI
+                  </p>
+                  <p style={{ margin: "0.4rem 0 0 0", fontSize: "0.8rem", color: "var(--text-muted)" }}>
+                    Tanyakan seputar skripsi Anda
+                  </p>
+                </div>
+              </div>
             )}
             {messages.map((msg, idx) => {
               const isUser = msg.role === "user";
               const hasThinking = msg.thinking && msg.thinking.length > 0;
               const isExpanded = expandedThinking[`msg-${idx}`];
-              
+
               return (
                 <div key={idx} id="chat-bubble-wrapper" style={{ alignSelf: isUser ? "flex-end" : "flex-start", maxWidth: "85%" }}>
                   <div style={{
@@ -475,18 +568,62 @@ export default function ChatDosenAIPage() {
                       borderTopLeftRadius: !isUser ? "4px" : "14px",
                       backgroundColor: isUser ? "var(--primary)" : "var(--surface-hover)",
                       color: isUser ? "white" : "var(--text-main)",
-                      fontSize: "0.9rem", lineHeight: 1.5, whiteSpace: "pre-wrap",
                       boxShadow: isUser ? "0 1px 3px rgba(99,102,241,0.15)" : "none",
                       wordBreak: "break-word"
                     }}>
-                      {msg.text}
+                      <div className="markdown-body">
+                        {isUser ? (
+                          <div style={{ whiteSpace: "pre-wrap" }}>{msg.text}</div>
+                        ) : (
+                          <ReactMarkdown>{msg.text}</ReactMarkdown>
+                        )}
+                      </div>
+
+                      {/* Grounding Sources (Citations) */}
+                      {msg.sources && msg.sources.length > 0 && (
+                        <div style={{
+                          marginTop: "0.75rem",
+                          paddingTop: "0.6rem",
+                          borderTop: "1px solid rgba(99,102,241,0.2)",
+                          fontSize: "0.75rem"
+                        }}>
+                          <p style={{ margin: "0 0 0.4rem 0", fontWeight: 700, opacity: 0.8, color: isUser ? "white" : "var(--primary)" }}>
+                            🔗 Referensi:
+                          </p>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", alignItems: "center" }}>
+                            {msg.sources.map((source, sIdx) => (
+                              <div key={sIdx} style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                                <a
+                                  href={source.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{
+                                    color: isUser ? "white" : "var(--primary)",
+                                    textDecoration: "underline",
+                                    opacity: 0.9,
+                                    maxWidth: "180px",
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                    whiteSpace: "nowrap"
+                                  }}
+                                >
+                                  {source.title}
+                                </a>
+                                {sIdx < msg.sources.length - 1 && (
+                                  <span style={{ color: isUser ? "white" : "var(--text-muted)", opacity: 0.5 }}>•</span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
-                  
+
                   {/* Thinking Block Dropdown */}
                   {hasThinking && (
                     <div style={{ marginTop: "0.5rem", marginLeft: isUser ? "0" : "2.8rem" }}>
-                      <button 
+                      <button
                         onClick={() => setExpandedThinking(prev => ({ ...prev, [`msg-${idx}`]: !isExpanded }))}
                         style={{
                           display: "flex", alignItems: "center", gap: "0.3rem",
@@ -499,7 +636,7 @@ export default function ChatDosenAIPage() {
                         <PremiumIcon name={isExpanded ? "chevronDown" : "chevronRight"} size={12} />
                         💭 Thinking
                       </button>
-                      
+
                       {isExpanded && (
                         <div style={{
                           marginTop: "0.4rem", padding: "0.7rem 0.85rem",
@@ -517,25 +654,48 @@ export default function ChatDosenAIPage() {
               );
             })}
             {loading && (
-                <div style={{ alignSelf: "flex-start", display: "flex", gap: "0.8rem" }}>
-                  <div style={{ width: "36px", height: "36px", borderRadius: "50%", backgroundColor: "rgba(99,102,241,0.1)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    <PremiumIcon name="sparkles" size={18} style={{ color: "var(--primary)" }} />
-                  </div>
-                  <div style={{ padding: "0.85rem 1.1rem", borderRadius: "16px", borderTopLeftRadius: "4px", backgroundColor: "var(--surface-hover)", display: "flex", gap: "8px", alignItems: "center" }}>
+              <div style={{ alignSelf: "flex-start", display: "flex", gap: "0.8rem" }}>
+                <div style={{ width: "36px", height: "36px", borderRadius: "50%", backgroundColor: "rgba(99,102,241,0.1)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <PremiumIcon name={searching ? "globe" : "sparkles"} size={18} style={{ color: "var(--primary)" }} className={searching ? "animate-spin-slow" : ""} />
+                </div>
+                <div style={{ padding: "0.85rem 1.1rem", borderRadius: "16px", borderTopLeftRadius: "4px", backgroundColor: "var(--surface-hover)", display: "flex", flexDirection: "column", gap: "8px" }}>
+                  {searching && (
+                    <div style={{ fontSize: "0.75rem", color: "var(--primary)", fontWeight: 600, display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.2rem" }}>
+                      <span className="animate-pulse">🌐 Mencari informasi di internet...</span>
+                    </div>
+                  )}
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                     <span className="animate-pulse" style={{ width: 7, height: 7, borderRadius: "50%", backgroundColor: "var(--text-muted)" }} />
                     <span className="animate-pulse" style={{ width: 7, height: 7, borderRadius: "50%", backgroundColor: "var(--text-muted)", animationDelay: "0.15s" }} />
                     <span className="animate-pulse" style={{ width: 7, height: 7, borderRadius: "50%", backgroundColor: "var(--text-muted)", animationDelay: "0.3s" }} />
                   </div>
                 </div>
-              )}
+              </div>
+            )}
             <div ref={chatEndRef} />
           </div>
 
-          <form id="chat-form" onSubmit={handleSendChat} style={{ padding: "0.85rem 1rem", borderTop: "1px solid var(--border)", display: "flex", gap: "0.6rem", backgroundColor: "var(--surface)" }}>
+          <form id="chat-form" onSubmit={handleSendChat} style={{ padding: "0.85rem 1rem", borderTop: "1px solid var(--border)", display: "flex", gap: "0.6rem", backgroundColor: "var(--surface)", alignItems: "center" }}>
+            <button
+              type="button"
+              onClick={() => setWebSearchActive(!webSearchActive)}
+              title={webSearchActive ? "Matikan Pencarian Web" : "Aktifkan Pencarian Web"}
+              style={{
+                width: "40px", height: "40px", borderRadius: "50%", 
+                border: webSearchActive ? "2px solid #4B5563" : "1px solid var(--border)",
+                backgroundColor: webSearchActive ? "#4B5563" : "var(--surface-hover)",
+                color: webSearchActive ? "white" : "#9CA3AF",
+                display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", transition: "all 0.2s", position: "relative",
+                boxShadow: webSearchActive ? "0 0 10px rgba(75, 85, 99, 0.3)" : "none"
+              }}
+            >
+              <PremiumIcon name="globe" size={20} />
+            </button>
+            
             <input
               id="chat-input"
               type="text" value={input} onChange={e => setInput(e.target.value)}
-              placeholder="Ketik pertanyaan..."
+              placeholder={webSearchActive ? "Cari informasi di internet..." : "Ketik pertanyaan..."}
               style={{
                 flex: 1, padding: "0.7rem 1rem", borderRadius: "24px",
                 border: "1px solid var(--border)", backgroundColor: "var(--surface-hover)", outline: "none", fontSize: "0.9rem", color: "var(--text-main)"
@@ -565,7 +725,7 @@ export default function ChatDosenAIPage() {
           <div style={{ textAlign: "center" }}>
             <h2 style={{ fontSize: "1.35rem", margin: "0 0 0.5rem", fontWeight: 700 }}>Voice Call Dosen AI</h2>
             <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", margin: 0, maxWidth: "340px", lineHeight: 1.5 }}>
-              Berbicara langsung dengan AI menggunakan suara pilihan Anda
+              Berbicara langsung dengan Skripzy AI menggunakan suara pilihan Anda
             </p>
           </div>
 
@@ -594,7 +754,7 @@ export default function ChatDosenAIPage() {
               <span>{VOICE_OPTIONS.find(v => v.id === selectedVoice)?.label || "Pilih Suara"}</span>
               <PremiumIcon name={expandedVoiceOptions ? "chevronDown" : "chevronRight"} size={18} style={{ transform: expandedVoiceOptions ? "rotate(0deg)" : "rotate(0deg)", transition: "transform 0.2s" }} />
             </button>
-            
+
             {expandedVoiceOptions && (
               <div style={{ marginTop: "0.75rem", display: "flex", flexDirection: "column", gap: "0.6rem", maxHeight: "220px", overflowY: "auto" }}>
                 {VOICE_OPTIONS.map((voice) => (
@@ -637,15 +797,15 @@ export default function ChatDosenAIPage() {
       {/* CALL MODE (ACTIVE SCREEN) */}
       {mode === "call" && callActive && (
         <div className="glass-panel" style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", marginBottom: "1rem" }}>
-          
+
           <div style={{ padding: "1rem 1.25rem", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "var(--surface)", flexWrap: "wrap", gap: "0.75rem" }}>
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "0.2rem" }}>
-                <div style={{ 
-                  width: "10px", height: "10px", borderRadius: "50%", 
-                  backgroundColor: callStatus === "listening" ? "#10B981" : callStatus === "speaking" ? "#6366F1" : callStatus === "connecting" ? "#3B82F6" : "#9CA3AF" 
+                <div style={{
+                  width: "10px", height: "10px", borderRadius: "50%",
+                  backgroundColor: callStatus === "listening" ? "#10B981" : callStatus === "speaking" ? "#6366F1" : callStatus === "connecting" ? "#3B82F6" : "#9CA3AF"
                 }} className={callStatus !== "idle" && callStatus !== "error" ? "animate-pulse" : ""} />
-                
+
                 <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-main)" }}>
                   {callStatus === "connecting" && "🔌 Menghubungkan..."}
                   {callStatus === "listening" && "🎤 Silakan bicara..."}
@@ -671,7 +831,7 @@ export default function ChatDosenAIPage() {
                       backgroundColor: "#6366F1",
                       borderRadius: "4px",
                       animation: `soundWave 1s infinite ease-in-out ${i * 0.15}s`,
-                      height: "8px" 
+                      height: "8px"
                     }}
                   />
                 ))}
@@ -693,28 +853,28 @@ export default function ChatDosenAIPage() {
 
           {/* Audio Indicator Section */}
           <div style={{ padding: "1.25rem", borderTop: "1px solid var(--border)", display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem", backgroundColor: "var(--surface)" }}>
-            <div style={{ 
-              width: "72px", height: "72px", borderRadius: "50%", 
-              display: "flex", alignItems: "center", justifyContent: "center", 
-              backgroundColor: callStatus === "listening" ? "rgba(16,185,129,0.15)" : callStatus === "speaking" ? "rgba(99,102,241,0.15)" : "var(--surface-hover)", 
+            <div style={{
+              width: "72px", height: "72px", borderRadius: "50%",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              backgroundColor: callStatus === "listening" ? "rgba(16,185,129,0.15)" : callStatus === "speaking" ? "rgba(99,102,241,0.15)" : "var(--surface-hover)",
               transition: "all 0.3s",
               boxShadow: callStatus === "listening" ? "0 4px 12px rgba(16,185,129,0.1)" : callStatus === "speaking" ? "0 4px 12px rgba(99,102,241,0.1)" : "none"
             }}>
-              <PremiumIcon 
-                name={callStatus === "listening" ? "mic" : "radio"} 
+              <PremiumIcon
+                name={callStatus === "listening" ? "mic" : "radio"}
                 size={32}
-                style={{ 
+                style={{
                   color: callStatus === "listening" ? "#10B981" : "#9CA3AF",
                   opacity: callStatus === "speaking" ? 0.4 : 1,
                   filter: callStatus === "speaking" ? "blur(0.5px)" : "none",
                   transition: "all 0.3s",
                   pointerEvents: callStatus === "speaking" ? "none" : "auto"
-                }} 
+                }}
               />
 
             </div>
           </div>
-          
+
         </div>
       )}
     </div>

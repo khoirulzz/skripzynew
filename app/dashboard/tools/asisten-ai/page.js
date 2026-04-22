@@ -2,9 +2,11 @@
 
 import { useState } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
+import ReactMarkdown from "react-markdown";
 import { callGemini, MODELS } from "@/lib/callWorker";
 import { deductCredits, refundCredits } from "@/lib/credits";
-import { searchSemanticScholar } from "@/lib/semanticScholar";
+import { searchPapersWithFallback } from "@/lib/referenceApis";
+import AnimatedLoadingScreen from "@/components/workspace/AnimatedLoadingScreen";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
 import Link from "next/link";
 
@@ -19,6 +21,7 @@ export default function AsistenAIPage() {
   // States untuk Generator Judul
   const [topic, setTopic] = useState("");
   const [loadingJudul, setLoadingJudul] = useState(false);
+  const [apiAttemptJudul, setApiAttemptJudul] = useState("core");
   const [resultJudul, setResultJudul] = useState("");
   const [errorJudul, setErrorJudul] = useState("");
 
@@ -28,6 +31,7 @@ export default function AsistenAIPage() {
   const [bgProblem, setBgProblem] = useState("");
   const [includeReferences, setIncludeReferences] = useState(true);
   const [loadingBg, setLoadingBg] = useState(false);
+  const [apiAttemptBg, setApiAttemptBg] = useState("core");
   const [resultBg, setResultBg] = useState("");
   const [errorBg, setErrorBg] = useState("");
 
@@ -41,19 +45,20 @@ export default function AsistenAIPage() {
     setLoadingJudul(true);
     setErrorJudul("");
     setResultJudul("");
+    setApiAttemptJudul("core");
 
     try {
       await deductCredits(user.uid, COST_JUDUL);
 
-      // Cari referensi dulu
-      const papers = await searchSemanticScholar(topic, { limit: 5 });
-      if (papers.length === 0) {
-        throw new Error("Tidak ditemukan referensi yang relevan di Semantic Scholar. Coba gunakan kata kunci yang lebih umum.");
+      // Cari referensi dulu dengan new API
+      const result = await searchPapersWithFallback(topic, { limit: 5, yearRange: "10" });
+      if (result.papers.length === 0) {
+        throw new Error("Tidak ditemukan referensi yang relevan. Coba gunakan kata kunci yang lebih umum.");
       }
+      setApiAttemptJudul(result.source);
 
-      const referencesText = papers.map(p => {
-        const authorList = p.authors.length > 0 ? p.authors.join(', ') : 'Penulis tidak diketahui';
-        return `Judul: ${p.title}\nPenulis: ${authorList}\nTahun: ${p.year}\nURL: ${p.url}\nAbstrak: ${p.abstract || 'Tidak tersedia.'}`;
+      const referencesText = result.papers.map(p => {
+        return `Judul: ${p.title}\nPenulis: ${p.authorString}\nTahun: ${p.year}\nURL: ${p.displayUrl || p.url}\nAbstrak: ${p.abstract || 'Tidak tersedia.'}`;
       }).join('\n\n---\n\n');
 
       const prompt = `Anda adalah ahli metodologi penelitian. Tugas Anda menganalisis daftar referensi penelitian berikut, lalu:
@@ -63,14 +68,14 @@ export default function AsistenAIPage() {
 3.  Identifikasi Potensi <b>Novelty</b> (kebaruan) yang belum banyak dibahas.
 4.  Buat 3 rekomendasi judul baru yang mengandung unsur novelty tersebut.
 5.  Untuk setiap judul rekomendasi, berikan 2 rumusan masalah yang relevan.
-6.  Jangan gunakan format markdown \`\`\`html atau tanda \`\`\` apapun. Hasilkan output bersih yang siap ditampilkan di browser sebagai HTML.
+6.  Jangan gunakan format markdown \`\`\`html atau tanda \`\`\` apapun. Sajikan hasil langsung dalam format Markdown yang bersih dan rapi.
 
-Sajikan dalam format HTML rapi. LANGSUNG TAMPILKAN HASIL TANPA KALIMAT PENGANTAR ATAU PENUTUP.
+Sajikan dalam format Markdown yang mudah dibaca. LANGSUNG TAMPILKAN HASIL TANPA KALIMAT PENGANTAR ATAU PENUTUP.
 
 Berikut adalah data untuk dianalisis:
 ${referencesText}
 
-Gunakan tag <h4>, <h5>, <ul>, <li>, dan <a> dengan rapi agar mudah dibaca.
+Gunakan heading (###), list (-), dan bold (**) secara tepat agar mudah dibaca. Link referensi tetap gunakan format markdown [Judul](URL).
 `;
 
       const aiResponse = await callGemini({
@@ -97,6 +102,7 @@ Gunakan tag <h4>, <h5>, <ul>, <li>, dan <a> dengan rapi agar mudah dibaca.
     setLoadingBg(true);
     setErrorBg("");
     setResultBg("");
+    setApiAttemptBg("core");
 
     try {
       await deductCredits(user.uid, COST_BG);
@@ -105,9 +111,12 @@ Gunakan tag <h4>, <h5>, <ul>, <li>, dan <a> dengan rapi agar mudah dibaca.
       let papers = [];
 
       if (includeReferences) {
-        papers = await searchSemanticScholar(bgTitle, { limit: 5 });
-        if (papers.length > 0) {
-          const refs = papers.map(p => `Judul: ${p.title}\nPenulis: ${p.authors.join(', ')}\nTahun: ${p.year}\nAbstrak: ${p.abstract}`).join('\n\n---\n\n');
+        const result = await searchPapersWithFallback(bgTitle, { limit: 5, yearRange: "10" });
+        setApiAttemptBg(result.source);
+        
+        if (result.papers.length > 0) {
+          papers = result.papers;
+          const refs = papers.map(p => `Judul: ${p.title}\nPenulis: ${p.authorString}\nTahun: ${p.year}\nAbstrak: ${p.abstract}`).join('\n\n---\n\n');
           promptText = `Anda adalah seorang akademisi dan penulis ilmiah profesional. Tugas Anda adalah menyusun narasi latar belakang penelitian yanng manusiawi, mendalam, logis, dan mengalir dengan gaya bahasa akademik yang baik, tetap mempertahankan pola tulisan Manusia, namun tetap komunikatif.
 
 📌 Informasi Penelitian:
@@ -115,7 +124,7 @@ Gunakan tag <h4>, <h5>, <ul>, <li>, dan <a> dengan rapi agar mudah dibaca.
 - Fenomena Umum: ${bgPhenomenon}
 - Masalah Spesifik: ${bgProblem}
 
-📚 Referensi dari Semantic Scholar:
+📚 Referensi dari Database Akademis:
 ${refs}
 
 Tujuan Penulisan:
@@ -125,10 +134,9 @@ Tulis latar belakang penelitian sepanjang 6–7 paragraf yang disusun secara ded
 3. Paragraf penutup menyajikan justifikasi kuat atas urgensi penelitian.
 
 Format Penulisan:
-- Gunakan tag HTML: <p> untuk paragraf, <strong> untuk penekanan.
-- Gunakan "blockquote" untuk menampilkan "research gap".
+- Gunakan format Markdown: **teks** untuk penekanan, > untuk "research gap".
 - Jangan sertakan daftar pustaka di dalam teks.
-- TULISKAN HANYA NARASI. Jangan gunakan markdown block.`;
+- TULISKAN HANYA NARASI. Jangan gunakan markdown block (\`\`\`).`;
         }
       }
 
@@ -139,7 +147,7 @@ Judul Penelitian: ${bgTitle}
 Fenomena Umum: ${bgPhenomenon}
 Masalah Spesifik: ${bgProblem}
 
-Berikan hasil murni dalam format HTML dengan setiap paragraf dibungkus dalam tag <p>. Tanpa markdown block dan kalimat pengantar.`;
+Berikan hasil murni dalam format Markdown yang rapi. Tanpa markdown block dan kalimat pengantar.`;
       }
 
       const aiResponse = await callGemini({
@@ -152,12 +160,11 @@ Berikan hasil murni dalam format HTML dengan setiap paragraf dibungkus dalam tag
       let finalHTML = aiResponse;
 
       if (includeReferences && papers.length > 0) {
-        let referenceListHTML = '<h5 style="margin-top:2rem">Daftar Referensi yang Digunakan</h5><ul>';
+        let referenceListMD = '\n\n### Daftar Referensi yang Digunakan\n';
         papers.forEach(p => {
-          referenceListHTML += `<li><a href="${p.url}" target="_blank" rel="noopener noreferrer">${p.title}</a> (${p.authors.join(', ')}, ${p.year})</li>`;
+          referenceListMD += `- [${p.title}](${p.displayUrl || p.url}) (${p.authorString}, ${p.year})\n`;
         });
-        referenceListHTML += '</ul>';
-        finalHTML += referenceListHTML;
+        finalHTML += referenceListMD;
       }
 
       setResultBg(finalHTML);
@@ -216,7 +223,7 @@ Berikan hasil murni dalam format HTML dengan setiap paragraf dibungkus dalam tag
              <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
                <h3 style={{ fontSize: "1.1rem", margin: 0 }}>Cari Ide Judul (Novelty)</h3>
                <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", margin: "0 0 0.5rem" }}>
-                 AI akan mencari jurnal terkait di Semantic Scholar, menganalisis gap penelitian, dan merekomendasikan judul beserta rumusan masalahnya.
+                 AI akan mencari jurnal dari Core, OpenAlex, dan Unpaywall, menganalisis gap penelitian, dan merekomendasikan judul beserta rumusan masalahnya.
                </p>
 
                {errorJudul && (
@@ -279,7 +286,7 @@ Berikan hasil murni dalam format HTML dengan setiap paragraf dibungkus dalam tag
                   checked={includeReferences} 
                   onChange={(e) => setIncludeReferences(e.target.checked)} 
                 />
-                <label htmlFor="incRef" style={{ fontSize: "0.85rem", cursor: "pointer" }}>Sertakan referensi (Semantic Scholar)</label>
+                <label htmlFor="incRef" style={{ fontSize: "0.85rem", cursor: "pointer" }}>Sertakan referensi (Core + OpenAlex + Unpaywall)</label>
               </div>
 
               <button 
@@ -302,14 +309,12 @@ Berikan hasil murni dalam format HTML dengan setiap paragraf dibungkus dalam tag
              </div>
            )}
            {activeTab === "judul" && loadingJudul && (
-             <div className="animate-pulse" style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-               <div style={{ height: "20px", background: "var(--surface-hover)", width: "60%", borderRadius: "4px" }}></div>
-               <div style={{ height: "20px", background: "var(--surface-hover)", width: "80%", borderRadius: "4px" }}></div>
-               <div style={{ height: "20px", background: "var(--surface-hover)", width: "50%", borderRadius: "4px" }}></div>
-             </div>
+             <AnimatedLoadingScreen isLoading={loadingJudul} apiAttempt={apiAttemptJudul} />
            )}
            {activeTab === "judul" && resultJudul && (
-             <div className="tiptap" dangerouslySetInnerHTML={{ __html: resultJudul }} style={{ fontSize: "0.95rem", lineHeight: 1.6 }} />
+             <div className="markdown-body">
+               <ReactMarkdown>{resultJudul}</ReactMarkdown>
+             </div>
            )}
 
            {activeTab === "latar_belakang" && !loadingBg && !resultBg && (
@@ -318,13 +323,12 @@ Berikan hasil murni dalam format HTML dengan setiap paragraf dibungkus dalam tag
              </div>
            )}
            {activeTab === "latar_belakang" && loadingBg && (
-             <div className="animate-pulse" style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
-               <div style={{ height: "100px", background: "var(--surface-hover)", width: "100%", borderRadius: "8px" }}></div>
-               <div style={{ height: "100px", background: "var(--surface-hover)", width: "100%", borderRadius: "8px" }}></div>
-             </div>
+             <AnimatedLoadingScreen isLoading={loadingBg} apiAttempt={apiAttemptBg} />
            )}
            {activeTab === "latar_belakang" && resultBg && (
-             <div className="tiptap" dangerouslySetInnerHTML={{ __html: resultBg }} style={{ fontSize: "0.95rem", lineHeight: 1.8 }} />
+             <div className="markdown-body">
+               <ReactMarkdown>{resultBg}</ReactMarkdown>
+             </div>
            )}
         </div>
 

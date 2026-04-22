@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
+import ReactMarkdown from "react-markdown";
 import { callGemini } from "@/lib/callWorker";
 import { deductCredits, refundCredits, getCharLimit } from "@/lib/credits";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
@@ -187,7 +188,9 @@ export default function HumanizerPage() {
                   ))}
                 </div>
               ) : (
-                <p style={{ margin: 0, lineHeight: 1.8, fontSize: "0.95rem", whiteSpace: "pre-wrap" }}>{output}</p>
+                <div className="markdown-body">
+                  <ReactMarkdown>{output}</ReactMarkdown>
+                </div>
               )}
             </div>
           )}

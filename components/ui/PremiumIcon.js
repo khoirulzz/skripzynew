@@ -2,11 +2,11 @@
 
 import {
   Moon, Sun, Home, Compass, User, CreditCard, ChevronRight, Zap,
-  LogOut, Settings, HelpCircle, FileText, Database, Send,
+  Settings, HelpCircle, FileText, Database, Send,
   Bold, Italic, List, ListOrdered, Quote, Heading2, Heading3,
   ArrowLeft, Save, Sparkles, Plus, X, Check, ChevronDown, BookOpen,
   BarChart2, MessageSquare, Volume, Upload, AlertCircle, Radio, BookMarked, Mic, Wand2,
-  Menu, LayoutTemplate, Search, Copy, Trash, Globe, Circle, Type, ChevronDownSquare, PieChart, DownloadCloud, BrainCircuit, Box, CheckCircle, Coins, ChartNoAxesCombined, SquarePen
+  Menu, LayoutTemplate, Activity, Layers, Search, Edit, Copy, Trash, Globe, Circle, Type, ChevronDownSquare, PieChart, DownloadCloud, BrainCircuit, Box, CheckCircle, Coins, ChartNoAxesCombined, SquarePen, BarChart3, Users, Tag, Gift, LogOut, Loader
 } from "lucide-react";
 
 // Register all icons used in the app here
@@ -68,6 +68,14 @@ const icons = {
   chartNoAxesCombined: ChartNoAxesCombined,
   globe: Globe,
   search: Search,
+  barChart3: BarChart3,
+  users: Users,
+  tag: Tag,
+  gift: Gift,
+  loader: Loader,
+  edit: Edit,
+  activity: Activity,
+  layers: Layers,
 };
 
 export function PremiumIcon({ name, size = 24, className = "", ...rest }) {

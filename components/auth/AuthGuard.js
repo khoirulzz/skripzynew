@@ -6,7 +6,7 @@ import { useAuth } from "@/components/providers/AuthProvider";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
 
 export function AuthGuard({ children, requireAuth = true }) {
-  const { user, loading } = useAuth();
+  const { user, userData, loading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -14,10 +14,15 @@ export function AuthGuard({ children, requireAuth = true }) {
       if (requireAuth && !user) {
         router.push("/login");
       } else if (!requireAuth && user) {
-        router.push("/dashboard");
+        // Redirect based on role
+        if (userData?.role === "admin") {
+          router.push("/admin");
+        } else {
+          router.push("/dashboard");
+        }
       }
     }
-  }, [user, loading, requireAuth, router]);
+  }, [user, userData, loading, requireAuth, router]);
 
   if (loading) {
     return (

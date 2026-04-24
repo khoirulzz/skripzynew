@@ -6,6 +6,7 @@ import ReactMarkdown from "react-markdown";
 import { callGeminiStream } from "@/lib/callWorker";
 import { deductCredits, refundCredits, getCharLimit } from "@/lib/credits";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
+import { useBillingCatalog } from "@/lib/useBillingCatalog";
 import Link from "next/link";
 
 const CREDIT_COST = 3;
@@ -52,6 +53,7 @@ Tugas kamu:
 
 export default function HumanizerPage() {
   const { user, userData } = useAuth();
+  const { toolMap } = useBillingCatalog();
   const plan      = userData?.plan || "free";
   const charLimit = getCharLimit(plan);
 
@@ -65,12 +67,13 @@ export default function HumanizerPage() {
   const [expandedIntensitas, setExpandedIntensitas] = useState(false);
   const [expandedStyle, setExpandedStyle] = useState(false);
 
+  const creditCost = toolMap["humanizer"]?.creditCost ?? CREDIT_COST;
   const credits   = userData?.credits ?? 0;
-  const canAfford = credits >= CREDIT_COST;
+  const canAfford = credits >= creditCost;
 
   const handleHumanize = async () => {
     if (!user || !input.trim()) return;
-    if (!canAfford) { setError(`Kredit tidak cukup. Butuh ${CREDIT_COST} credit.`); return; }
+    if (!canAfford) { setError(`Kredit tidak cukup. Butuh ${creditCost} credit.`); return; }
     if (input.length > charLimit) { setError(`Teks melebihi batas ${charLimit} karakter.`); return; }
 
     setLoading(true);
@@ -80,7 +83,7 @@ export default function HumanizerPage() {
     const selectedIntensitas = INTENSITAS_LIST.find(i => i.id === intensitas);
 
     try {
-      await deductCredits(user.uid, CREDIT_COST);
+      await deductCredits(user.uid, creditCost);
 
       await callGeminiStream({
         prompt: input,
@@ -92,7 +95,7 @@ export default function HumanizerPage() {
         }
       });
     } catch (err) {
-      await refundCredits(user.uid, CREDIT_COST).catch(() => {});
+      await refundCredits(user.uid, creditCost).catch(() => {});
       setError(err.message || "Terjadi kesalahan. Silakan coba lagi.");
     } finally {
       setLoading(false);
@@ -117,7 +120,7 @@ export default function HumanizerPage() {
         </div>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.4rem 0.85rem", backgroundColor: "rgba(245,158,11,0.1)", borderRadius: "var(--radius-lg)", fontSize: "0.8rem", fontWeight: 600, color: "#D97706" }}>
           <PremiumIcon name="sparkles" size={14} />
-          <span>{CREDIT_COST} credit / humanize</span>
+          <span>{creditCost} credit / humanize</span>
           <span style={{ padding: "1px 6px", background: "linear-gradient(135deg, #6366F1, #8B5CF6)", color: "white", borderRadius: "8px", fontSize: "0.6rem", fontWeight: 800 }}>PRO</span>
         </div>
       </div>

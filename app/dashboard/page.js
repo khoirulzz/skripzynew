@@ -1,6 +1,7 @@
 "use client";
 
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
+import { useBillingCatalog } from "@/lib/useBillingCatalog";
 import Link from "next/link";
 
 // ============================================================
@@ -42,6 +43,7 @@ const WORKSPACE_ITEMS = [
 const QUICK_TOOLS = [
   {
     href: "/dashboard/tools/asisten-ai",
+    slug: "asisten-ai",
     icon: "messageSquare",
     iconColor: "#4F46E5",
     iconBg: "rgba(79, 70, 229, 0.1)",
@@ -53,6 +55,7 @@ const QUICK_TOOLS = [
   },
   {
     href: "/dashboard/tools/parafrase",
+    slug: "parafrase",
     icon: "wand",
     iconColor: "#0EA5E9",
     iconBg: "rgba(14, 165, 233, 0.1)",
@@ -64,6 +67,7 @@ const QUICK_TOOLS = [
   },
   {
     href: "/dashboard/tools/cek-grammar",
+    slug: "cek-grammar",
     icon: "check",
     iconColor: "#10B981",
     iconBg: "rgba(16, 185, 129, 0.1)",
@@ -75,6 +79,7 @@ const QUICK_TOOLS = [
   },
   {
     href: "/dashboard/tools/humanizer",
+    slug: "humanizer",
     icon: "sparkles",
     iconColor: "#F59E0B",
     iconBg: "rgba(245, 158, 11, 0.1)",
@@ -86,6 +91,7 @@ const QUICK_TOOLS = [
   },
   {
     href: "/dashboard/tools/ai-detector",
+    slug: "ai-detector",
     icon: "alertCircle",
     iconColor: "#EF4444",
     iconBg: "rgba(239, 68, 68, 0.1)",
@@ -97,6 +103,7 @@ const QUICK_TOOLS = [
   },
   {
     href: "/dashboard/tools/referensi",
+    slug: "referensi-ringkas",
     icon: "bookOpen",
     iconColor: "#8B5CF6",
     iconBg: "rgba(139, 92, 246, 0.1)",
@@ -108,6 +115,7 @@ const QUICK_TOOLS = [
   },
   {
     href: "/dashboard/tools/simulasi-sidang",
+    slug: "simulasi-sidang",
     icon: "barChart",
     iconColor: "#EC4899",
     iconBg: "rgba(236, 72, 153, 0.1)",
@@ -209,7 +217,7 @@ function QuickToolCard({ tool, plan }) {
       <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", marginTop: "auto" }}>
         <PremiumIcon name="zap" size={12} style={{ color: tool.iconColor }} />
         <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", fontWeight: 600 }}>
-          {tool.credit} credit / penggunaan
+          {tool.creditText || `${tool.credit} credit / penggunaan`}
         </span>
       </div>
     </div>
@@ -226,7 +234,23 @@ import { useAuth } from "@/components/providers/AuthProvider";
 
 export default function DashboardPage() {
   const { userData } = useAuth();
+  const { toolMap } = useBillingCatalog();
   const currentPlan = userData?.plan || "free";
+  const quickTools = QUICK_TOOLS.map((tool) => {
+    if (tool.slug === "asisten-ai") {
+      const titleCost = toolMap["asisten-ai-judul"]?.creditCost ?? 2;
+      const backgroundCost = toolMap["asisten-ai-latar-belakang"]?.creditCost ?? 3;
+      return {
+        ...tool,
+        creditText: `${Math.min(titleCost, backgroundCost)}-${Math.max(titleCost, backgroundCost)} credit / penggunaan`,
+      };
+    }
+
+    return {
+      ...tool,
+      credit: tool.slug ? toolMap[tool.slug]?.creditCost ?? tool.credit : tool.credit,
+    };
+  });
 
   return (
     <div className="animate-fade-in" style={{ maxWidth: "1080px", margin: "0 auto" }}>
@@ -267,7 +291,7 @@ export default function DashboardPage() {
             ✓ Tersedia untuk Semua Plan
           </p>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: "1.25rem" }}>
-            {QUICK_TOOLS.filter(t => !t.pro).map(tool => (
+            {quickTools.filter(t => !t.pro).map(tool => (
               <QuickToolCard key={tool.href} tool={tool} plan={currentPlan} />
             ))}
           </div>
@@ -279,7 +303,7 @@ export default function DashboardPage() {
             ★ Khusus Pro & Plus
           </p>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: "1.25rem" }}>
-            {QUICK_TOOLS.filter(t => t.pro).map(tool => (
+            {quickTools.filter(t => t.pro).map(tool => (
               <QuickToolCard key={tool.href} tool={tool} plan={currentPlan} />
             ))}
           </div>

@@ -6,6 +6,7 @@ import ReactMarkdown from "react-markdown";
 import { callGemini, MODELS } from "@/lib/callWorker";
 import { deductCredits, refundCredits, getCharLimit } from "@/lib/credits";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
+import { useBillingCatalog } from "@/lib/useBillingCatalog";
 import Link from "next/link";
 
 const CREDIT_COST = 3;
@@ -55,6 +56,7 @@ function Gauge({ value }) {
 
 export default function AIDetectorPage() {
   const { user, userData } = useAuth();
+  const { toolMap } = useBillingCatalog();
   const plan = userData?.plan || "free";
   const charLimit = getCharLimit(plan);
 
@@ -63,12 +65,13 @@ export default function AIDetectorPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  const creditCost = toolMap["ai-detector"]?.creditCost ?? CREDIT_COST;
   const credits = userData?.credits ?? 0;
-  const canAfford = credits >= CREDIT_COST;
+  const canAfford = credits >= creditCost;
 
   const handleCheck = async () => {
     if (!user || !input.trim()) return;
-    if (!canAfford) { setError(`Kredit tidak cukup. Butuh ${CREDIT_COST} credit.`); return; }
+    if (!canAfford) { setError(`Kredit tidak cukup. Butuh ${creditCost} credit.`); return; }
     if (input.length > charLimit) { setError(`Teks melebihi batas ${charLimit} karakter.`); return; }
 
     setLoading(true);
@@ -76,7 +79,7 @@ export default function AIDetectorPage() {
     setResult(null);
 
     try {
-      await deductCredits(user.uid, CREDIT_COST);
+      await deductCredits(user.uid, creditCost);
 
       const raw = await callGemini({
         prompt: input,
@@ -95,7 +98,7 @@ export default function AIDetectorPage() {
       const parsed = JSON.parse(jsonStr);
       setResult(parsed);
     } catch (err) {
-      await refundCredits(user.uid, CREDIT_COST).catch(() => {});
+      await refundCredits(user.uid, creditCost).catch(() => {});
       setError(err.message || "Terjadi kesalahan saat menganalisis teks.");
     } finally {
       setLoading(false);
@@ -115,7 +118,7 @@ export default function AIDetectorPage() {
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.5rem 1rem", backgroundColor: "rgba(239, 68, 68, 0.1)", borderRadius: "var(--radius-lg)", fontSize: "0.8rem", fontWeight: 600, color: "var(--danger)", whiteSpace: "nowrap" }}>
           <PremiumIcon name="zap" size={14} />
-          <span>{CREDIT_COST} credit</span>
+          <span>{creditCost} credit</span>
           <span style={{ padding: "2px 8px", background: "linear-gradient(135deg, #6366F1, #8B5CF6)", color: "white", borderRadius: "8px", fontSize: "0.65rem", fontWeight: 800, marginLeft: "0.25rem" }}>PRO</span>
         </div>
       </div>

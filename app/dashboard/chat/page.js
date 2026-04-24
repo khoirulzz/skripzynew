@@ -7,6 +7,7 @@ import { callGemini, callGeminiStream, MODELS, getGeminiLiveProxyUrl } from "@/l
 import { deductCredits } from "@/lib/credits";
 import { GeminiLiveClient, VOICE_OPTIONS } from "@/lib/geminiLiveClient";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
+import { useBillingCatalog } from "@/lib/useBillingCatalog";
 
 // ── Constants ────────────────────────────────────────────────
 const CREDIT_PER_MSG = 1;
@@ -24,7 +25,10 @@ Peranmu:
 
 export default function ChatDosenAIPage() {
   const { user, userData } = useAuth();
+  const { toolMap } = useBillingCatalog();
   const credits = userData?.credits ?? 0;
+  const messageCost = toolMap["chat-message"]?.creditCost ?? CREDIT_PER_MSG;
+  const callStartCost = toolMap["chat-call-start"]?.creditCost ?? CREDIT_CALL_START;
 
   const [mode, setMode] = useState("chat");
 
@@ -157,7 +161,7 @@ export default function ChatDosenAIPage() {
   const handleSendChat = async (e) => {
     e?.preventDefault();
     if (!input.trim() || loading || !user) return;
-    if (credits < CREDIT_PER_MSG) { alert("Kredit tidak cukup."); return; }
+    if (credits < messageCost) { alert("Kredit tidak cukup."); return; }
 
     const userMsg = input.trim();
     setInput("");
@@ -171,7 +175,7 @@ export default function ChatDosenAIPage() {
     if (isSearchNeeded) setSearching(true);
 
     try {
-      await deductCredits(user.uid, CREDIT_PER_MSG);
+      await deductCredits(user.uid, messageCost);
 
       // Gunakan model grounding (Gemini 2.0) jika mode search aktif
       const targetModel = isSearchNeeded ? MODELS.grounding : MODELS.lite;
@@ -263,12 +267,12 @@ export default function ChatDosenAIPage() {
 
   const startCall = async () => {
     if (!user) return;
-    if (credits < CREDIT_CALL_START) {
+    if (credits < callStartCost) {
       alert("Kredit tidak cukup untuk memulai panggilan."); return;
     }
 
     try {
-      await deductCredits(user.uid, CREDIT_CALL_START);
+      await deductCredits(user.uid, callStartCost);
     } catch (err) {
       alert(err.message); return;
     }
@@ -792,7 +796,7 @@ export default function ChatDosenAIPage() {
             )}
           </div>
 
-          <button onClick={startCall} disabled={credits < CREDIT_CALL_START} style={{ padding: "0.85rem 2rem", borderRadius: "50px", border: "none", cursor: credits >= CREDIT_CALL_START ? "pointer" : "not-allowed", background: "linear-gradient(135deg, #10B981, #059669)", color: "white", fontWeight: 700, fontSize: "0.95rem", display: "flex", alignItems: "center", gap: "0.6rem", boxShadow: "0 6px 20px rgba(16,185,129,0.3)", opacity: credits >= CREDIT_CALL_START ? 1 : 0.5, transition: "all 0.2s" }}>
+          <button onClick={startCall} disabled={credits < callStartCost} style={{ padding: "0.85rem 2rem", borderRadius: "50px", border: "none", cursor: credits >= callStartCost ? "pointer" : "not-allowed", background: "linear-gradient(135deg, #10B981, #059669)", color: "white", fontWeight: 700, fontSize: "0.95rem", display: "flex", alignItems: "center", gap: "0.6rem", boxShadow: "0 6px 20px rgba(16,185,129,0.3)", opacity: credits >= callStartCost ? 1 : 0.5, transition: "all 0.2s" }}>
             <PremiumIcon name="mic" size={18} /> Mulai Panggilan
           </button>
         </div>

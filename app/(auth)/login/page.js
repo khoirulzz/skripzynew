@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "@/lib/firebase";
+import { doc, getDoc } from "firebase/firestore";
+import { auth, db } from "@/lib/firebase";
 import { AuthGuard } from "@/components/auth/AuthGuard";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
 import Link from "next/link";
@@ -21,8 +22,12 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      router.push("/dashboard");
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const userRef = doc(db, "users", userCredential.user.uid);
+      const userSnapshot = await getDoc(userRef);
+      const role = userSnapshot.exists() ? userSnapshot.data().role : "user";
+
+      router.push(role === "admin" ? "/admin" : "/dashboard");
     } catch (err) {
       console.error(err);
       setError("Email atau password tidak valid.");

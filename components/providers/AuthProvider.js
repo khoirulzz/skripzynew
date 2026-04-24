@@ -17,13 +17,21 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let unsubscribeDoc = null;
+
     const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
-      
+
+      if (unsubscribeDoc) {
+        unsubscribeDoc();
+        unsubscribeDoc = null;
+      }
+
       if (firebaseUser) {
+        setLoading(true);
         // Fetch user document from Firestore dynamically
         const userRef = doc(db, "users", firebaseUser.uid);
-        const unsubscribeDoc = onSnapshot(userRef, (snapshot) => {
+        unsubscribeDoc = onSnapshot(userRef, (snapshot) => {
           if (snapshot.exists()) {
             setUserData(snapshot.data());
           } else {
@@ -35,15 +43,18 @@ export function AuthProvider({ children }) {
           console.error("Failed to fetch user data:", err);
           setLoading(false);
         });
-        
-        return () => unsubscribeDoc();
       } else {
         setUserData(null);
         setLoading(false);
       }
     });
 
-    return () => unsubscribeAuth();
+    return () => {
+      if (unsubscribeDoc) {
+        unsubscribeDoc();
+      }
+      unsubscribeAuth();
+    };
   }, []);
 
   return (

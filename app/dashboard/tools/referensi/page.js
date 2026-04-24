@@ -8,6 +8,7 @@ import { callGemini, MODELS } from "@/lib/callWorker";
 import { deductCredits, refundCredits } from "@/lib/credits";
 import AnimatedLoadingScreen from "@/components/workspace/AnimatedLoadingScreen";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
+import { useBillingCatalog } from "@/lib/useBillingCatalog";
 import Link from "next/link";
 
 const COST_SUMMARY = 1;
@@ -15,7 +16,9 @@ const API_GROUP = "group_4";
 
 export default function ReferensiCerdasPage() {
   const { user, userData } = useAuth();
+  const { toolMap } = useBillingCatalog();
   const credits = userData?.credits ?? 0;
+  const summaryCost = toolMap["referensi-ringkas"]?.creditCost ?? COST_SUMMARY;
 
   const [query, setQuery] = useState("");
   const [yearRange, setYearRange] = useState("5");
@@ -56,8 +59,8 @@ export default function ReferensiCerdasPage() {
 
   const handleSummarize = async (paper) => {
     if (!user) return;
-    if (credits < COST_SUMMARY) {
-      alert(`Kredit tidak cukup. Butuh ${COST_SUMMARY} credit.`);
+    if (credits < summaryCost) {
+      alert(`Kredit tidak cukup. Butuh ${summaryCost} credit.`);
       return;
     }
     if (!paper.abstract) {
@@ -67,7 +70,7 @@ export default function ReferensiCerdasPage() {
 
     setLoadingSum(prev => ({ ...prev, [paper.id]: true }));
     try {
-      await deductCredits(user.uid, COST_SUMMARY);
+      await deductCredits(user.uid, summaryCost);
       
       const prompt = `Abstrak Jurnal:
 Judul: ${paper.title}
@@ -86,7 +89,7 @@ Tuliskan 1 paragraf inti (apa masalahnya, metode yang dipakai, dan hasilnya), se
 
       setSummaries(prev => ({ ...prev, [paper.id]: aiResponse }));
     } catch (err) {
-      await refundCredits(user.uid, COST_SUMMARY).catch(() => {});
+      await refundCredits(user.uid, summaryCost).catch(() => {});
       console.error(err);
       alert("Gagal meringkas abstrak: " + err.message);
     } finally {
@@ -202,7 +205,7 @@ Tuliskan 1 paragraf inti (apa masalahnya, metode yang dipakai, dan hasilnya), se
                       onClick={() => handleSummarize(paper)}
                       disabled={isSummarizing}
                     >
-                      {isSummarizing ? "Meringkas..." : `Ringkas dengan AI (-${COST_SUMMARY} Kredit)`}
+                      {isSummarizing ? "Meringkas..." : `Ringkas dengan AI (-${summaryCost} Kredit)`}
                     </button>
                   </div>
                 )}

@@ -6,6 +6,7 @@ import ReactMarkdown from "react-markdown";
 import { callGemini } from "@/lib/callWorker";
 import { deductCredits, refundCredits } from "@/lib/credits";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
+import { useBillingCatalog } from "@/lib/useBillingCatalog";
 import Link from "next/link";
 
 const CREDIT_COST = 2;
@@ -58,6 +59,7 @@ function ScoreGauge({ skor }) {
 
 export default function CekGrammarPage() {
   const { user, userData } = useAuth();
+  const { toolMap } = useBillingCatalog();
   const [input, setInput]       = useState("");
   const [result, setResult]     = useState(null);
   const [loading, setLoading]   = useState(false);
@@ -65,19 +67,20 @@ export default function CekGrammarPage() {
   const [copiedFix, setCopiedFix] = useState(false);
   const [activeTab, setActiveTab] = useState("kesalahan"); // 'kesalahan' | 'perbaikan'
 
+  const creditCost = toolMap["cek-grammar"]?.creditCost ?? CREDIT_COST;
   const credits   = userData?.credits ?? 0;
-  const canAfford = credits >= CREDIT_COST;
+  const canAfford = credits >= creditCost;
 
   const handleCheck = async () => {
     if (!user || !input.trim()) return;
-    if (!canAfford) { setError(`Kredit tidak cukup. Butuh ${CREDIT_COST} credit.`); return; }
+    if (!canAfford) { setError(`Kredit tidak cukup. Butuh ${creditCost} credit.`); return; }
 
     setLoading(true);
     setError("");
     setResult(null);
 
     try {
-      await deductCredits(user.uid, CREDIT_COST);
+      await deductCredits(user.uid, creditCost);
 
       const raw = await callGemini({
         prompt: input,
@@ -97,7 +100,7 @@ export default function CekGrammarPage() {
       const parsed = JSON.parse(jsonStr);
       setResult(parsed);
     } catch (err) {
-      await refundCredits(user.uid, CREDIT_COST).catch(() => {});
+      await refundCredits(user.uid, creditCost).catch(() => {});
       setError(err.message || "Terjadi kesalahan. Silakan coba lagi.");
     } finally {
       setLoading(false);
@@ -121,7 +124,7 @@ export default function CekGrammarPage() {
         </div>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.4rem 0.85rem", backgroundColor: "var(--surface-hover)", borderRadius: "var(--radius-lg)", fontSize: "0.8rem", fontWeight: 600 }}>
           <PremiumIcon name="zap" size={14} className="text-primary" />
-          <span>{CREDIT_COST} credit / cek</span>
+          <span>{creditCost} credit / cek</span>
         </div>
       </div>
 
@@ -248,7 +251,7 @@ export default function CekGrammarPage() {
               <div style={{ width: "52px", height: "52px", borderRadius: "50%", backgroundColor: "rgba(16,185,129,0.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <PremiumIcon name="check" size={24} style={{ color: "var(--success)" }} />
               </div>
-              <p className="text-muted" style={{ margin: 0, fontSize: "0.85rem" }}>Masukkan teks di kiri, lalu klik "Cek Grammar" untuk melihat hasilnya di sini.</p>
+              <p className="text-muted" style={{ margin: 0, fontSize: "0.85rem" }}>Masukkan teks di kiri, lalu klik &quot;Cek Grammar&quot; untuk melihat hasilnya di sini.</p>
             </div>
           )}
         </div>

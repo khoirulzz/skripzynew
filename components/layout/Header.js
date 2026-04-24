@@ -4,6 +4,7 @@ import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
+import Image from "next/image";
 import Link from "next/link";
 
 /**
@@ -51,7 +52,7 @@ export function Header({ onMenuClick = null, isMobile = false }) {
         {/* Brand logo shown on mobile (since sidebar is hidden) */}
         {isMobile && (
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <img src="/logo-skripzy.webp" alt="Skripzy" width={24} height={24} style={{ borderRadius: "4px" }} />
+            <Image src="/logo-skripzy.webp" alt="Skripzy" width={24} height={24} style={{ borderRadius: "4px" }} />
             <span style={{ fontSize: "1.1rem", fontWeight: 700, letterSpacing: "-0.02em" }}>
               Skripzy.
             </span>
@@ -95,7 +96,7 @@ export function Header({ onMenuClick = null, isMobile = false }) {
           <PremiumIcon name="coins" size={14} className="text-primary" />
           <span>{userData?.credits || 0}{!isMobile && " Credits"}</span>
           <Link
-            href="dashboard/langganan"
+            href="/dashboard/langganan"
             className="btn btn-primary"
             title="Top Up Credits"
             style={{

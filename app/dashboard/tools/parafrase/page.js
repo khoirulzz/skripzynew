@@ -6,6 +6,7 @@ import ReactMarkdown from "react-markdown";
 import { callGeminiStream } from "@/lib/callWorker";
 import { deductCredits, refundCredits, getCharLimit } from "@/lib/credits";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
+import { useBillingCatalog } from "@/lib/useBillingCatalog";
 import Link from "next/link";
 
 // ── Konstanta ────────────────────────────────────────────────
@@ -115,6 +116,7 @@ function CreativitySlider({ value, onChange, disabled }) {
 // ── Main Page ─────────────────────────────────────────────────
 export default function ParafrasePage() {
   const { user, userData } = useAuth();
+  const { toolMap } = useBillingCatalog();
   const plan = userData?.plan || "free";
   const charLimit = getCharLimit(plan);
 
@@ -130,12 +132,13 @@ export default function ParafrasePage() {
 
   const selectedGaya  = GAYA_LIST.find(g => g.id === gaYa);
   const selectedLevel = CREATIVITY_LEVELS.find(l => l.value === creativity);
+  const creditCost    = toolMap["parafrase"]?.creditCost ?? CREDIT_COST;
   const credits       = userData?.credits ?? 0;
-  const canAfford     = credits >= CREDIT_COST;
+  const canAfford     = credits >= creditCost;
 
   const handleParafrase = async () => {
     if (!user || !input.trim()) return;
-    if (!canAfford) { setError(`Kredit tidak cukup. Butuh ${CREDIT_COST} credit.`); return; }
+    if (!canAfford) { setError(`Kredit tidak cukup. Butuh ${creditCost} credit.`); return; }
     if (input.length > charLimit) { setError(`Teks melebihi batas ${charLimit} karakter untuk plan Anda.`); return; }
 
     setLoading(true);
@@ -143,7 +146,7 @@ export default function ParafrasePage() {
     setOutput("");
 
     try {
-      await deductCredits(user.uid, CREDIT_COST);
+      await deductCredits(user.uid, creditCost);
 
       await callGeminiStream({
         prompt: input,
@@ -156,7 +159,7 @@ export default function ParafrasePage() {
       });
       // The state output is progressively updated via onStream
     } catch (err) {
-      await refundCredits(user.uid, CREDIT_COST).catch(() => {});
+      await refundCredits(user.uid, creditCost).catch(() => {});
       setError(err.message || "Terjadi kesalahan. Silakan coba lagi.");
     } finally {
       setLoading(false);
@@ -183,7 +186,7 @@ export default function ParafrasePage() {
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.5rem 1rem", backgroundColor: "var(--surface-hover)", borderRadius: "var(--radius-lg)", fontSize: "0.8rem", fontWeight: 600, whiteSpace: "nowrap" }}>
           <PremiumIcon name="zap" size={14} className="text-primary" />
-          <span>{CREDIT_COST} credit</span>
+          <span>{creditCost} credit</span>
         </div>
       </div>
 
@@ -341,7 +344,7 @@ export default function ParafrasePage() {
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem" }}>
                 <span className="text-muted">Biaya Parafrase</span>
-                <span style={{ fontWeight: 600, color: "var(--primary)" }}>−{CREDIT_COST}</span>
+                <span style={{ fontWeight: 600, color: "var(--primary)" }}>−{creditCost}</span>
               </div>
             </div>
             
@@ -354,7 +357,7 @@ export default function ParafrasePage() {
               {loading ? (
                 <><PremiumIcon name="zap" size={16} className="animate-pulse" /> Memproses...</>
               ) : (
-                <><PremiumIcon name="wand2" size={16} /> Parafrase Sekarang</>
+                <><PremiumIcon name="wand" size={16} /> Parafrase Sekarang</>
               )}
             </button>
             

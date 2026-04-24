@@ -8,6 +8,7 @@ import { deductCredits, refundCredits } from "@/lib/credits";
 import { searchPapersWithFallback } from "@/lib/referenceApis";
 import AnimatedLoadingScreen from "@/components/workspace/AnimatedLoadingScreen";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
+import { useBillingCatalog } from "@/lib/useBillingCatalog";
 import Link from "next/link";
 
 const COST_JUDUL = 2;
@@ -16,6 +17,9 @@ const API_GROUP = "group_2"; // Group untuk Asisten AI
 
 export default function AsistenAIPage() {
   const { user, userData } = useAuth();
+  const { toolMap } = useBillingCatalog();
+  const titleCost = toolMap["asisten-ai-judul"]?.creditCost ?? COST_JUDUL;
+  const backgroundCost = toolMap["asisten-ai-latar-belakang"]?.creditCost ?? COST_BG;
   const [activeTab, setActiveTab] = useState("judul"); // "judul" | "latar_belakang"
   
   // States untuk Generator Judul
@@ -40,7 +44,7 @@ export default function AsistenAIPage() {
   // ── Fungsi Generator Judul ─────────────────────────────────
   const handleGenerateJudul = async () => {
     if (!user || !topic.trim()) return;
-    if (credits < COST_JUDUL) { setErrorJudul(`Kredit tidak cukup. Butuh ${COST_JUDUL} credit.`); return; }
+    if (credits < titleCost) { setErrorJudul(`Kredit tidak cukup. Butuh ${titleCost} credit.`); return; }
 
     setLoadingJudul(true);
     setErrorJudul("");
@@ -48,7 +52,7 @@ export default function AsistenAIPage() {
     setApiAttemptJudul("core");
 
     try {
-      await deductCredits(user.uid, COST_JUDUL);
+      await deductCredits(user.uid, titleCost);
 
       // Cari referensi dulu dengan new API
       const result = await searchPapersWithFallback(topic, { limit: 5, yearRange: "10" });
@@ -87,7 +91,7 @@ Gunakan heading (###), list (-), dan bold (**) secara tepat agar mudah dibaca. L
 
       setResultJudul(aiResponse);
     } catch (err) {
-      await refundCredits(user.uid, COST_JUDUL).catch(() => {});
+      await refundCredits(user.uid, titleCost).catch(() => {});
       setErrorJudul(err.message || "Gagal generate judul.");
     } finally {
       setLoadingJudul(false);
@@ -97,7 +101,7 @@ Gunakan heading (###), list (-), dan bold (**) secara tepat agar mudah dibaca. L
   // ── Fungsi Latar Belakang ─────────────────────────────────
   const handleGenerateBg = async () => {
     if (!user || !bgTitle.trim() || !bgPhenomenon.trim() || !bgProblem.trim()) return;
-    if (credits < COST_BG) { setErrorBg(`Kredit tidak cukup. Butuh ${COST_BG} credit.`); return; }
+    if (credits < backgroundCost) { setErrorBg(`Kredit tidak cukup. Butuh ${backgroundCost} credit.`); return; }
 
     setLoadingBg(true);
     setErrorBg("");
@@ -105,7 +109,7 @@ Gunakan heading (###), list (-), dan bold (**) secara tepat agar mudah dibaca. L
     setApiAttemptBg("core");
 
     try {
-      await deductCredits(user.uid, COST_BG);
+      await deductCredits(user.uid, backgroundCost);
 
       let promptText = "";
       let papers = [];
@@ -169,7 +173,7 @@ Berikan hasil murni dalam format Markdown yang rapi. Tanpa markdown block dan ka
 
       setResultBg(finalHTML);
     } catch (err) {
-      await refundCredits(user.uid, COST_BG).catch(() => {});
+      await refundCredits(user.uid, backgroundCost).catch(() => {});
       setErrorBg(err.message || "Gagal menyusun latar belakang.");
     } finally {
       setLoadingBg(false);
@@ -248,7 +252,7 @@ Berikan hasil murni dalam format Markdown yang rapi. Tanpa markdown block dan ka
                  onClick={handleGenerateJudul}
                  disabled={loadingJudul || !topic.trim()}
                >
-                 {loadingJudul ? "Menganalisis..." : `Generate Ide Judul (-${COST_JUDUL} Kredit)`}
+                 {loadingJudul ? "Menganalisis..." : `Generate Ide Judul (-${titleCost} Kredit)`}
                </button>
              </div>
           )}
@@ -295,7 +299,7 @@ Berikan hasil murni dalam format Markdown yang rapi. Tanpa markdown block dan ka
                  disabled={loadingBg || !bgTitle.trim() || !bgPhenomenon.trim() || !bgProblem.trim()}
                  style={{ marginTop: "0.5rem" }}
                >
-                 {loadingBg ? "Menyusun Draf..." : `Buat Draf Latar Belakang (-${COST_BG} Kredit)`}
+                 {loadingBg ? "Menyusun Draf..." : `Buat Draf Latar Belakang (-${backgroundCost} Kredit)`}
                </button>
             </div>
           )}

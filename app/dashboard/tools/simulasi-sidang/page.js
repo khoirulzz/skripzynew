@@ -6,6 +6,7 @@ import ReactMarkdown from "react-markdown";
 import { callGemini, MODELS } from "@/lib/callWorker";
 import { deductCredits } from "@/lib/credits";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
+import { useBillingCatalog } from "@/lib/useBillingCatalog";
 import Link from "next/link";
 
 const COST_SESSION = 5;
@@ -20,8 +21,10 @@ const DOSEN_PROFILES = [
 
 export default function SimulasiSidangPage() {
   const { user, userData } = useAuth();
+  const { toolMap } = useBillingCatalog();
   const credits = userData?.credits ?? 0;
   const plan = userData?.plan || "free";
+  const sessionCost = toolMap["simulasi-sidang"]?.creditCost ?? COST_SESSION;
 
   // Setup State
   const [isSessionActive, setIsSessionActive] = useState(false);
@@ -90,13 +93,13 @@ export default function SimulasiSidangPage() {
   const handleStartSession = async (e) => {
     e.preventDefault();
     if (!skripsiTitle.trim()) { setSetupError("Judul skripsi wajib diisi."); return; }
-    if (credits < COST_SESSION) { setSetupError(`Kredit tidak cukup. Butuh ${COST_SESSION} credit.`); return; }
+    if (credits < sessionCost) { setSetupError(`Kredit tidak cukup. Butuh ${sessionCost} credit.`); return; }
 
     setSetupLoading(true);
     setSetupError("");
 
     try {
-      await deductCredits(user.uid, COST_SESSION);
+      await deductCredits(user.uid, sessionCost);
       
       const profileInfo = DOSEN_PROFILES.find(p => p.id === dosenProfile);
       
@@ -275,7 +278,7 @@ Mahasiswa sedang mempresentasikan ${sidangMode === "proposal" ? "proposal" : "sk
         {!isSessionActive && (
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.4rem 0.85rem", backgroundColor: "rgba(236, 72, 153, 0.1)", borderRadius: "var(--radius-lg)", fontSize: "0.8rem", fontWeight: 600, color: "#DB2777" }}>
             <PremiumIcon name="barChart" size={14} />
-            <span>{COST_SESSION} credit / sesi</span>
+            <span>{sessionCost} credit / sesi</span>
             <span style={{ padding: "1px 6px", background: "linear-gradient(135deg, #6366F1, #8B5CF6)", color: "white", borderRadius: "8px", fontSize: "0.6rem", fontWeight: 800 }}>PRO</span>
           </div>
         )}

@@ -47,6 +47,7 @@ export default function RegisterPage() {
         status: formData.status,
         asalInstitusi: formData.asalInstitusi,
         createdAt: serverTimestamp(),
+        plan: "free",
         credits: 15,
         role: "user"
       });

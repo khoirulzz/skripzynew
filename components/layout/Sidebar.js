@@ -11,9 +11,9 @@ import { ThemeToggle } from "@/components/layout/ThemeToggle";
 /**
  * Sidebar Component
  *
- * Desktop mode  → isCollapsed controls icon-only vs full sidebar.
+ * Desktop mode  â†’ isCollapsed controls icon-only vs full sidebar.
  *                 toggleCollapse toggles width.
- * Mobile mode   → always rendered full (isCollapsed=false),
+ * Mobile mode   â†’ always rendered full (isCollapsed=false),
  *                 toggleCollapse closes the drawer (acts as X button).
  */
 export function Sidebar({ isCollapsed = false, toggleCollapse, isMobile = false }) {
@@ -89,7 +89,7 @@ export function Sidebar({ isCollapsed = false, toggleCollapse, isMobile = false 
         padding: "0 0.5rem 1.5rem",
       }}
     >
-      {/* ── Sidebar Header ───────────────────────────────── */}
+      {/* â”€â”€ Sidebar Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div
         style={{
           display: "flex",
@@ -101,7 +101,7 @@ export function Sidebar({ isCollapsed = false, toggleCollapse, isMobile = false 
           gap: "0.5rem",
         }}
       >
-        {/* Brand logo — hidden when collapsed */}
+        {/* Brand logo â€” hidden when collapsed */}
         {!isCollapsed && (
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
             <img src="/logo-skripzy.webp" alt="Skripzy" width={28} height={28} style={{ borderRadius: "4px" }} />
@@ -116,7 +116,7 @@ export function Sidebar({ isCollapsed = false, toggleCollapse, isMobile = false 
           </div>
         )}
 
-        {/* Hamburger / X toggle button — always visible */}
+        {/* Hamburger / X toggle button â€” always visible */}
         <button
           onClick={toggleCollapse}
           className="btn btn-ghost"
@@ -131,7 +131,7 @@ export function Sidebar({ isCollapsed = false, toggleCollapse, isMobile = false 
         </button>
       </div>
 
-      {/* ── Nav Items ────────────────────────────────────── */}
+      {/* â”€â”€ Nav Items â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <nav
         style={{
           flex: 1,
@@ -145,7 +145,7 @@ export function Sidebar({ isCollapsed = false, toggleCollapse, isMobile = false 
         {navItems.map((item) => renderNavLink(item))}
       </nav>
 
-      {/* ── Bottom Items ─────────────────────────────────── */}
+      {/* â”€â”€ Bottom Items â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div
         style={{
           display: "flex",
@@ -174,24 +174,25 @@ export function Sidebar({ isCollapsed = false, toggleCollapse, isMobile = false 
           <PremiumIcon name="settings" size={20} />
           {!isCollapsed && <span>Pengaturan</span>}
         </Link>
-        
+
         {/* Mobile Profile & Logout */}
         {isMobile && (
           <div style={{ marginTop: "0.5rem", borderTop: "1px solid var(--border)", paddingTop: "1rem", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem" }}>
-             <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", overflow: "hidden" }}>
-               <div style={{ width: "32px", height: "32px", borderRadius: "50%", backgroundColor: "var(--primary-light)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--primary)", fontWeight: 700, fontSize: "0.85rem", flexShrink: 0 }}>
-                 {userData?.namaLengkap?.charAt(0) || "U"}
-               </div>
-               <div style={{ flex: 1, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis", fontSize: "0.85rem", fontWeight: 600, color: "var(--text-main)" }}>
-                 {userData?.namaLengkap || "Peneliti"}
-               </div>
-             </div>
-             <button onClick={handleLogout} className="btn btn-ghost" style={{ padding: "0.5rem", color: "var(--danger)" }} title="Keluar">
-               <PremiumIcon name="logout" size={18} />
-             </button>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", overflow: "hidden" }}>
+              <div style={{ width: "32px", height: "32px", borderRadius: "50%", backgroundColor: "var(--primary-light)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--primary)", fontWeight: 700, fontSize: "0.85rem", flexShrink: 0 }}>
+                {userData?.namaLengkap?.charAt(0) || "U"}
+              </div>
+              <div style={{ flex: 1, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis", fontSize: "0.85rem", fontWeight: 600, color: "var(--text-main)" }}>
+                {userData?.namaLengkap || "Peneliti"}
+              </div>
+            </div>
+            <button onClick={handleLogout} className="btn btn-ghost" style={{ padding: "0.5rem", color: "var(--danger)" }} title="Keluar">
+              <PremiumIcon name="logout" size={18} />
+            </button>
           </div>
         )}
       </div>
     </aside>
   );
 }
+

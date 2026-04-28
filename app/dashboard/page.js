@@ -14,7 +14,7 @@ const WORKSPACE_ITEMS = [
     iconColor: "#4F46E5",
     iconBg: "rgba(79, 70, 229, 0.1)",
     title: "Workspace Skripsi",
-    desc: "Buat & kelola dokumen skripsi Bab 1–5",
+    desc: "Mulai buat Skripsimu dari nol (Bab 1–5)",
     pro: false,
   },
   {
@@ -32,7 +32,7 @@ const WORKSPACE_ITEMS = [
     iconColor: "#8B5CF6",
     iconBg: "rgba(139, 92, 246, 0.1)",
     title: "Convert → Jurnal",
-    desc: "Ubah skripsi menjadi artikel jurnal",
+    desc: "Ubah skripsi menjadi artikel jurnal siap publish",
     pro: true,
   },
 ];
@@ -48,7 +48,7 @@ const QUICK_TOOLS = [
     iconColor: "#4F46E5",
     iconBg: "rgba(79, 70, 229, 0.1)",
     title: "Asisten AI",
-    desc: "Tanya apa saja seputar penelitianmu",
+    desc: "Cari ide berdasarkan gap research dan susun latar belakang",
     credit: 1,
     pro: false,
     badge: null,
@@ -60,7 +60,7 @@ const QUICK_TOOLS = [
     iconColor: "#0EA5E9",
     iconBg: "rgba(14, 165, 233, 0.1)",
     title: "Parafrase",
-    desc: "Tulis ulang teks agar lebih orisinal",
+    desc: "Tulis ulang teksmu agar lebih orisinal",
     credit: 2,
     pro: false,
     badge: null,
@@ -96,7 +96,7 @@ const QUICK_TOOLS = [
     iconColor: "#EF4444",
     iconBg: "rgba(239, 68, 68, 0.1)",
     title: "AI Detector",
-    desc: "Cek apakah teks terdeteksi sebagai AI",
+    desc: "Cek apakah teksmu terdeteksi sebagai AI",
     credit: 3,
     pro: true,
     badge: "PRO",
@@ -108,10 +108,22 @@ const QUICK_TOOLS = [
     iconColor: "#8B5CF6",
     iconBg: "rgba(139, 92, 246, 0.1)",
     title: "Referensi Cerdas",
-    desc: "Cari jurnal & sitasi otomatis APA/IEEE",
+    desc: "Cari jurnal & sitasi otomatis untuk artikelmu",
     credit: 2,
     pro: true,
     badge: "PRO",
+  },
+  {
+    href: "/dashboard/tools/notebook",
+    slug: "notebook-referensi",
+    icon: "bookMarked",
+    iconColor: "#4F46E5",
+    iconBg: "rgba(79, 70, 229, 0.1)",
+    title: "Notebook",
+    desc: "Simpan & tanya jawab dengan referensi jurnalmu",
+    credit: 5,
+    pro: true,
+    badge: "NEW",
   },
   {
     href: "/dashboard/tools/simulasi-sidang",
@@ -123,7 +135,7 @@ const QUICK_TOOLS = [
     desc: "Latih presentasi & tanya jawab sidang",
     credit: 5,
     pro: true,
-    badge: "PRO",
+    badge: "HOTS",
   },
 ];
 
@@ -149,28 +161,65 @@ function WorkspaceCard({ item, plan }) {
     <div
       className="glass-panel"
       style={{
-        display: "flex", flexDirection: "column", gap: "1rem",
-        padding: "1.5rem", height: "100%",
+        display: "flex",
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: "1.5rem",
+        padding: "1.75rem",
+        height: "100%",
+        borderRadius: "24px",
         cursor: isLocked ? "not-allowed" : "pointer",
         opacity: isLocked ? 0.65 : 1,
-        transition: "transform 0.2s, box-shadow 0.2s",
+        transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+        backgroundColor: "var(--surface)",
+        border: "1px solid var(--border)",
       }}
-      onMouseEnter={e => { if (!isLocked) { e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.boxShadow = "var(--shadow-lg)"; }}}
-      onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = ""; }}
+      onMouseEnter={e => {
+        if (!isLocked) {
+          e.currentTarget.style.transform = "translateY(-4px)";
+          e.currentTarget.style.boxShadow = "0 20px 25px -5px rgba(0,0,0,0.05), 0 10px 10px -5px rgba(0,0,0,0.02)";
+          const arrow = e.currentTarget.querySelector('.arrow-box');
+          if (arrow) arrow.style.backgroundColor = "var(--surface-hover)";
+        }
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.transform = "translateY(0)";
+        e.currentTarget.style.boxShadow = "";
+        const arrow = e.currentTarget.querySelector('.arrow-box');
+        if (arrow) arrow.style.backgroundColor = "transparent";
+      }}
     >
-      <div style={{
-        width: "44px", height: "44px", borderRadius: "10px",
-        backgroundColor: item.iconBg,
-        display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-      }}>
-        <PremiumIcon name={item.icon} size={22} style={{ color: item.iconColor }} />
-      </div>
-      <div>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.25rem" }}>
-          <h4 style={{ fontSize: "1rem", margin: 0, color: "var(--text-main)" }}>{item.title}</h4>
-          {item.pro && <ProBadge />}
+      <div style={{ display: "flex", flexDirection: "column", gap: "1rem", flex: 1 }}>
+        {/* Icon container */}
+        <div style={{
+          width: "48px", height: "48px", borderRadius: "12px",
+          backgroundColor: item.iconBg,
+          display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+        }}>
+          <PremiumIcon name={item.icon} size={24} style={{ color: item.iconColor }} />
         </div>
-        <p style={{ fontSize: "0.8rem", margin: 0 }}>{item.desc}</p>
+
+        {/* Text container */}
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.25rem" }}>
+            <h4 style={{ fontSize: "1.1rem", margin: 0, color: "var(--text-main)", fontWeight: 700 }}>{item.title}</h4>
+            {item.pro && <ProBadge />}
+          </div>
+          <p style={{ fontSize: "0.85rem", margin: 0, color: "var(--text-muted)", lineHeight: 1.5 }}>{item.desc}</p>
+        </div>
+      </div>
+
+      {/* Arrow button */}
+      <div className="arrow-box" style={{
+        width: "36px", height: "36px", borderRadius: "50%",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        border: "1px solid var(--border)",
+        color: "var(--text-muted)",
+        transition: "all 0.2s ease",
+        flexShrink: 0
+      }}>
+        <PremiumIcon name="chevronRight" size={18} />
       </div>
     </div>
   );
@@ -185,40 +234,43 @@ function QuickToolCard({ tool, plan }) {
     <div
       className="glass-panel"
       style={{
-        padding: "1.25rem",
-        display: "flex", flexDirection: "column", gap: "0.85rem",
+        padding: "1.75rem",
+        display: "flex", flexDirection: "column", gap: "1.25rem",
+        borderRadius: "24px",
         cursor: isLocked ? "not-allowed" : "pointer",
         opacity: isLocked ? 0.65 : 1,
-        transition: "transform 0.2s, box-shadow 0.2s",
+        transition: "all 0.3s ease",
         height: "100%",
+        backgroundColor: "var(--surface)",
+        border: "1px solid var(--border)",
       }}
-      onMouseEnter={e => { if (!isLocked) { e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.boxShadow = "var(--shadow-lg)"; }}}
-      onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = ""; }}
+      onMouseEnter={e => {
+        if (!isLocked) {
+          e.currentTarget.style.transform = "translateY(-4px)";
+          e.currentTarget.style.boxShadow = "0 20px 25px -5px rgba(0,0,0,0.05)";
+        }
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.transform = "translateY(0)";
+        e.currentTarget.style.boxShadow = "";
+      }}
     >
-      {/* Icon + Badge */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
-        <div style={{
-          width: "38px", height: "38px", borderRadius: "8px",
-          backgroundColor: tool.iconBg,
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}>
-          <PremiumIcon name={tool.icon} size={18} style={{ color: tool.iconColor }} />
-        </div>
-        {tool.badge && <ProBadge />}
+      {/* Icon container */}
+      <div style={{
+        width: "44px", height: "44px", borderRadius: "10px",
+        backgroundColor: tool.iconBg,
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}>
+        <PremiumIcon name={tool.icon} size={22} style={{ color: tool.iconColor }} />
       </div>
 
       {/* Title + Desc */}
-      <div>
-        <h4 style={{ fontSize: "0.9rem", margin: "0 0 0.2rem 0", color: "var(--text-main)" }}>{tool.title}</h4>
-        <p style={{ fontSize: "0.75rem", margin: 0, lineHeight: 1.4 }}>{tool.desc}</p>
-      </div>
-
-      {/* Credit cost */}
-      <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", marginTop: "auto" }}>
-        <PremiumIcon name="zap" size={12} style={{ color: tool.iconColor }} />
-        <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", fontWeight: 600 }}>
-          {tool.creditText || `${tool.credit} credit / penggunaan`}
-        </span>
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <h4 style={{ fontSize: "1rem", margin: 0, color: "var(--text-main)", fontWeight: 700 }}>{tool.title}</h4>
+          {tool.badge && <ProBadge />}
+        </div>
+        <p style={{ fontSize: "0.85rem", margin: 0, lineHeight: 1.5, color: "var(--text-muted)" }}>{tool.desc}</p>
       </div>
     </div>
   );
@@ -256,39 +308,56 @@ export default function DashboardPage() {
     <div className="animate-fade-in" style={{ maxWidth: "1080px", margin: "0 auto" }}>
 
       {/* ── Workspace Hub ────────────────────────────────── */}
-      <section className="mb-10 sm:mb-12">
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.5rem", flexWrap: "wrap", gap: "1rem" }}>
-          <div>
-            <h2 style={{ fontSize: "1.25rem", fontWeight: 700, margin: 0, color: "var(--text-main)" }}>Workspace Hub</h2>
-            <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", margin: "0.4rem 0 0 0" }}>Kelola proyek penelitian Anda</p>
+      <section style={{ marginBottom: "5rem" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "2rem", flexWrap: "wrap", gap: "1rem" }}>
+          <div style={{ position: "relative" }}>
+            <h2 style={{ fontSize: "1.75rem", fontWeight: 800, margin: 0, color: "var(--text-main)", letterSpacing: "-0.03em" }}>
+              Workspace Hub
+            </h2>
+            <p style={{ fontSize: "1rem", color: "var(--text-muted)", margin: "0.5rem 0 0 0" }}>Kelola proyek penelitian Anda</p>
+
+            {/* Decorative sparkles */}
+            <div style={{
+              position: "absolute",
+              top: "-10px",
+              right: "-40px",
+              color: "var(--primary)",
+              opacity: 0.6,
+              transform: "rotate(15deg)"
+            }}>
+              <PremiumIcon name="sparkles" size={24} />
+            </div>
           </div>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "1.25rem" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "1.5rem" }}>
           {WORKSPACE_ITEMS.map((item) => (
             <WorkspaceCard key={item.href} item={item} plan={currentPlan} />
           ))}
         </div>
       </section>
 
-      {/* Divider */}
-      <div style={{ height: "1px", backgroundColor: "var(--border)", margin: "2rem 0" }}></div>
-
       {/* ── Quick Tools ───────────────────────────────────── */}
       <section>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.5rem", flexWrap: "wrap", gap: "1rem" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "2rem", flexWrap: "wrap", gap: "1rem" }}>
           <div>
-            <h2 style={{ fontSize: "1.25rem", fontWeight: 700, margin: 0, color: "var(--text-main)" }}>Quick Tools & AI Features</h2>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.85rem", color: "var(--text-muted)", marginTop: "0.4rem" }}>
-              <PremiumIcon name="zap" size={14} style={{ color: "var(--primary)" }} />
-              <span>Gunakan credit untuk mengakses tools</span>
-            </div>
+            <h2 style={{ fontSize: "1.5rem", fontWeight: 800, margin: 0, color: "var(--text-main)", letterSpacing: "-0.02em" }}>Quick Tools & AI Features</h2>
           </div>
         </div>
 
         {/* Free tools */}
-        <div style={{ marginBottom: "2.5rem" }}>
-          <p style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--text-muted)", marginBottom: "1rem", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-            ✓ Tersedia untuk Semua Plan
+        <div style={{ marginBottom: "3rem" }}>
+          <p style={{
+            fontSize: "0.75rem",
+            fontWeight: 800,
+            color: "var(--text-muted)",
+            marginBottom: "1.25rem",
+            textTransform: "uppercase",
+            letterSpacing: "0.1em",
+            display: "flex",
+            alignItems: "center",
+            gap: "0.5rem"
+          }}>
+            <span style={{ color: "var(--success)" }}>✓</span> Tersedia untuk Semua Plan
           </p>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: "1.25rem" }}>
             {quickTools.filter(t => !t.pro).map(tool => (

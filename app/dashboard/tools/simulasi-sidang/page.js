@@ -8,14 +8,15 @@ import { deductCredits } from "@/lib/credits";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
 import { useBillingCatalog } from "@/lib/useBillingCatalog";
 import Link from "next/link";
+import Script from "next/script";
 
 const COST_SESSION = 5;
-const API_GROUP = "group_2";
+const SIDANG_MODEL = "gemini-flash-lite-latest";
 
 const DOSEN_PROFILES = [
-  { id: "killer", label: "Dosen Killer", desc: "Sangat kritis, to the point, mencari kelemahan skripsi.", temp: 0.2 },
-  { id: "kritis", label: "Dosen Kritis", desc: "Logis, menguji metodologi dan dasar teori dengan tajam.", temp: 0.4 },
-  { id: "santai", label: "Dosen Santai", desc: "Ramah, namun tetap bertanya seputar esensi penelitian.", temp: 0.7 },
+  { id: "killer", label: "Dosen Killer", desc: "Sangat kritis, to the point, mencari kelemahan.", temp: 0.2 },
+  { id: "kritis", label: "Dosen Sedang (Kritis)", desc: "Logis, menguji metodologi dan dasar teori dengan tajam.", temp: 0.4 },
+  { id: "santai", label: "Dosen Sedang (Santai)", desc: "Ramah, namun tetap bertanya seputar esensi penelitian.", temp: 0.7 },
   { id: "suportif", label: "Dosen Suportif", desc: "Menggiring opini, membimbing memberikan saran perbaikan.", temp: 0.8 },
 ];
 
@@ -30,14 +31,25 @@ export default function SimulasiSidangPage() {
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [skripsiTitle, setSkripsiTitle] = useState("");
   const [dosenProfile, setDosenProfile] = useState("kritis");
-  const [sidangMode, setSidangMode] = useState("skripsi"); // "proposal" or "skripsi"
-  const [uploadedDocUrl, setUploadedDocUrl] = useState(null);
-  const [uploading, setUploading] = useState(false);
+  const [sidangMode, setSidangMode] = useState("skripsi");
+
+  // Document State
+  const [extractionStatus, setExtractionStatus] = useState("");
   const [setupLoading, setSetupLoading] = useState(false);
   const [setupError, setSetupError] = useState("");
+  const [sessionInsight, setSessionInsight] = useState(null);
+  const [docName, setDocName] = useState("");
+
+  // Session Limits & Tracking
+  const [questionCount, setQuestionCount] = useState(0);
+  const [sanggahanCount, setSanggahanCount] = useState(0);
+  const [maxQuestions, setMaxQuestions] = useState(10);
+  const [maxSanggahan, setMaxSanggahan] = useState(0);
+  const [isFinished, setIsFinished] = useState(false);
+  const [showConfirmEnd, setShowConfirmEnd] = useState(false);
 
   // Chat State
-  const [messages, setMessages] = useState([]); // { role: 'model'|'user', text: '' }
+  const [messages, setMessages] = useState([]);
   const [currentInput, setCurrentInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
 
@@ -46,7 +58,44 @@ export default function SimulasiSidangPage() {
   const recognitionRef = useRef(null);
   const chatEndRef = useRef(null);
 
-  // Initialize Speech Recognition
+  // 1. PERSIST STATE DENGAN SESSION STORAGE
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const saved = sessionStorage.getItem("simulasi_sidang_state");
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (parsed.isSessionActive) {
+            setIsSessionActive(parsed.isSessionActive);
+            setSkripsiTitle(parsed.skripsiTitle || "");
+            setDosenProfile(parsed.dosenProfile || "kritis");
+            setSidangMode(parsed.sidangMode || "skripsi");
+            setSessionInsight(parsed.sessionInsight || null);
+            setDocName(parsed.docName || "");
+            setQuestionCount(parsed.questionCount || 0);
+            setSanggahanCount(parsed.sanggahanCount || 0);
+            setMaxQuestions(parsed.maxQuestions || 10);
+            setMaxSanggahan(parsed.maxSanggahan || 0);
+            setIsFinished(parsed.isFinished || false);
+            setMessages(parsed.messages || []);
+          }
+        } catch (e) { }
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isSessionActive) {
+      sessionStorage.setItem("simulasi_sidang_state", JSON.stringify({
+        isSessionActive, skripsiTitle, dosenProfile, sidangMode, sessionInsight, docName,
+        questionCount, sanggahanCount, maxQuestions, maxSanggahan, isFinished, messages
+      }));
+    } else {
+      sessionStorage.removeItem("simulasi_sidang_state");
+    }
+  }, [isSessionActive, skripsiTitle, dosenProfile, sidangMode, sessionInsight, docName, questionCount, sanggahanCount, maxQuestions, maxSanggahan, isFinished, messages]);
+
+  // Init Speech Recognition
   useEffect(() => {
     if (typeof window !== "undefined") {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -55,101 +104,242 @@ export default function SimulasiSidangPage() {
         recognitionRef.current.continuous = false;
         recognitionRef.current.interimResults = false;
         recognitionRef.current.lang = "id-ID";
-
         recognitionRef.current.onresult = (event) => {
           const transcript = event.results[0][0].transcript;
           setCurrentInput(prev => prev + " " + transcript);
         };
-
-        recognitionRef.current.onerror = (event) => {
-          console.error("Speech recognition error", event);
-          setIsRecording(false);
-        };
-
-        recognitionRef.current.onend = () => {
-          setIsRecording(false);
-        };
+        recognitionRef.current.onerror = () => setIsRecording(false);
+        recognitionRef.current.onend = () => setIsRecording(false);
       }
     }
   }, []);
 
-  const scrollToBottom = () => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-  useEffect(() => { scrollToBottom(); }, [messages, chatLoading]);
+  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, chatLoading]);
 
-  // TTS function
+  // 2. TTS DENGAN SPEECH SYNTHESIS (NATIVE BROWSER OPTIMIZED)
   const speak = (text) => {
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      window.speechSynthesis.cancel(); // Stop playing anything
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = "id-ID";
-      utterance.rate = 1.0;
-      utterance.pitch = dosenProfile === "killer" ? 0.8 : dosenProfile === "suportif" ? 1.2 : 1.0;
-      window.speechSynthesis.speak(utterance);
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+
+    window.speechSynthesis.cancel();
+    
+    // Matikan audio puter jika masih ada yang tersisa
+    if (window.currentAudio) {
+      window.currentAudio.pause();
+      window.currentAudio.currentTime = 0;
     }
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = "id-ID";
+    utterance.rate = 1.0;
+    utterance.pitch = dosenProfile === "killer" ? 0.8 : dosenProfile === "suportif" ? 1.2 : 1.0;
+
+    const voices = window.speechSynthesis.getVoices();
+    if (voices.length > 0) {
+      const idVoices = voices.filter(v => v.lang.includes("id"));
+      // Cari suara Google atau Online yang biasanya lebih natural
+      const bestVoice = idVoices.find(v => v.name.includes("Google") || v.name.includes("Premium") || v.name.includes("Online")) || idVoices[0];
+      if (bestVoice) {
+        utterance.voice = bestVoice;
+      }
+    }
+
+    window.speechSynthesis.speak(utterance);
   };
 
-  const handleStartSession = async (e) => {
-    e.preventDefault();
-    if (!skripsiTitle.trim()) { setSetupError("Judul skripsi wajib diisi."); return; }
-    if (credits < sessionCost) { setSetupError(`Kredit tidak cukup. Butuh ${sessionCost} credit.`); return; }
+  // 3. DOCUMENT EXTRACTION (PDF & WORD) CLIENT-SIDE
+  const extractPDF = async (file) => {
+    const pdfjsLib = await import("pdfjs-dist");
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.mjs`;
+
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    let text = "";
+    const maxPages = Math.min(pdf.numPages, 100); // Batasi 100 halaman untuk hemat memory
+    for (let i = 1; i <= maxPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      const strings = content.items.map(item => item.str);
+      text += strings.join(" ") + "\n";
+    }
+    return text;
+  };
+
+  const extractWord = async (file) => {
+    const mammoth = await import("mammoth");
+    const arrayBuffer = await file.arrayBuffer();
+    const result = await mammoth.extractRawText({ arrayBuffer });
+    return result.value;
+  };
+
+  const cleanText = (text) => {
+    return text.replace(/\r/g, "").replace(/\n{2,}/g, "\n").replace(/\s{2,}/g, " ").replace(/Halaman\s*\d+/gi, "");
+  };
+
+  const buildContext = (rawText) => {
+    setExtractionStatus("Memisahkan Bab & Filter Teks (Client-Side)...");
+    const cleaned = cleanText(rawText);
+
+    const parts = cleaned.split(/(?=BAB\s+[IVXLC]+|CHAPTER\s+[IVXLC]+)/i);
+    if (parts.length < 2) return cleaned.split(" ").slice(0, 4000).join(" "); // Fallback
+
+    let finalContext = "";
+    parts.forEach((part, index) => {
+      if (index === 0) {
+        finalContext += "\n[ABSTRAK]\n" + part.slice(0, 3000);
+      } else if (index === 1 || index === parts.length - 1) {
+        finalContext += `\n[BAB]\n` + part.slice(0, 4000); // Ambil full Bab 1 & Kesimpulan (limit 4k char)
+      } else {
+        const paragraphs = part.split(/\n+/).map(p => p.trim()).filter(p => p.length > 80);
+        const keywords = ["tujuan", "masalah", "metode", "penelitian", "hasil", "analisis", "kesimpulan", "kerangka"];
+
+        const head = paragraphs.slice(0, 2);
+        const tail = paragraphs.slice(-2);
+        const important = paragraphs.filter(p => keywords.some(k => p.toLowerCase().includes(k)));
+        const top = [...paragraphs].sort((a, b) => b.length - a.length).slice(0, 3);
+
+        const combined = [...new Set([...head, ...important.slice(0, 3), ...top, ...tail])];
+        finalContext += `\n[BAB RINGKAS]\n` + combined.join("\n\n");
+      }
+    });
+    return finalContext;
+  };
+
+  const handleDocumentUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== "application/pdf" && !file.name.endsWith(".docx")) {
+      alert("Hanya file PDF atau Word (.docx) yang didukung.");
+      return;
+    }
 
     setSetupLoading(true);
     setSetupError("");
+    setDocName(file.name);
+    setSessionInsight(null);
 
     try {
-      await deductCredits(user.uid, sessionCost);
-      
-      const profileInfo = DOSEN_PROFILES.find(p => p.id === dosenProfile);
-      
-      // Initial System Greeting with document reference
-      let systemInstruction = `Kamu adalah dosen penguji sidang ${sidangMode === "proposal" ? "proposal" : "skripsi"}. Karaktermu: ${profileInfo.label} (${profileInfo.desc}). 
-Mahasiswa sedang mempresentasikan ${sidangMode === "proposal" ? "proposal" : "skripsi"} berjudul: "${skripsiTitle}".`;
+      setExtractionStatus("Mengekstrak teks dokumen...");
+      let rawText = "";
+      if (file.type === "application/pdf") rawText = await extractPDF(file);
+      else rawText = await extractWord(file);
 
-      if (uploadedDocUrl) {
-        systemInstruction += `\n\nDokumen reference ${sidangMode === "proposal" ? "proposal" : "skripsi"}: ${uploadedDocUrl}\nGunakan dokumen ini sebagai referensi untuk membuat pertanyaan yang relevan dan mendalam.`;
-      }
+      const contextText = buildContext(rawText);
 
-      systemInstruction += `\n\nAturan main:
-1. Mulailah percakapan dengan menyapa mahasiswa singkat dan berikan 1 pertanyaan kritis pertama tentang judul/latar belakang.
-2. Tunggu balasan mahasiswa. 
-3. Balaslah selalu dengan obrolan lisan layaknya dosen penguji (singkat, 2-3 kalimat saja).
-4. Jika jawaban mahasiswa tidak nyambung, tegur secara natural.
-5. Gunakan bahasa lisan formal namun natural (contoh: "Coba jelaskan...", "Saya kurang setuju...", "Lalu apa bedanya...?").`;
+      setExtractionStatus("Meringkas Insight dengan AI (One-time call)...");
+      const prompt = `Buatkan ringkasan wawasan penelitian dari draf dokumen ini untuk digunakan sebagai "otak" bagi Dosen Penguji.
+Kembalikan dalam format JSON murni tanpa markdown, dengan struktur:
+{"bab_summary": {"pendahuluan": "...", "teori_metode": "...", "hasil_kesimpulan": "..."}, "insight": {"tujuan": "...", "metode": "...", "hasil": "...", "kelemahan": ["...", "..."]}}
+
+Teks Dokumen (Telah difilter):
+${contextText.slice(0, 20000)}
+`;
 
       const aiResponse = await callGemini({
-        prompt: "Halo dosen penguji, saya siap untuk diuji.",
-        systemInstruction: systemInstruction,
-        model: MODELS.primary,
-        group: API_GROUP,
-        temperature: profileInfo.temp,
+        prompt,
+        model: SIDANG_MODEL,
+        temperature: 0.2, // Low temp for extraction JSON
       });
 
-      setMessages([
-        { role: "model", text: aiResponse }
-      ]);
-      setIsSessionActive(true);
-      speak(aiResponse);
+      const jsonStr = aiResponse.replace(/```json/gi, "").replace(/```/g, "").trim();
+      const insightObj = JSON.parse(jsonStr);
+
+      setSessionInsight(insightObj);
+      setExtractionStatus("Dokumen siap!");
+      setTimeout(() => setExtractionStatus(""), 2000);
 
     } catch (err) {
-      setSetupError(err.message || "Gagal memulai sesi sidang.");
+      console.error(err);
+      setSetupError("Gagal memproses dokumen. Pastikan dokumen bisa dibaca.");
+      setDocName("");
+      setExtractionStatus("");
     } finally {
       setSetupLoading(false);
     }
   };
 
+  const handleStartSession = async (e) => {
+    e.preventDefault();
+    if (!skripsiTitle.trim()) { setSetupError("Judul penelitian wajib diisi."); return; }
+    if (credits < sessionCost) { setSetupError(`Kredit tidak cukup. Butuh ${sessionCost} credit.`); return; }
+
+    setSetupLoading(true);
+    setSetupError("");
+    setExtractionStatus("Menyiapkan Ruang Sidang...");
+
+    try {
+      await deductCredits(user.uid, sessionCost);
+
+      // 4. ATURAN SIDANG (DOSEN & TIPE)
+      let mq = 10;
+      let ms = 5;
+
+      if (sidangMode === "proposal") {
+        mq = 7;
+        if (dosenProfile === "suportif") ms = 0;
+        else if (dosenProfile === "killer") ms = 7;
+        else ms = 3;
+      } else {
+        mq = 10;
+        if (dosenProfile === "suportif") ms = 2;
+        else if (dosenProfile === "killer") ms = 10;
+        else ms = 5;
+      }
+
+      setMaxQuestions(mq);
+      setMaxSanggahan(ms);
+      setQuestionCount(1);
+      setSanggahanCount(0);
+      setIsFinished(false);
+
+      const profileInfo = DOSEN_PROFILES.find(p => p.id === dosenProfile);
+
+      let systemInstruction = `Kamu adalah dosen penguji sidang ${sidangMode}. Karaktermu: ${profileInfo.label} (${profileInfo.desc}). 
+Mahasiswa sedang sidang dengan judul: "${skripsiTitle}".`;
+
+      if (sessionInsight) {
+        systemInstruction += `\n\nPengetahuan kamu tentang penelitian ini:
+${JSON.stringify(sessionInsight)}
+Gunakan insight ini untuk bertanya spesifik.`;
+      }
+
+      systemInstruction += `\n\nAturan:
+1. Mulai dengan sapaan singkat dan berikan Pertanyaan Utama 1.
+2. Selalu balas layaknya obrolan lisan nyata (singkat, 2-3 kalimat max).
+3. Kembalikan HANYA JSON MURNI tanpa markdown, dengan format: {"type": "pertanyaan", "message": "pesan lisan kamu"}`;
+
+      const aiResponseJSON = await callGemini({
+        prompt: "Halo Bapak/Ibu dosen penguji, saya siap untuk memulai presentasi/sidang.",
+        systemInstruction: systemInstruction,
+        model: SIDANG_MODEL,
+        temperature: profileInfo.temp,
+        responseMimeType: "application/json"
+      });
+
+      let responseObj = { message: "Maaf, terjadi kesalahan." };
+      try {
+        responseObj = JSON.parse(aiResponseJSON.replace(/```json/gi, "").replace(/```/g, "").trim());
+      } catch (e) { responseObj.message = aiResponseJSON; }
+
+      setMessages([{ role: "model", text: responseObj.message }]);
+      setIsSessionActive(true);
+      speak(responseObj.message);
+
+    } catch (err) {
+      setSetupError(err.message || "Gagal memulai sesi sidang.");
+    } finally {
+      setSetupLoading(false);
+      setExtractionStatus("");
+    }
+  };
+
   const handleSendMessage = async (e) => {
     e?.preventDefault();
-    if (!currentInput.trim() || chatLoading) return;
+    if (!currentInput.trim() || chatLoading || isFinished) return;
 
     const userMessage = currentInput.trim();
     setCurrentInput("");
-    
-    // Stop speaking if still speaking
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
-    }
+    if (window.currentAudio) window.currentAudio.pause();
 
     const newHistory = [...messages, { role: "user", text: userMessage }];
     setMessages(newHistory);
@@ -157,24 +347,55 @@ Mahasiswa sedang mempresentasikan ${sidangMode === "proposal" ? "proposal" : "sk
 
     try {
       const profileInfo = DOSEN_PROFILES.find(p => p.id === dosenProfile);
-      let systemInstruction = `Kamu adalah dosen penguji sidang ${sidangMode === "proposal" ? "proposal" : "skripsi"}. Karaktermu: ${profileInfo.label}. Judul ${sidangMode === "proposal" ? "proposal" : "skripsi"} mahasiswa: "${skripsiTitle}".`;
-      
-      if (uploadedDocUrl) {
-        systemInstruction += `\n\nReferensi dokumen: ${uploadedDocUrl}\nGunakannya untuk membuat pertanyaan yang lebih mendalam dan relevan.`;
-      }
-      
-      systemInstruction += `\n\nSelalu respon maksimal 3 kalimat secara lisan alamiah.`;
+      let currentQ = questionCount;
+      let currentS = sanggahanCount;
 
-      const aiResponse = await callGemini({
+      let stateInstructions = `\n\nStatus Sidang:
+- Topik Pertanyaan Utama yang sudah diajukan: ${currentQ} dari maksimal ${maxQuestions}
+- Sanggahan yang sudah dipakai: ${currentS} dari maksimal ${maxSanggahan}`;
+
+      if (currentQ >= maxQuestions) {
+        stateInstructions += `\n\nINSTRUKSI FINAL: Kuota pertanyaan utama sudah habis. Akhiri sidang sekarang juga. Jangan bertanya lagi. Wajib gunakan type "penutup" dan nyatakan bahwa sidang selesai.`;
+      } else {
+        stateInstructions += `\n\nINSTRUKSI TINDAKAN (PILIH SALAH SATU):
+1. "pertanyaan": Berikan apresiasi jika jawaban mahasiswa memuaskan, lalu ajukan Topik Pertanyaan Utama ke-${currentQ + 1} yang diambil dari konteks skripsi atau mengaitkan bab metodologi dengan jawaban user sebelumnya.
+2. "sanggahan": Jika jawaban mahasiswa lemah, membingungkan, dan kuota sanggahan (${currentS}/${maxSanggahan}) masih ada, serang/sanggah kelemahan jawabannya tadi tanpa berpindah topik pertanyaan.
+3. "penutup": Jika kamu merasa sidang sudah cukup, gunakan ini untuk menutup sidang.`;
+      }
+
+      let systemInstruction = `Kamu adalah dosen penguji sidang ${sidangMode}. Karaktermu: ${profileInfo.label}. Judul mahasiswa: "${skripsiTitle}".`;
+      if (sessionInsight) systemInstruction += `\nInsight Dokumen: ${JSON.stringify(sessionInsight)}`;
+      systemInstruction += stateInstructions;
+      systemInstruction += `\n\nSelalu respon maksimal 3 kalimat secara lisan alamiah. KEMBALIKAN HANYA JSON MURNI dengan format:
+{
+  "type": "pertanyaan" | "sanggahan" | "penutup",
+  "message": "pesan lisan kamu yang akan diucapkan ke mahasiswa"
+}`;
+
+      const aiResponseJSON = await callGemini({
         history: newHistory,
         systemInstruction: systemInstruction,
-        model: MODELS.primary,
-        group: API_GROUP,
+        model: SIDANG_MODEL,
         temperature: profileInfo.temp,
+        responseMimeType: "application/json"
       });
 
-      setMessages(prev => [...prev, { role: "model", text: aiResponse }]);
-      speak(aiResponse);
+      let responseObj = { type: "pertanyaan", message: "Maaf, terjadi kesalahan dari AI." };
+      try {
+        responseObj = JSON.parse(aiResponseJSON.replace(/```json/gi, "").replace(/```/g, "").trim());
+      } catch (e) { responseObj.message = aiResponseJSON; }
+
+      // Update turn counts dynamically
+      if (responseObj.type === "pertanyaan") {
+        setQuestionCount(prev => prev + 1);
+      } else if (responseObj.type === "sanggahan") {
+        setSanggahanCount(prev => prev + 1);
+      } else if (responseObj.type === "penutup" || currentQ >= maxQuestions) {
+        setIsFinished(true);
+      }
+
+      setMessages(prev => [...prev, { role: "model", text: responseObj.message }]);
+      speak(responseObj.message);
 
     } catch (err) {
       alert("Error: " + err.message);
@@ -183,80 +404,65 @@ Mahasiswa sedang mempresentasikan ${sidangMode === "proposal" ? "proposal" : "sk
     }
   };
 
-  const toggleRecording = () => {
-    if (!recognitionRef.current) {
-      alert("Browser Anda tidak mendukung Web Speech API (Coba gunakan Google Chrome).");
-      return;
-    }
-    
-    if (isRecording) {
-      recognitionRef.current.stop();
-      setIsRecording(false);
-    } else {
-      try {
-        recognitionRef.current.start();
-        setIsRecording(true);
-        // Stop currently playing TTS so mic doesn't catch it
-        if (typeof window !== "undefined" && window.speechSynthesis) window.speechSynthesis.cancel();
-      } catch (err) {
-        console.error(err);
-      }
-    }
-  };
+  const generateFinalScoring = async () => {
+    if (window.currentAudio) window.currentAudio.pause();
+    setChatLoading(true);
 
-  const handleEndSession = () => {
-    if (typeof window !== "undefined" && window.speechSynthesis) window.speechSynthesis.cancel();
-    setIsSessionActive(false);
-    setMessages([]);
-    setSkripsiTitle("");
-    setUploadedDocUrl(null);
-  };
-
-  const handleDocumentUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (file.type !== "application/pdf") {
-      alert("Hanya file PDF yang didukung.");
-      return;
-    }
-
-    setUploading(true);
     try {
-      // Get Cloudinary signature from worker
-      const sigResponse = await fetch(`${process.env.NEXT_PUBLIC_WORKER_URL}/api/cloudinary-sign`, {
-        method: "POST",
-        headers: { "x-skripzy-secret": process.env.NEXT_PUBLIC_WORKER_SECRET || "skripzy1234" },
+      const prompt = `Sidang telah selesai. Berdasarkan riwayat percakapan kita tadi, tolong berikan penilaian jujur dan komprehensif.
+Gunakan format Markdown persis seperti ini:
+
+### 📊 Evaluasi Sidang
+- **Kekuatan Utama:** [Tulis 1-2 kalimat]
+- **Kelemahan Terbesar:** [Tulis 1-2 kalimat area yang kurang dikuasai mahasiswa]
+- **Saran Perbaikan (Revisi):** [Tulis 1-2 kalimat rekomendasi perbaikan skripsi]
+
+### 🏆 Skor Akhir
+- **Pemahaman Materi:** [Angka 0-100]
+- **Kemampuan Defend/Menjawab:** [Angka 0-100]
+- **Nilai Prediksi:** [A/B/C/D]
+
+Sajikan dengan gaya bahasa akademis namun membangun (konstruktif).`;
+
+      const aiResponse = await callGemini({
+        history: messages,
+        prompt: prompt,
+        model: SIDANG_MODEL,
+        temperature: 0.4,
       });
 
-      if (!sigResponse.ok) throw new Error("Gagal mendapatkan signature Cloudinary");
-
-      const { signature, timestamp, cloudName, apiKey } = await sigResponse.json();
-
-      // Upload to Cloudinary
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("signature", signature);
-      formData.append("timestamp", timestamp);
-      formData.append("api_key", apiKey);
-      formData.append("folder", "Sidang");
-      formData.append("resource_type", "auto");
-
-      const uploadResponse = await fetch(
-        `https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`,
-        { method: "POST", body: formData }
-      );
-
-      if (!uploadResponse.ok) throw new Error("Upload Cloudinary gagal");
-
-      const uploaded = await uploadResponse.json();
-      setUploadedDocUrl(uploaded.secure_url);
-      alert(`✅ Dokumen berhasil diupload!\nDosen AI akan merujuk dokumen ini saat menguji.`);
+      setMessages(prev => [...prev, { role: "model", text: aiResponse }]);
     } catch (err) {
-      console.error("Upload error:", err);
-      alert(`❌ Gagal upload dokumen: ${err.message}`);
+      alert("Gagal memuat kesimpulan: " + err.message);
     } finally {
-      setUploading(false);
+      setChatLoading(false);
+    }
+  };
+
+  const confirmEndSession = () => {
+    if (window.confirm("Apakah Anda yakin ingin mengakhiri sesi sidang ini? Riwayat obrolan akan dihapus setelah Anda keluar.")) {
+      if (window.currentAudio) window.currentAudio.pause();
+      sessionStorage.removeItem("simulasi_sidang_state");
+      setIsSessionActive(false);
+      setMessages([]);
+      setSessionInsight(null);
+      setDocName("");
+      setQuestionCount(0);
+      setSanggahanCount(0);
+      setIsFinished(false);
+      setShowConfirmEnd(false);
+    }
+  };
+
+  const handleDragOver = (e) => { e.preventDefault(); e.stopPropagation(); };
+  const handleDrop = async (e) => {
+    e.preventDefault(); e.stopPropagation();
+    if (setupLoading) return;
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      // Simulate an input change event
+      const fakeEvent = { target: { files: [file] } };
+      handleDocumentUpload(fakeEvent);
     }
   };
 
@@ -265,15 +471,15 @@ Mahasiswa sedang mempresentasikan ${sidangMode === "proposal" ? "proposal" : "sk
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "2rem" }}>
         {isSessionActive ? (
-          <button onClick={handleEndSession} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--danger)" }}>
-             <PremiumIcon name="arrowLeft" size={20} />
+          <button onClick={() => setShowConfirmEnd(true)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--danger)" }} title="Keluar">
+            <PremiumIcon name="arrowLeft" size={20} />
           </button>
         ) : (
           <Link href="/dashboard" style={{ color: "var(--text-muted)" }}><PremiumIcon name="arrowLeft" size={20} /></Link>
         )}
         <div>
           <h1 style={{ fontSize: "1.5rem", margin: 0 }}>Simulasi Sidang AI</h1>
-          <p style={{ margin: 0, fontSize: "0.875rem" }}>Latihan presentasi dan tanya jawab layaknya sidang sungguhan</p>
+          <p style={{ margin: 0, fontSize: "0.875rem", color: "var(--text-muted)" }}>Latihan presentasi dan defend skripsi bersama Dosen Penguji</p>
         </div>
         {!isSessionActive && (
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.4rem 0.85rem", backgroundColor: "rgba(236, 72, 153, 0.1)", borderRadius: "var(--radius-lg)", fontSize: "0.8rem", fontWeight: 600, color: "#DB2777" }}>
@@ -299,98 +505,88 @@ Mahasiswa sedang mempresentasikan ${sidangMode === "proposal" ? "proposal" : "sk
         <div className="glass-panel p-6">
           <form onSubmit={handleStartSession}>
             <h2 style={{ fontSize: "1.2rem", margin: "0 0 1.5rem 0" }}>Persiapan Sidang</h2>
-            
+
             {setupError && (
-               <div style={{ padding: "0.75rem", backgroundColor: "rgba(239,68,68,0.1)", color: "var(--danger)", borderRadius: "8px", fontSize: "0.85rem", marginBottom: "1rem" }}>
-                 {setupError}
-               </div>
+              <div style={{ padding: "0.75rem", backgroundColor: "rgba(239,68,68,0.1)", color: "var(--danger)", borderRadius: "8px", fontSize: "0.85rem", marginBottom: "1rem" }}>
+                {setupError}
+              </div>
             )}
 
-            {/* Mode Selection: Proposal vs Skripsi */}
             <div className="form-group">
-              <label className="form-label">Jenis Sidang</label>
+              <label className="form-label">Jenis Sidang & Karakter Dosen</label>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1rem" }}>
                 {["proposal", "skripsi"].map(mode => (
                   <button
-                    key={mode}
-                    type="button"
-                    onClick={() => setSidangMode(mode)}
-                    disabled={plan === "free"}
+                    key={mode} type="button" onClick={() => setSidangMode(mode)} disabled={plan === "free"}
                     style={{
                       textAlign: "center", padding: "1rem", borderRadius: "10px",
                       border: sidangMode === mode ? "2px solid #EC4899" : "2px solid var(--border)",
                       backgroundColor: sidangMode === mode ? "rgba(236,72,153,0.05)" : "transparent",
-                      cursor: plan === "free" ? "not-allowed" : "pointer", 
-                      opacity: plan === "free" ? 0.6 : 1,
-                      fontWeight: 600,
-                      color: sidangMode === mode ? "#DB2777" : "var(--text-main)",
-                      textTransform: "capitalize"
+                      cursor: plan === "free" ? "not-allowed" : "pointer", opacity: plan === "free" ? 0.6 : 1,
+                      fontWeight: 600, color: sidangMode === mode ? "#DB2777" : "var(--text-main)", textTransform: "capitalize"
                     }}
                   >
                     📋 Sidang {mode === "proposal" ? "Proposal" : "Skripsi"}
                   </button>
                 ))}
               </div>
+              <select className="form-input" value={dosenProfile} onChange={e => setDosenProfile(e.target.value)} disabled={plan === "free"}>
+                {DOSEN_PROFILES.map(p => (
+                  <option key={p.id} value={p.id}>{p.label} - {p.desc}</option>
+                ))}
+              </select>
             </div>
 
             <div className="form-group">
-              <label className="form-label">Judul Lengkap {sidangMode === "proposal" ? "Proposal" : "Skripsi"} Anda</label>
-              <textarea 
-                className="form-input" 
-                rows="3" 
-                placeholder={sidangMode === "proposal" ? "Contoh: Proposal Pengaruh Algoritma Rekomendasi..." : "Contoh: Penelitian Pengaruh Algoritma Rekomendasi..."}
-                value={skripsiTitle}
-                onChange={e => setSkripsiTitle(e.target.value)}
-                disabled={plan === "free"}
+              <label className="form-label">Judul Lengkap</label>
+              <textarea
+                className="form-input" rows="2"
+                placeholder="Contoh: Pengaruh Algoritma Rekomendasi Terhadap Keputusan..."
+                value={skripsiTitle} onChange={e => setSkripsiTitle(e.target.value)} disabled={plan === "free"}
               />
             </div>
 
-            {/* Document Upload */}
+            {/* Document Upload Drag & Drop */}
             <div className="form-group">
-              <label className="form-label">Upload Dokumen {sidangMode === "proposal" ? "Proposal" : "Skripsi"} (Opsional)</label>
-              <label style={{
-                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-                padding: "1.5rem 1rem", border: "2px dashed var(--border)", borderRadius: "8px",
-                cursor: uploading ? "not-allowed" : "pointer", 
-                backgroundColor: uploadedDocUrl ? "rgba(16, 185, 129, 0.05)" : "var(--surface-hover)", 
-                gap: "0.5rem", textAlign: "center",
-                opacity: uploading ? 0.6 : 1,
-                transition: "all 0.2s"
-              }}>
-                {uploadedDocUrl ? (
+              <label className="form-label">Upload Dokumen (Wajib PDF / Word)</label>
+              <label
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
+                style={{
+                  display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                  padding: "2rem 1rem", border: "2px dashed var(--border)", borderRadius: "8px",
+                  cursor: setupLoading ? "not-allowed" : "pointer",
+                  backgroundColor: docName ? "rgba(16, 185, 129, 0.05)" : "var(--surface-hover)",
+                  gap: "0.5rem", textAlign: "center", opacity: setupLoading ? 0.6 : 1, transition: "all 0.2s"
+                }}>
+                {docName ? (
                   <>
                     <PremiumIcon name="checkCircle" size={24} style={{ color: "var(--success)" }} />
-                    <span style={{ fontSize: "0.8rem", color: "var(--text-main)", fontWeight: 600 }}>✅ Dokumen Terupload</span>
-                    <span style={{ fontSize: "0.65rem", color: "var(--text-muted)" }}>Dosen AI akan merujuk dokumen ini</span>
-                    <a href={uploadedDocUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: "0.7rem", color: "var(--primary)", textDecoration: "underline", marginTop: "0.25rem" }}>
-                      Lihat Dokumen
-                    </a>
+                    <span style={{ fontSize: "0.85rem", color: "var(--text-main)", fontWeight: 600 }}>{docName}</span>
+                    <span style={{ fontSize: "0.7rem", color: "var(--success)" }}>Ekstraksi berhasil. Dosen siap menguji isi dokumen ini!</span>
                   </>
                 ) : (
                   <>
-                    <PremiumIcon name={uploading ? "loader" : "uploadCloud"} size={24} className={uploading ? "animate-spin" : ""} style={{ color: "var(--text-muted)" }} />
-                    <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>{uploading ? "Mengupload..." : "Upload PDF Dokumen"}</span>
-                    <span style={{ fontSize: "0.65rem", color: "var(--text-muted)", opacity: 0.7 }}>Drag & drop atau klik untuk memilih file</span>
+                    <PremiumIcon name={setupLoading ? "loader" : "uploadCloud"} size={28} className={setupLoading ? "animate-spin" : ""} style={{ color: "var(--text-muted)" }} />
+                    <span style={{ fontSize: "0.9rem", color: "var(--text-muted)" }}>{setupLoading ? "Memproses..." : "Drag & Drop File PDF/Word Kesini"}</span>
+                    <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", opacity: 0.7 }}>Atau klik untuk memilih file (.pdf, .docx)</span>
                   </>
                 )}
-                <input 
-                  type="file" 
-                  accept=".pdf" 
-                  style={{ display: "none" }} 
-                  onChange={handleDocumentUpload}
-                  disabled={uploading}
-                />
+                <input type="file" accept=".pdf,.docx" style={{ display: "none" }} onChange={handleDocumentUpload} disabled={setupLoading} />
               </label>
+
+              {/* Dynamic Extraction Label */}
+              {extractionStatus && (
+                <div style={{ marginTop: "0.5rem", padding: "0.5rem", textAlign: "center", backgroundColor: "rgba(79, 70, 229, 0.1)", borderRadius: "4px", fontSize: "0.75rem", color: "var(--primary)", fontWeight: 600 }} className="animate-pulse">
+                  <PremiumIcon name="sparkles" size={12} style={{ display: "inline-block", marginRight: "4px" }} />
+                  {extractionStatus}
+                </div>
+              )}
             </div>
 
             <div style={{ display: "flex", justifyContent: "flex-end" }}>
-              <button 
-                type="submit" 
-                className="btn btn-primary" 
-                style={{ background: "linear-gradient(135deg, #EC4899, #BE185D)" }}
-                disabled={setupLoading || !skripsiTitle.trim() || plan === "free"}
-              >
-                {setupLoading ? "Menyiapkan Sidang..." : "Masuk Ruang Sidang"}
+              <button type="submit" className="btn btn-primary" style={{ background: "linear-gradient(135deg, #EC4899, #BE185D)" }} disabled={setupLoading || !skripsiTitle.trim() || plan === "free"}>
+                {setupLoading ? "Memuat..." : "Mulai Simulasi"}
               </button>
             </div>
           </form>
@@ -400,43 +596,34 @@ Mahasiswa sedang mempresentasikan ${sidangMode === "proposal" ? "proposal" : "sk
       {/* CHAT/SESSION PHASE */}
       {isSessionActive && (
         <div className="glass-panel" style={{ display: "flex", flexDirection: "column", height: "65vh" }}>
-          
-          {/* Room info header */}
+
           <div style={{ padding: "1rem 1.5rem", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "rgba(236,72,153,0.02)" }}>
             <div>
-              <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 700 }}>Ruang Sidang Live</div>
-              <div style={{ fontWeight: 600, color: "var(--text-main)", fontSize: "0.95rem" }}>{DOSEN_PROFILES.find(p=>p.id===dosenProfile).label}</div>
+              <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 700 }}>
+                {sidangMode} • Tanya: {questionCount}/{maxQuestions} • Sanggah: {sanggahanCount}/{maxSanggahan}
+              </div>
+              <div style={{ fontWeight: 600, color: "var(--text-main)", fontSize: "0.95rem" }}>{DOSEN_PROFILES.find(p => p.id === dosenProfile).label}</div>
             </div>
-            <button onClick={handleEndSession} className="btn btn-outline" style={{ borderColor: "var(--danger)", color: "var(--danger)", padding: "0.3rem 0.75rem", fontSize: "0.75rem" }}>
-              Akhiri Sidang
-            </button>
+            {isFinished ? (
+              <button onClick={generateFinalScoring} disabled={chatLoading} className="btn btn-primary" style={{ padding: "0.3rem 0.75rem", fontSize: "0.75rem", background: "linear-gradient(135deg, #10B981, #059669)" }}>
+                Lihat Evaluasi Akhir
+              </button>
+            ) : (
+              <button onClick={() => setShowConfirmEnd(true)} className="btn btn-outline" style={{ borderColor: "var(--danger)", color: "var(--danger)", padding: "0.3rem 0.75rem", fontSize: "0.75rem" }}>
+                Akhiri Sidang
+              </button>
+            )}
           </div>
 
-          {/* Chat history */}
           <div style={{ flex: 1, padding: "1.5rem", overflowY: "auto", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
             {messages.map((msg, idx) => {
               const isUser = msg.role === "user";
               return (
-                <div key={idx} style={{ 
-                  alignSelf: isUser ? "flex-end" : "flex-start", 
-                  maxWidth: "80%", 
-                  display: "flex", gap: "0.75rem", flexDirection: isUser ? "row-reverse" : "row" 
-                }}>
-                  <div style={{ 
-                    width: "36px", height: "36px", borderRadius: "50%", flexShrink: 0,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    backgroundColor: isUser ? "var(--primary-light)" : "var(--surface-hover)",
-                    color: isUser ? "var(--primary)" : "var(--text-muted)"
-                  }}>
+                <div key={idx} style={{ alignSelf: isUser ? "flex-end" : "flex-start", maxWidth: "80%", display: "flex", gap: "0.75rem", flexDirection: isUser ? "row-reverse" : "row" }}>
+                  <div style={{ width: "36px", height: "36px", borderRadius: "50%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: isUser ? "var(--primary-light)" : "var(--surface-hover)", color: isUser ? "var(--primary)" : "var(--text-muted)" }}>
                     <PremiumIcon name={isUser ? "user" : "mic"} size={18} />
                   </div>
-                  <div style={{ 
-                    backgroundColor: isUser ? "var(--primary)" : "var(--surface-hover)", 
-                    color: isUser ? "#fff" : "var(--text-main)",
-                    padding: "0.85rem 1.25rem", borderRadius: "16px", 
-                    borderTopRightRadius: isUser ? 0 : "16px", borderTopLeftRadius: !isUser ? 0 : "16px",
-                    lineHeight: 1.6, fontSize: "0.95rem"
-                  }}>
+                  <div style={{ backgroundColor: isUser ? "var(--primary)" : "var(--surface-hover)", color: isUser ? "#fff" : "var(--text-main)", padding: "0.85rem 1.25rem", borderRadius: "16px", borderTopRightRadius: isUser ? 0 : "16px", borderTopLeftRadius: !isUser ? 0 : "16px", lineHeight: 1.6, fontSize: "0.95rem" }}>
                     {isUser ? msg.text : (
                       <div className="markdown-body" style={{ color: "inherit" }}>
                         <ReactMarkdown>{msg.text}</ReactMarkdown>
@@ -446,59 +633,51 @@ Mahasiswa sedang mempresentasikan ${sidangMode === "proposal" ? "proposal" : "sk
                 </div>
               );
             })}
-            
+
             {chatLoading && (
-               <div style={{ alignSelf: "flex-start", display: "flex", gap: "0.75rem" }}>
-                  <div style={{ width: "36px", height: "36px", borderRadius: "50%", backgroundColor: "var(--surface-hover)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <PremiumIcon name="mic" size={18} className="text-muted" />
-                  </div>
-                  <div style={{ padding: "0.85rem 1.25rem", borderRadius: "16px", backgroundColor: "var(--surface-hover)", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                     <div className="animate-pulse" style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "var(--text-muted)" }} />
-                     <div className="animate-pulse" style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "var(--text-muted)", animationDelay: "150ms" }} />
-                     <div className="animate-pulse" style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "var(--text-muted)", animationDelay: "300ms" }} />
-                  </div>
-               </div>
+              <div style={{ alignSelf: "flex-start", display: "flex", gap: "0.75rem" }}>
+                <div style={{ width: "36px", height: "36px", borderRadius: "50%", backgroundColor: "var(--surface-hover)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <PremiumIcon name="mic" size={18} className="text-muted" />
+                </div>
+                <div style={{ padding: "0.85rem 1.25rem", borderRadius: "16px", backgroundColor: "var(--surface-hover)", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <div className="animate-pulse" style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "var(--text-muted)" }} />
+                  <div className="animate-pulse" style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "var(--text-muted)", animationDelay: "150ms" }} />
+                  <div className="animate-pulse" style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "var(--text-muted)", animationDelay: "300ms" }} />
+                </div>
+              </div>
             )}
             <div ref={chatEndRef} />
           </div>
 
-          {/* Input Area */}
-          <div style={{ padding: "1rem", borderTop: "1px solid var(--border)", display: "flex", gap: "0.75rem", alignItems: "flex-end" }}>
-            <button 
-              onClick={toggleRecording}
-              style={{
-                width: "48px", height: "48px", borderRadius: "50%", border: "none", cursor: "pointer", flexShrink: 0,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                backgroundColor: isRecording ? "rgba(239,68,68,0.1)" : "var(--surface-hover)",
-                color: isRecording ? "var(--danger)" : "var(--text-muted)",
-                transition: "all 0.2s"
-              }}
-              title="Gunakan mikrofon"
-            >
-              <PremiumIcon name="mic" size={24} className={isRecording ? "animate-pulse" : ""} />
-            </button>
-            <div style={{ flex: 1, backgroundColor: "var(--surface)", border: "1px solid var(--border)", borderRadius: "24px", padding: "0.5rem 1rem", display: "flex", alignItems: "center" }}>
-              <input
-                 type="text"
-                 value={currentInput}
-                 onChange={e => setCurrentInput(e.target.value)}
-                 onKeyDown={e => { if (e.key === "Enter") handleSendMessage(); }}
-                 placeholder={isRecording ? "Sedang mendengarkan..." : "Ketik respon Anda (atau pakai mic)..."}
-                 style={{ width: "100%", background: "transparent", border: "none", outline: "none", fontSize: "0.95rem" }}
-               />
+          {!isFinished && (
+            <div style={{ padding: "1rem", borderTop: "1px solid var(--border)", display: "flex", gap: "0.75rem", alignItems: "flex-end" }}>
+              <button onClick={() => { if (isRecording) { recognitionRef.current?.stop(); setIsRecording(false); } else { recognitionRef.current?.start(); setIsRecording(true); if (window.currentAudio) window.currentAudio.pause(); } }} style={{ width: "48px", height: "48px", borderRadius: "50%", border: "none", cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: isRecording ? "rgba(239,68,68,0.1)" : "var(--surface-hover)", color: isRecording ? "var(--danger)" : "var(--text-muted)", transition: "all 0.2s" }} title="Gunakan mikrofon">
+                <PremiumIcon name="mic" size={24} className={isRecording ? "animate-pulse" : ""} />
+              </button>
+              <div style={{ flex: 1, backgroundColor: "var(--surface)", border: "1px solid var(--border)", borderRadius: "24px", padding: "0.5rem 1rem", display: "flex", alignItems: "center" }}>
+                <input type="text" value={currentInput} onChange={e => setCurrentInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter") handleSendMessage(); }} placeholder={isRecording ? "Sedang mendengarkan..." : "Jawab pertanyaan dosen..."} style={{ width: "100%", background: "transparent", border: "none", outline: "none", fontSize: "0.95rem" }} />
+              </div>
+              <button onClick={handleSendMessage} disabled={!currentInput.trim() || chatLoading} style={{ width: "48px", height: "48px", borderRadius: "50%", border: "none", cursor: currentInput.trim() ? "pointer" : "not-allowed", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: currentInput.trim() ? "var(--primary)" : "var(--surface-hover)", color: currentInput.trim() ? "white" : "var(--text-muted)" }}>
+                <PremiumIcon name="send" size={20} />
+              </button>
             </div>
-            <button 
-              onClick={handleSendMessage}
-              disabled={!currentInput.trim() || chatLoading}
-              style={{
-                width: "48px", height: "48px", borderRadius: "50%", border: "none", cursor: currentInput.trim() ? "pointer" : "not-allowed", flexShrink: 0,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                backgroundColor: currentInput.trim() ? "var(--primary)" : "var(--surface-hover)",
-                color: currentInput.trim() ? "white" : "var(--text-muted)"
-              }}
-            >
-              <PremiumIcon name="send" size={20} />
-            </button>
+          )}
+        </div>
+      )}
+
+      {/* Confirmation Modal */}
+      {showConfirmEnd && (
+        <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div className="glass-panel" style={{ width: "90%", maxWidth: "400px", padding: "2rem", textAlign: "center" }}>
+            <PremiumIcon name="alertTriangle" size={48} style={{ color: "var(--warning)", margin: "0 auto 1rem" }} />
+            <h3 style={{ margin: "0 0 0.5rem", fontSize: "1.25rem" }}>Akhiri Sidang?</h3>
+            <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", marginBottom: "1.5rem" }}>
+              Sesi saat ini akan ditutup dan riwayat obrolan akan dihapus secara permanen.
+            </p>
+            <div style={{ display: "flex", gap: "1rem", justifyContent: "center" }}>
+              <button className="btn btn-outline" onClick={() => setShowConfirmEnd(false)}>Batal</button>
+              <button className="btn btn-primary" style={{ backgroundColor: "var(--danger)", borderColor: "var(--danger)" }} onClick={confirmEndSession}>Ya, Akhiri</button>
+            </div>
           </div>
         </div>
       )}

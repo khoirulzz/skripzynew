@@ -198,7 +198,7 @@ a {
   padding-right: 2.5rem;
 }
 
-/* ─── IMPROVED FORM INPUTS ─── */
+/* â”€â”€â”€ IMPROVED FORM INPUTS â”€â”€â”€ */
 .form-input-enhanced {
   width: 100%;
   padding: 0.875rem 1.125rem;
@@ -247,13 +247,13 @@ a {
   box-shadow: 0 0 0 3px var(--primary-light);
 }
 
-/* ─── FORM LABELS ─── */
+/* â”€â”€â”€ FORM LABELS â”€â”€â”€ */
 .form-label-required {
   color: var(--danger);
   margin-left: 0.25rem;
 }
 
-/* ─── CARD & PANEL ─── */
+/* â”€â”€â”€ CARD & PANEL â”€â”€â”€ */
 .card {
   background-color: var(--surface);
   border: 1px solid var(--border);
@@ -286,7 +286,7 @@ a {
   margin: 0.5rem 0 0 0;
 }
 
-/* ─── GRID UTILITIES ─── */
+/* â”€â”€â”€ GRID UTILITIES â”€â”€â”€ */
 .grid {
   display: grid;
   gap: 1.5rem;
@@ -307,7 +307,7 @@ a {
   .grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 
-/* ─── TEXT UTILITIES ─── */
+/* â”€â”€â”€ TEXT UTILITIES â”€â”€â”€ */
 .text-main { color: var(--text-main); }
 .text-muted { color: var(--text-muted); }
 .text-primary { color: var(--primary); }
@@ -327,7 +327,7 @@ a {
 .font-semibold { font-weight: 600; }
 .font-bold { font-weight: 700; }
 
-/* ─── SPACING UTILITIES ─── */
+/* â”€â”€â”€ SPACING UTILITIES â”€â”€â”€ */
 .p-1 { padding: 0.25rem; }
 .p-2 { padding: 0.5rem; }
 .p-3 { padding: 0.75rem; }
@@ -350,7 +350,7 @@ a {
 .mt-2 { margin-top: 0.5rem; }
 .mt-4 { margin-top: 1rem; }
 
-/* ─── ANIMATIONS & EFFECTS ─── */
+/* â”€â”€â”€ ANIMATIONS & EFFECTS â”€â”€â”€ */
 @keyframes slideInDown {
   from { opacity: 0; transform: translateY(-10px); }
   to { opacity: 1; transform: translateY(0); }
@@ -388,7 +388,7 @@ a {
   animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
-/* ─── BORDERS & DIVIDERS ─── */
+/* â”€â”€â”€ BORDERS & DIVIDERS â”€â”€â”€ */
 .border-t { border-top: 1px solid var(--border); }
 .border-b { border-bottom: 1px solid var(--border); }
 .border-l { border-left: 1px solid var(--border); }
@@ -400,7 +400,7 @@ a {
   margin: 1rem 0;
 }
 
-/* ─── SECTION CONTAINER ─── */
+/* â”€â”€â”€ SECTION CONTAINER â”€â”€â”€ */
 .section {
   margin-bottom: 2rem;
 }
@@ -415,7 +415,7 @@ a {
   display: inline-block;
 }
 
-/* ─── RESPONSIVE PADDING ─── */
+/* â”€â”€â”€ RESPONSIVE PADDING â”€â”€â”€ */
 @media (max-width: 768px) {
   .p-4-md { padding: 1rem; }
   .p-6-md { padding: 1.5rem; }
@@ -423,7 +423,7 @@ a {
   .text-lg-md { font-size: 1rem; }
 }
 
-/* ─── SIDEBAR LAYOUT ─── */
+/* â”€â”€â”€ SIDEBAR LAYOUT â”€â”€â”€ */
 /* Sidebar wrapper on desktop: fixed width, never hidden */
 .sidebar-container {
   display: flex;
@@ -438,7 +438,7 @@ a {
   background-color: var(--surface-hover) !important;
 }
 
-/* ─── SCROLLBAR STYLING ─── */
+/* â”€â”€â”€ SCROLLBAR STYLING â”€â”€â”€ */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -457,7 +457,7 @@ a {
   background: var(--text-muted);
 }
 
-/* ─── RESPONSIVE IMPROVEMENTS FOR TOOLS PAGES ─── */
+/* â”€â”€â”€ RESPONSIVE IMPROVEMENTS FOR TOOLS PAGES â”€â”€â”€ */
 @media (max-width: 768px) {
   /* Stack grid layout on mobile for tools */
   [style*="gridTemplateColumns: 1fr 1fr"],
@@ -503,7 +503,7 @@ a {
   }
 }
 
-/* ─── RESPONSIVE UTILITIES ─── */
+/* â”€â”€â”€ RESPONSIVE UTILITIES â”€â”€â”€ */
 .hide-mobile { display: inline-block; }
 .show-mobile { display: none; }
 
@@ -554,7 +554,7 @@ a {
   .text-xs { font-size: 0.7rem !important; }
 }
 
-/* ─── UTILITY GRID FOR TOOLS ─── */
+/* â”€â”€â”€ UTILITY GRID FOR TOOLS â”€â”€â”€ */
 .tools-grid-responsive {
   display: grid;
   gap: 1rem;
@@ -735,7 +735,7 @@ a {
 .font-medium { font-weight: 500; }
 .text-muted { color: var(--text-muted); }
 
-/* ─── AI OUTPUT MARKDOWN RENDERING ─── */
+/* â”€â”€â”€ AI OUTPUT MARKDOWN RENDERING â”€â”€â”€ */
 .markdown-body {
   font-size: 0.95rem;
   line-height: 1.7;
@@ -783,4 +783,5 @@ a {
   font-style: italic;
   color: var(--text-muted);
 }
+
 

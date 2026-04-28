@@ -4,7 +4,7 @@
  * Mendukung REST API biasa dan WebSocket Proxy Pass-Through untuk Gemini Live.
  */
 
-const RETRYABLE_STATUS = new Set([408, 429, 500, 502, 503, 504]);
+const RETRYABLE_STATUS = new Set([401, 403, 408, 429, 500, 502, 503, 504]);
 
 function createCorsHeaders(extra = {}) {
     return {
@@ -39,7 +39,7 @@ export default {
         // 2. Keamanan Sederhana: Memakai Custom Secret
         const EXPECTED_SECRET = env.WORKER_SECRET || "skripzy1234";
         const url = new URL(request.url);
-        
+
         // Cek secret dari Header (REST) ATAU Query Param (WebSocket dari browser)
         const incomingSecret = request.headers.get("x-skripzy-secret") || url.searchParams.get("secret");
 
@@ -54,30 +54,80 @@ export default {
             // ──── ENDPOINT BARU: GENERATE CLOUDINARY SIGNATURE ────
             if (url.pathname === "/api/cloudinary-sign" && request.method === "POST") {
                 const timestamp = Math.round((new Date).getTime() / 1000);
-                
+
                 // Kita mengurutkan parameter sesuai standar Cloudinary, tambahkan folder "Referensi"
-                const paramsToSign = { 
+                const paramsToSign = {
                     folder: "Referensi",
-                    timestamp: timestamp 
+                    timestamp: timestamp
                 };
                 const keys = Object.keys(paramsToSign).sort();
                 // Menggabungkan parameter & menyambungnya dengan API Secret
                 const stringToSign = keys.map(k => `${k}=${paramsToSign[k]}`).join('&') + (env.CLOUDINARY_API_SECRET || "");
-                
+
                 // Membuat SHA-1 hash menggunakan Web Crypto API (karena di lingkungan Cloudflare Worker)
                 const msgBuffer = new TextEncoder().encode(stringToSign);
                 const hashBuffer = await crypto.subtle.digest('SHA-1', msgBuffer);
                 const hashArray = Array.from(new Uint8Array(hashBuffer));
                 const signature = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 
-                return new Response(JSON.stringify({ 
-                    signature, 
-                    timestamp, 
+                return new Response(JSON.stringify({
+                    signature,
+                    timestamp,
                     cloudName: env.CLOUDINARY_CLOUD_NAME,
                     apiKey: env.CLOUDINARY_API_KEY
                 }), {
                     status: 200,
                     headers: createCorsHeaders(),
+                });
+            }
+
+            // ──── ENDPOINT BARU: BATCH EMBEDDING UNTUK RAG ────
+            if (url.pathname === "/api/ai/embed-batch" && request.method === "POST") {
+                const { texts, model = "gemini-embedding-2" } = await request.json();
+
+                if (!texts || !Array.isArray(texts)) {
+                    return new Response(JSON.stringify({ error: "Texts array required" }), {
+                        status: 400, headers: createCorsHeaders()
+                    });
+                }
+
+                // Siapkan payload untuk Google Batch API (Max 100 per request)
+                const payload = {
+                    requests: texts.map(t => ({
+                        model: `models/${model}`,
+                        content: { parts: [{ text: t }] }
+                    }))
+                };
+
+                const groupHeader = request.headers.get("x-api-group") || "group_3";
+                const groupsToTry = groupHeader.split(",").map(g => g.trim()).filter(Boolean);
+
+                let lastError = null;
+                for (const group of groupsToTry) {
+                    const keys = (API_GROUPS[group] || []).filter(Boolean);
+                    for (const key of keys) {
+                        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:batchEmbedContents?key=${key}`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify(payload)
+                        });
+
+                        if (res.ok) {
+                            const data = await res.json();
+                            const embeddings = data.embeddings.map(e => e.values);
+                            return new Response(JSON.stringify({ embeddings }), {
+                                status: 200, headers: createCorsHeaders()
+                            });
+                        }
+
+                        const errText = await res.text();
+                        lastError = { status: res.status, body: errText };
+                        if (!RETRYABLE_STATUS.has(res.status)) break;
+                    }
+                }
+
+                return new Response(JSON.stringify({ error: "Batch embedding failed", details: lastError }), {
+                    status: lastError?.status || 500, headers: createCorsHeaders()
                 });
             }
 
@@ -97,8 +147,8 @@ export default {
                 }
 
                 // Ambil key pertama yang tersedia untuk sesi telepon ini
-                const apiKey = usableKeys[0]; 
-                
+                const apiKey = usableKeys[0];
+
                 // Cloudflare Worker akan otomatis mengupgrade `https://` menjadi WSS secara passthrough
                 const targetUrl = `https://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${apiKey}`;
 
@@ -108,7 +158,7 @@ export default {
             // ──── ENDPOINT: SEARCH REFERENCE - CORE API ────
             if (url.pathname === "/api/search/core" && request.method === "POST") {
                 const { query, limit = 10, yearFrom, yearTo } = await request.json();
-                
+
                 if (!query) {
                     return new Response(JSON.stringify({ error: "Query required", results: [] }), {
                         status: 400,
@@ -126,15 +176,15 @@ export default {
 
                 try {
                     let coreUrl = `https://api.core.ac.uk/v3/search/works?q=${encodeURIComponent(query)}&limit=${Math.min(limit, 100)}&api_key=${coreApiKey}`;
-                    
+
                     // Add year filtering if provided
                     if (yearFrom && yearTo) {
                         coreUrl += `&yearFrom=${yearFrom}&yearTo=${yearTo}`;
                     }
-                    
+
                     console.log(`[Core API] Fetching: ${query} (${yearFrom}-${yearTo})`);
                     const coreResponse = await fetch(coreUrl, { method: "GET" });
-                    
+
                     if (!coreResponse.ok) {
                         const errorText = await coreResponse.text();
                         throw new Error(`Core API returned ${coreResponse.status}: ${errorText}`);
@@ -159,7 +209,7 @@ export default {
             // ──── ENDPOINT: SEARCH REFERENCE - OPENALEX API ────
             if (url.pathname === "/api/search/openalex" && request.method === "POST") {
                 const { query, limit = 10, yearFrom, yearTo } = await request.json();
-                
+
                 if (!query) {
                     return new Response(JSON.stringify({ error: "Query required", results: [] }), {
                         status: 400,
@@ -169,16 +219,16 @@ export default {
 
                 try {
                     let openalexUrl = `https://api.openalex.org/works?search=${encodeURIComponent(query)}&per_page=${Math.min(limit, 50)}`;
-                    
+
                     // Add year filtering if provided
                     if (yearFrom && yearTo) {
                         const yearFilter = `publication_year:${yearFrom}-${yearTo}`;
                         openalexUrl += `&filter=${encodeURIComponent(yearFilter)}`;
                     }
-                    
+
                     console.log(`[OpenAlex API] Fetching: ${query} (${yearFrom}-${yearTo})`);
                     const openalexResponse = await fetch(openalexUrl, { method: "GET" });
-                    
+
                     if (!openalexResponse.ok) {
                         const errorText = await openalexResponse.text();
                         throw new Error(`OpenAlex API returned ${openalexResponse.status}: ${errorText}`);
@@ -203,7 +253,7 @@ export default {
             // ──── ENDPOINT: SEARCH REFERENCE - UNPAYWALL API ────
             if (url.pathname === "/api/search/unpaywall" && request.method === "POST") {
                 const { query, limit = 10, yearFrom, yearTo } = await request.json();
-                
+
                 if (!query) {
                     return new Response(JSON.stringify({ error: "Query required", results: [] }), {
                         status: 400,
@@ -215,10 +265,10 @@ export default {
                     // Unpaywall doesn't support direct search well, use simple approach
                     const unpaywallEmail = "officialskripzy@gmail.com";
                     let unpaywallUrl = `https://api.unpaywall.org/v2/search?query=${encodeURIComponent(query)}&email=${encodeURIComponent(unpaywallEmail)}&limit=${Math.min(limit, 50)}`;
-                    
+
                     console.log(`[Unpaywall API] Fetching: ${query}`);
                     const unpaywallResponse = await fetch(unpaywallUrl, { method: "GET" });
-                    
+
                     if (!unpaywallResponse.ok) {
                         const errorText = await unpaywallResponse.text();
                         throw new Error(`Unpaywall API returned ${unpaywallResponse.status}: ${errorText}`);

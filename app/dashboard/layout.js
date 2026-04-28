@@ -27,7 +27,7 @@ export default function DashboardLayout({ children }) {
     <AuthGuard requireAuth={true}>
       <div style={{ display: "flex", minHeight: "100vh", backgroundColor: "var(--background)", overflow: "hidden", position: "relative" }}>
 
-        {/* ── MOBILE: Backdrop overlay ─────────────────────────── */}
+        {/* -- MOBILE: Backdrop overlay -- */}
         {isMobile && isMobileOpen && (
           <div
             onClick={closeMobile}
@@ -41,7 +41,7 @@ export default function DashboardLayout({ children }) {
           />
         )}
 
-        {/* ── MOBILE: Sliding sidebar drawer ───────────────────── */}
+        {/* -- MOBILE: Sliding sidebar drawer -- */}
         {isMobile && (
           <div
             style={{
@@ -62,7 +62,7 @@ export default function DashboardLayout({ children }) {
           </div>
         )}
 
-        {/* ── DESKTOP: Static sidebar (collapsible width) ───────── */}
+        {/* -- DESKTOP: Static sidebar (collapsible width) -- */}
         {!isMobile && (
           <div
             style={{
@@ -83,15 +83,34 @@ export default function DashboardLayout({ children }) {
           </div>
         )}
 
-        {/* ── Main content area ────────────────────────────────── */}
-        <main style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: "100vh", overflow: "hidden" }}>
-          {/* Pass mobile toggle so Header can render the hamburger */}
+        <main style={{ flex: 1, display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
+          {/* Pass mobile toggle or desktop collapse toggle so Header can render the hamburger */}
           <Header
             onMenuClick={isMobile ? () => setIsMobileOpen((prev) => !prev) : null}
             isMobile={isMobile}
           />
-          <div style={{ padding: "1.5rem", overflowY: "auto", flex: 1 }}>
-            {children}
+          <div style={{ padding: "1.5rem", overflowY: "auto", flex: 1, position: "relative" }}>
+            {/* Decorative mesh background with dots – matching reference */}
+            <div aria-hidden="true" style={{
+              position: "fixed",
+              top: 0,
+              right: 0,
+              width: "100%",
+              height: "100%",
+              backgroundImage: `
+                radial-gradient(circle at top right, rgba(99,102,241,0.05) 0%, transparent 40%),
+                radial-gradient(circle at bottom right, rgba(139,92,246,0.03) 0%, transparent 40%),
+                radial-gradient(circle, rgba(0,0,0,0.02) 1px, transparent 1px)
+              `,
+              backgroundSize: "100% 100%, 100% 100%, 24px 24px",
+              pointerEvents: "none",
+              zIndex: 0,
+            }} />
+            
+            {/* Content wrapper */}
+            <div style={{ position: "relative", zIndex: 1 }}>
+              {children}
+            </div>
           </div>
         </main>
 

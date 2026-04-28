@@ -6,7 +6,6 @@ import ReactMarkdown from "react-markdown";
 import { callGemini, MODELS } from "@/lib/callWorker";
 import { deductCredits, refundCredits } from "@/lib/credits";
 import { searchPapersWithFallback } from "@/lib/referenceApis";
-import AnimatedLoadingScreen from "@/components/workspace/AnimatedLoadingScreen";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
 import { useBillingCatalog } from "@/lib/useBillingCatalog";
 import Link from "next/link";
@@ -21,7 +20,7 @@ export default function AsistenAIPage() {
   const titleCost = toolMap["asisten-ai-judul"]?.creditCost ?? COST_JUDUL;
   const backgroundCost = toolMap["asisten-ai-latar-belakang"]?.creditCost ?? COST_BG;
   const [activeTab, setActiveTab] = useState("judul"); // "judul" | "latar_belakang"
-  
+
   // States untuk Generator Judul
   const [topic, setTopic] = useState("");
   const [loadingJudul, setLoadingJudul] = useState(false);
@@ -54,18 +53,27 @@ export default function AsistenAIPage() {
     try {
       await deductCredits(user.uid, titleCost);
 
+      let referencesText = "";
+      let prompt = "";
+      let foundReferences = false;
+
       // Cari referensi dulu dengan new API
-      const result = await searchPapersWithFallback(topic, { limit: 5, yearRange: "10" });
-      if (result.papers.length === 0) {
-        throw new Error("Tidak ditemukan referensi yang relevan. Coba gunakan kata kunci yang lebih umum.");
+      try {
+        const result = await searchPapersWithFallback(topic, { limit: 5, yearRange: "10" });
+        if (result.papers && result.papers.length > 0) {
+          setApiAttemptJudul(result.source);
+          foundReferences = true;
+          referencesText = result.papers.map(p => {
+            return `Judul: ${p.title}\nPenulis: ${p.authorString}\nTahun: ${p.year}\nURL: ${p.displayUrl || p.url}\nAbstrak: ${p.abstract || 'Tidak tersedia.'}`;
+          }).join('\n\n---\n\n');
+        }
+      } catch (err) {
+        console.warn("Gagal menemukan referensi, melanjutkan tanpa referensi.", err);
+        setApiAttemptJudul("error");
       }
-      setApiAttemptJudul(result.source);
 
-      const referencesText = result.papers.map(p => {
-        return `Judul: ${p.title}\nPenulis: ${p.authorString}\nTahun: ${p.year}\nURL: ${p.displayUrl || p.url}\nAbstrak: ${p.abstract || 'Tidak tersedia.'}`;
-      }).join('\n\n---\n\n');
-
-      const prompt = `Anda adalah ahli metodologi penelitian. Tugas Anda menganalisis daftar referensi penelitian berikut, lalu:
+      if (foundReferences) {
+        prompt = `Anda adalah ahli metodologi penelitian. Tugas Anda menganalisis daftar referensi penelitian berikut, lalu:
 
 1.  Sajikan ulang daftar referensi yang dianalisis. <b>Judul penelitian HARUS dijadikan link (tag <a>) yang bisa diklik menuju URL aslinya</b>, lengkap dengan penulis dan tahun.
 2.  Identifikasi <b>research gap</b> dari kumpulan referensi tersebut.
@@ -81,6 +89,20 @@ ${referencesText}
 
 Gunakan heading (###), list (-), dan bold (**) secara tepat agar mudah dibaca. Link referensi tetap gunakan format markdown [Judul](URL).
 `;
+      } else {
+        prompt = `Anda adalah ahli metodologi penelitian. Tugas Anda adalah memberikan rekomendasi judul penelitian berdasarkan topik berikut: "${topic}".
+
+**PENTING: Sistem saat ini gagal menemukan referensi jurnal yang relevan dari database.**
+Harap tambahkan catatan ramah di awal output Anda yang menyatakan bahwa referensi tidak ditemukan (atau terjadi gangguan pencarian), sehingga hasil ini hanya memuat rekomendasi judul dan rumusan masalah tanpa analisis *Research Gap* dari literatur.
+
+Lalu, sajikan:
+1.  3 rekomendasi judul penelitian baru yang inovatif dan relevan dengan topik tersebut.
+2.  Untuk setiap judul rekomendasi, berikan 2 rumusan masalah yang tepat.
+3.  Berikan sedikit penjelasan teoritis terkait potensi novelty yang bisa diangkat meskipun tanpa referensi literatur.
+
+Sajikan dalam format Markdown yang mudah dibaca. LANGSUNG TAMPILKAN HASIL TANPA KALIMAT PENGANTAR (kecuali catatan terkait referensi tadi).
+Gunakan heading (###), list (-), dan bold (**) secara tepat agar mudah dibaca.`;
+      }
 
       const aiResponse = await callGemini({
         prompt: prompt,
@@ -91,7 +113,7 @@ Gunakan heading (###), list (-), dan bold (**) secara tepat agar mudah dibaca. L
 
       setResultJudul(aiResponse);
     } catch (err) {
-      await refundCredits(user.uid, titleCost).catch(() => {});
+      await refundCredits(user.uid, titleCost).catch(() => { });
       setErrorJudul(err.message || "Gagal generate judul.");
     } finally {
       setLoadingJudul(false);
@@ -115,13 +137,14 @@ Gunakan heading (###), list (-), dan bold (**) secara tepat agar mudah dibaca. L
       let papers = [];
 
       if (includeReferences) {
-        const result = await searchPapersWithFallback(bgTitle, { limit: 5, yearRange: "10" });
-        setApiAttemptBg(result.source);
-        
-        if (result.papers.length > 0) {
-          papers = result.papers;
-          const refs = papers.map(p => `Judul: ${p.title}\nPenulis: ${p.authorString}\nTahun: ${p.year}\nAbstrak: ${p.abstract}`).join('\n\n---\n\n');
-          promptText = `Anda adalah seorang akademisi dan penulis ilmiah profesional. Tugas Anda adalah menyusun narasi latar belakang penelitian yanng manusiawi, mendalam, logis, dan mengalir dengan gaya bahasa akademik yang baik, tetap mempertahankan pola tulisan Manusia, namun tetap komunikatif.
+        try {
+          const result = await searchPapersWithFallback(bgTitle, { limit: 5, yearRange: "10" });
+          setApiAttemptBg(result.source);
+
+          if (result.papers && result.papers.length > 0) {
+            papers = result.papers;
+            const refs = papers.map(p => `Judul: ${p.title}\nPenulis: ${p.authorString}\nTahun: ${p.year}\nAbstrak: ${p.abstract}`).join('\n\n---\n\n');
+            promptText = `Anda adalah seorang akademisi dan penulis ilmiah profesional. Tugas Anda adalah menyusun narasi latar belakang penelitian yanng manusiawi, mendalam, logis, dan mengalir dengan gaya bahasa akademik yang baik, tetap mempertahankan pola tulisan Manusia, namun tetap komunikatif.
 
 📌 Informasi Penelitian:
 - Judul: ${bgTitle}
@@ -141,6 +164,10 @@ Format Penulisan:
 - Gunakan format Markdown: **teks** untuk penekanan, > untuk "research gap".
 - Jangan sertakan daftar pustaka di dalam teks.
 - TULISKAN HANYA NARASI. Jangan gunakan markdown block (\`\`\`).`;
+          }
+        } catch (err) {
+          console.warn("Gagal menemukan referensi untuk latar belakang.", err);
+          setApiAttemptBg("error");
         }
       }
 
@@ -173,7 +200,7 @@ Berikan hasil murni dalam format Markdown yang rapi. Tanpa markdown block dan ka
 
       setResultBg(finalHTML);
     } catch (err) {
-      await refundCredits(user.uid, backgroundCost).catch(() => {});
+      await refundCredits(user.uid, backgroundCost).catch(() => { });
       setErrorBg(err.message || "Gagal menyusun latar belakang.");
     } finally {
       setLoadingBg(false);
@@ -220,55 +247,55 @@ Berikan hasil murni dalam format Markdown yang rapi. Tanpa markdown block dan ka
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2rem" }}>
-        
+
         {/* === KIRI: INPUT === */}
         <div className="glass-panel p-6" style={{ alignSelf: "start" }}>
           {activeTab === "judul" && (
-             <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-               <h3 style={{ fontSize: "1.1rem", margin: 0 }}>Cari Ide Judul (Novelty)</h3>
-               <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", margin: "0 0 0.5rem" }}>
-                 AI akan mencari jurnal dari Core, OpenAlex, dan Unpaywall, menganalisis gap penelitian, dan merekomendasikan judul beserta rumusan masalahnya.
-               </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+              <h3 style={{ fontSize: "1.1rem", margin: 0 }}>Cari Ide Judul (Novelty)</h3>
+              <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", margin: "0 0 0.5rem" }}>
+                AI akan mencari jurnal dari Database Paper dan menganalisis gap penelitian, dan merekomendasikan judul beserta rumusan masalahnya.
+              </p>
 
-               {errorJudul && (
-                 <div style={{ padding: "0.75rem", backgroundColor: "rgba(239,68,68,0.1)", color: "var(--danger)", borderRadius: "var(--radius-sm)", fontSize: "0.8rem" }}>
-                   {errorJudul}
-                 </div>
-               )}
+              {errorJudul && (
+                <div style={{ padding: "0.75rem", backgroundColor: "rgba(239,68,68,0.1)", color: "var(--danger)", borderRadius: "var(--radius-sm)", fontSize: "0.8rem" }}>
+                  {errorJudul}
+                </div>
+              )}
 
-               <div className="form-group">
-                 <label className="form-label">Topik Penilitian</label>
-                 <input 
-                   type="text" 
-                   className="form-input" 
-                   placeholder="Contoh: Pengaruh AI terhadap Pendidikan Dasar" 
-                   value={topic}
-                   onChange={e => setTopic(e.target.value)}
-                 />
-               </div>
+              <div className="form-group">
+                <label className="form-label">Topik Penilitian</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="Contoh: Pengaruh AI terhadap Pendidikan Dasar"
+                  value={topic}
+                  onChange={e => setTopic(e.target.value)}
+                />
+              </div>
 
-               <button 
-                 className="btn btn-primary w-full"
-                 onClick={handleGenerateJudul}
-                 disabled={loadingJudul || !topic.trim()}
-               >
-                 {loadingJudul ? "Menganalisis..." : `Generate Ide Judul (-${titleCost} Kredit)`}
-               </button>
-             </div>
+              <button
+                className="btn btn-primary w-full"
+                onClick={handleGenerateJudul}
+                disabled={loadingJudul || !topic.trim()}
+              >
+                {loadingJudul ? "Menganalisis..." : `Generate Ide Judul (-${titleCost} Kredit)`}
+              </button>
+            </div>
           )}
 
           {activeTab === "latar_belakang" && (
             <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
               <h3 style={{ fontSize: "1.1rem", margin: 0 }}>Draf Latar Belakang</h3>
               <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", margin: "0 0 0.5rem" }}>
-                 Susun latar belakang penelitian menggunakan pendekatan deduktif dengan narasi alami.
+                Susun latar belakang penelitian dengan narasi alami.
               </p>
 
-               {errorBg && (
-                 <div style={{ padding: "0.75rem", backgroundColor: "rgba(239,68,68,0.1)", color: "var(--danger)", borderRadius: "var(--radius-sm)", fontSize: "0.8rem" }}>
-                   {errorBg}
-                 </div>
-               )}
+              {errorBg && (
+                <div style={{ padding: "0.75rem", backgroundColor: "rgba(239,68,68,0.1)", color: "var(--danger)", borderRadius: "var(--radius-sm)", fontSize: "0.8rem" }}>
+                  {errorBg}
+                </div>
+              )}
 
               <div className="form-group">
                 <label className="form-label">Judul Penelitian</label>
@@ -284,56 +311,72 @@ Berikan hasil murni dalam format Markdown yang rapi. Tanpa markdown block dan ka
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <input 
-                  type="checkbox" 
-                  id="incRef" 
-                  checked={includeReferences} 
-                  onChange={(e) => setIncludeReferences(e.target.checked)} 
+                <input
+                  type="checkbox"
+                  id="incRef"
+                  checked={includeReferences}
+                  onChange={(e) => setIncludeReferences(e.target.checked)}
                 />
                 <label htmlFor="incRef" style={{ fontSize: "0.85rem", cursor: "pointer" }}>Sertakan referensi (Core + OpenAlex + Unpaywall)</label>
               </div>
 
-              <button 
-                 className="btn btn-primary w-full"
-                 onClick={handleGenerateBg}
-                 disabled={loadingBg || !bgTitle.trim() || !bgPhenomenon.trim() || !bgProblem.trim()}
-                 style={{ marginTop: "0.5rem" }}
-               >
-                 {loadingBg ? "Menyusun Draf..." : `Buat Draf Latar Belakang (-${backgroundCost} Kredit)`}
-               </button>
+              <button
+                className="btn btn-primary w-full"
+                onClick={handleGenerateBg}
+                disabled={loadingBg || !bgTitle.trim() || !bgPhenomenon.trim() || !bgProblem.trim()}
+                style={{ marginTop: "0.5rem" }}
+              >
+                {loadingBg ? "Menyusun Draf..." : `Buat Draf Latar Belakang (-${backgroundCost} Kredit)`}
+              </button>
             </div>
           )}
         </div>
 
         {/* === KANAN: OUTPUT === */}
         <div className="glass-panel p-6" style={{ overflowY: "auto", maxHeight: "600px" }}>
-           {activeTab === "judul" && !loadingJudul && !resultJudul && (
-             <div style={{ color: "var(--text-muted)", textAlign: "center", marginTop: "3rem", fontSize: "0.9rem" }}>
-               Isi form di samping untuk mulai mencari ide judul. Hasil analisis research gap, novelty, dan judul akan tampil di sini.
-             </div>
-           )}
-           {activeTab === "judul" && loadingJudul && (
-             <AnimatedLoadingScreen isLoading={loadingJudul} apiAttempt={apiAttemptJudul} />
-           )}
-           {activeTab === "judul" && resultJudul && (
-             <div className="markdown-body">
-               <ReactMarkdown>{resultJudul}</ReactMarkdown>
-             </div>
-           )}
+          {activeTab === "judul" && !loadingJudul && !resultJudul && (
+            <div style={{ color: "var(--text-muted)", textAlign: "center", marginTop: "3rem", fontSize: "0.9rem" }}>
+              Isi form untuk mulai mencari ide judul. Hasil analisis research gap, novelty, dan judul akan tampil di sini.
+            </div>
+          )}
+          {activeTab === "judul" && loadingJudul && (
+            <div style={{ padding: "1.5rem", backgroundColor: "rgba(79, 70, 229, 0.05)", border: "1px solid rgba(79, 70, 229, 0.2)", borderRadius: "var(--radius-md)", textAlign: "center" }} className="animate-pulse">
+              <PremiumIcon name="sparkles" size={24} style={{ color: "var(--primary)", margin: "0 auto 0.5rem" }} className="animate-spin-slow" />
+              <p style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--primary)", marginBottom: "0.5rem", margin: 0 }}>
+                {apiAttemptJudul === "" || apiAttemptJudul === "core" || apiAttemptJudul === "openalex" || apiAttemptJudul === "unpaywall" ? "Mencari referensi jurnal..." : "Menyusun ide dan rekomendasi..."}
+              </p>
+              <div style={{ height: "4px", backgroundColor: "rgba(79, 70, 229, 0.2)", borderRadius: "9999px", overflow: "hidden", maxWidth: "200px", margin: "0.5rem auto 0" }}>
+                <div className="animate-progress-loading" style={{ height: "100%", backgroundColor: "var(--primary)", width: "60%" }}></div>
+              </div>
+            </div>
+          )}
+          {activeTab === "judul" && resultJudul && (
+            <div className="markdown-body">
+              <ReactMarkdown>{resultJudul}</ReactMarkdown>
+            </div>
+          )}
 
-           {activeTab === "latar_belakang" && !loadingBg && !resultBg && (
-             <div style={{ color: "var(--text-muted)", textAlign: "center", marginTop: "3rem", fontSize: "0.9rem" }}>
-               Isi variabel penelitian Anda di samping. AI akan menyusun draf latar belakang lengkap di sini.
-             </div>
-           )}
-           {activeTab === "latar_belakang" && loadingBg && (
-             <AnimatedLoadingScreen isLoading={loadingBg} apiAttempt={apiAttemptBg} />
-           )}
-           {activeTab === "latar_belakang" && resultBg && (
-             <div className="markdown-body">
-               <ReactMarkdown>{resultBg}</ReactMarkdown>
-             </div>
-           )}
+          {activeTab === "latar_belakang" && !loadingBg && !resultBg && (
+            <div style={{ color: "var(--text-muted)", textAlign: "center", marginTop: "3rem", fontSize: "0.9rem" }}>
+              Isi variabel penelitian Anda. AI akan menyusun draf latar belakang lengkap di sini.
+            </div>
+          )}
+          {activeTab === "latar_belakang" && loadingBg && (
+            <div style={{ padding: "1.5rem", backgroundColor: "rgba(79, 70, 229, 0.05)", border: "1px solid rgba(79, 70, 229, 0.2)", borderRadius: "var(--radius-md)", textAlign: "center" }} className="animate-pulse">
+              <PremiumIcon name="sparkles" size={24} style={{ color: "var(--primary)", margin: "0 auto 0.5rem" }} className="animate-spin-slow" />
+              <p style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--primary)", marginBottom: "0.5rem", margin: 0 }}>
+                {apiAttemptBg === "" || apiAttemptBg === "core" || apiAttemptBg === "openalex" || apiAttemptBg === "unpaywall" ? "Mencari referensi yang relevan..." : "Menyusun draf latar belakang..."}
+              </p>
+              <div style={{ height: "4px", backgroundColor: "rgba(79, 70, 229, 0.2)", borderRadius: "9999px", overflow: "hidden", maxWidth: "200px", margin: "0.5rem auto 0" }}>
+                <div className="animate-progress-loading" style={{ height: "100%", backgroundColor: "var(--primary)", width: "60%" }}></div>
+              </div>
+            </div>
+          )}
+          {activeTab === "latar_belakang" && resultBg && (
+            <div className="markdown-body">
+              <ReactMarkdown>{resultBg}</ReactMarkdown>
+            </div>
+          )}
         </div>
 
       </div>

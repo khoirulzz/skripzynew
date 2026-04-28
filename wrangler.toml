@@ -1,0 +1,11 @@
+name = "skripzy-app"
+main = "script-worker.js"
+compatibility_date = "2024-01-01"
+
+[vars]
+WORKER_SECRET = "skripzy1234"
+
+# Environment variables (akan di-set di Cloudflare Dashboard)
+# GEMINI_API_KEY_1, GEMINI_API_KEY_2, etc.
+# CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET
+# CORE_API_KEY

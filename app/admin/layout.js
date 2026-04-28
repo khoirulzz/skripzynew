@@ -47,7 +47,7 @@ export default function AdminLayout({ children }) {
         />
 
         {/* Main Content */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", paddingTop: "64px" }}>
           <Header
             isMobile={isMobile}
             onMenuClick={() => {

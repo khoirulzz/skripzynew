@@ -7,7 +7,13 @@
       "**/node_modules/**"
     ],
     "cleanUrls": true,
-    "trailingSlash": true
+    "trailingSlash": true,
+    "rewrites": [
+      {
+        "source": "/dashboard/tools/notebook/**",
+        "destination": "/dashboard/tools/notebook/index/index.html"
+      }
+    ]
   },
   "firestore": {
     "rules": "firestore.rules"

@@ -12,14 +12,12 @@ import Link from "next/link";
 const CREDIT_COST = 3;
 const API_GROUP   = "group_1";
 
-// Intensitas Humanisasi — makin tinggi makin "manusiawi" tapi makin jauh dari aslinya
 const INTENSITAS_LIST = [
   { id: "ringan",   label: "Ringan",   desc: "Perbaikan minimal, tetap dekat dengan teks asli", temp: 0.5 },
   { id: "sedang",   label: "Sedang",   desc: "Keseimbangan antara keaslian & nuansa manusiawi",  temp: 0.9 },
   { id: "penuh",    label: "Penuh",    desc: "Paling organik, bebas dari pola AI yang kaku",     temp: 1.3 },
 ];
 
-// Style penulisan manusiawi
 const STYLE_LIST = [
   { id: "santai",     label: "Santai",       desc: "Seperti esai blog pribadi yang mengalir" },
   { id: "mahasiswa",  label: "Mahasiswa",    desc: "Tulisan akademik namun tetap terdengar natural" },

@@ -25,7 +25,7 @@ export function Header({ onMenuClick = null, isMobile = false }) {
         display: "flex",
         justifyContent: "space-between",
         alignItems: "center",
-        padding: "0.75rem 1.25rem",
+        padding: "0.875rem 1.25rem",
         borderBottom: "1px solid var(--border)",
         backgroundColor: "var(--background)",
         gap: "0.75rem",
@@ -35,9 +35,9 @@ export function Header({ onMenuClick = null, isMobile = false }) {
         zIndex: 20,
       }}
     >
-      {/* ── Left: Hamburger (mobile) + Brand / Welcome ── */}
+
       <div style={{ display: "flex", alignItems: "center", gap: "0.65rem", minWidth: 0, flex: 1 }}>
-        {/* Hamburger button — only rendered when onMenuClick is passed (mobile mode) */}
+        {/* Hamburger button â€” only rendered when onMenuClick is passed (mobile mode) */}
         {onMenuClick && (
           <button
             onClick={onMenuClick}
@@ -59,7 +59,7 @@ export function Header({ onMenuClick = null, isMobile = false }) {
           </div>
         )}
 
-        {/* Welcome text — hidden on mobile to save space */}
+        {/* Welcome text â€” hidden on mobile to save space */}
         {!isMobile && (
           <h2
             style={{
@@ -72,12 +72,12 @@ export function Header({ onMenuClick = null, isMobile = false }) {
               color: "var(--text-main)",
             }}
           >
-            Selamat datang, {userData?.namaLengkap?.split(" ")[0] || "Peneliti"} 👋
+            Selamat datang, {userData?.namaLengkap?.split(" ")[0] || "Peneliti"}
           </h2>
         )}
       </div>
 
-      {/* ── Right: Credits + Theme + Profile ── */}
+      {/* â”€â”€ Right: Credits + Theme + Profile â”€â”€ */}
       <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexShrink: 0 }}>
         {/* Credit badge */}
         <div
@@ -117,7 +117,7 @@ export function Header({ onMenuClick = null, isMobile = false }) {
 
         {!isMobile && <ThemeToggle />}
 
-        {/* Profile avatar + logout — desktop only (on mobile, these are in sidebar) */}
+        {/* Profile avatar + logout â€” desktop only (on mobile, these are in sidebar) */}
         {!isMobile && (
           <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
             <div

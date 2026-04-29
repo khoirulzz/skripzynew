@@ -7,52 +7,38 @@ const ThemeContext = createContext({
   toggleTheme: () => {},
 });
 
+function resolveInitialTheme() {
+  if (typeof window === "undefined") return "light";
+  const savedTheme = localStorage.getItem("skripzy-theme");
+  if (savedTheme === "light" || savedTheme === "dark") {
+    return savedTheme;
+  }
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function applyTheme(theme) {
+  document.documentElement.classList.remove("dark", "light");
+  document.documentElement.classList.add(theme);
+
+  if (theme === "dark") {
+    document.body.classList.add("dark-mode");
+  } else {
+    document.body.classList.remove("dark-mode");
+  }
+}
+
 export function ThemeProvider({ children }) {
-  const [theme, setTheme] = useState("light");
-  const [mounted, setMounted] = useState(false);
+  const [theme, setTheme] = useState(resolveInitialTheme);
 
   useEffect(() => {
-    setMounted(true);
-    // Check local storage or system preference on mount
-    const savedTheme = localStorage.getItem("skripzy-theme");
-    if (savedTheme) {
-      setTheme(savedTheme);
-      document.documentElement.classList.add(savedTheme);
-      if (savedTheme === "dark") {
-          document.body.classList.add("dark-mode");
-      }
-    } else {
-      // Default to what user prefers or light
-      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-      const initialTheme = prefersDark ? "dark" : "light";
-      setTheme(initialTheme);
-      document.documentElement.classList.add(initialTheme);
-      if (initialTheme === "dark") {
-          document.body.classList.add("dark-mode");
-      }
-    }
-  }, []);
+    applyTheme(theme);
+    localStorage.setItem("skripzy-theme", theme);
+  }, [theme]);
 
   const toggleTheme = () => {
     const newTheme = theme === "dark" ? "light" : "dark";
     setTheme(newTheme);
-    localStorage.setItem("skripzy-theme", newTheme);
-    
-    // Update DOM
-    document.documentElement.classList.remove("dark", "light");
-    document.documentElement.classList.add(newTheme);
-    
-    if (newTheme === "dark") {
-        document.body.classList.add("dark-mode");
-    } else {
-        document.body.classList.remove("dark-mode");
-    }
   };
-
-  // Prevent hydration mismatch
-  if (!mounted) {
-      return <>{children}</>;
-  }
 
   return (
     <ThemeContext.Provider value={{ theme, toggleTheme }}>

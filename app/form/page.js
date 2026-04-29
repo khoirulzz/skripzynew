@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import PublicFormPageClient from "../PublicFormPageClient";
+import PublicFormPageClient from "./PublicFormPageClient";
 
 export default function Page() {
   return (

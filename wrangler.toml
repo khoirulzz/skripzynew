@@ -4,6 +4,8 @@ compatibility_date = "2024-01-01"
 
 [vars]
 WORKER_SECRET = "skripzy1234"
+FIREBASE_PROJECT_ID = "skripzy-4fbaa"
+FIREBASE_WEB_API_KEY = "AIzaSyB2YYmDJHpb3Ou8GZzpYWc-b0CuBx4nLJQ"
 
 # Environment variables (akan di-set di Cloudflare Dashboard)
 # GEMINI_API_KEY_1, GEMINI_API_KEY_2, etc.

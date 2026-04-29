@@ -1,65 +1,117 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // ── Helper: Cek apakah user adalah admin ──
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
     function isAdmin() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      return isSignedIn()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
-    
-    // ── Users: setiap user hanya bisa baca/tulis data miliknya sendiri, admin bisa semua ──
+
+    function isUserOwner(userId) {
+      return isSignedIn() && (request.auth.uid == userId || isAdmin());
+    }
+
+    function workspaceUserId(workspaceId) {
+      return get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.userId;
+    }
+
+    function isWorkspaceOwner(workspaceId) {
+      return isSignedIn() && (workspaceUserId(workspaceId) == request.auth.uid || isAdmin());
+    }
+
+    function isPublishedWorkspaceForm(workspaceId, formId) {
+      return get(/databases/$(database)/documents/workspaces/$(workspaceId)/forms/$(formId)).data.status == 'published';
+    }
+
     match /users/{userId} {
-      allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
-      allow write: if request.auth != null && (request.auth.uid == userId || isAdmin());
+      allow read, write: if isUserOwner(userId);
     }
-    
-    // ── Workspaces: hanya bisa diakses oleh pemiliknya atau admin ──
+
+    match /system_stats/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /requests/{docId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /pricing/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /topups/{docId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /promos/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /notebooks/{notebookId} {
+      allow read: if isSignedIn() && (resource.data.user_id == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.user_id == request.auth.uid;
+      allow update, delete: if isSignedIn() && (resource.data.user_id == request.auth.uid || isAdmin());
+    }
+
+    match /reference_chunks/{chunkId} {
+      allow read: if isSignedIn() && (resource.data.user_id == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.user_id == request.auth.uid;
+      allow update, delete: if isSignedIn() && (resource.data.user_id == request.auth.uid || isAdmin());
+    }
+
+    match /public_forms/{slug} {
+      allow read: if resource.data.status == 'published';
+      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
+      allow update, delete: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+    }
+
     match /workspaces/{workspaceId} {
-      allow read: if request.auth != null && (
-        resource.data.userId == request.auth.uid || isAdmin()
-      );
-      
-      allow create: if request.auth != null 
-        && request.resource.data.userId == request.auth.uid;
-        
-      allow update, delete: if request.auth != null 
-        && (resource.data.userId == request.auth.uid || isAdmin());
-    }
-    
-    // ── System stats: user biasa bisa read, admin bisa read/write ──
-    match /system_stats/{doc} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && isAdmin();
-    }
-    
-    // ── Requests: track penggunaan tools, semua user bisa baca miliknya, admin bisa read all ──
-    match /requests/{doc} {
-      allow read: if request.auth != null && (
-        resource.data.userId == request.auth.uid || isAdmin()
-      );
-      allow create: if request.auth != null;
-      allow write: if request.auth != null && isAdmin();
-    }
-    
-    // ── Pricing: semua orang bisa baca, hanya admin yang bisa tulis ──
-    match /pricing/{doc} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && isAdmin();
-    }
-    
-    // ── Topups: track top-up kredit, user bisa baca miliknya, admin bisa all ──
-    match /topups/{doc} {
-      allow read: if request.auth != null && (
-        resource.data.userId == request.auth.uid || isAdmin()
-      );
-      allow create: if request.auth != null;
-      allow write: if request.auth != null && isAdmin();
-    }
-    
-    // ── Promos: semua orang bisa baca, admin bisa tulis ──
-    match /promos/{doc} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && isAdmin();
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+
+      match /references/{referenceId} {
+        allow read, write: if isWorkspaceOwner(workspaceId);
+      }
+
+      match /forms/{formId} {
+        allow read, write: if isWorkspaceOwner(workspaceId);
+
+        match /responses/{responseId} {
+          allow read, update, delete: if isWorkspaceOwner(workspaceId);
+          allow create: if isWorkspaceOwner(workspaceId)
+            || (
+              request.auth == null
+              && isPublishedWorkspaceForm(workspaceId, formId)
+              && request.resource.data.workspaceId == workspaceId
+              && request.resource.data.formId == formId
+              && request.resource.data.submittedFrom == 'public-form'
+            );
+        }
+      }
+
+      match /transcripts/{transcriptId} {
+        allow read, write: if isWorkspaceOwner(workspaceId);
+      }
+
+      match /analysisSnapshots/{snapshotId} {
+        allow read, write: if isWorkspaceOwner(workspaceId);
+      }
+
+      match /notes/{noteId} {
+        allow read, write: if isWorkspaceOwner(workspaceId);
+      }
     }
   }
 }

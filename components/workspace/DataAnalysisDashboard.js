@@ -1,252 +1,309 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  addDoc,
+  collection,
+  doc,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  updateDoc,
+} from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
+import { computeFormAnalysis, buildAnalysisNarrative } from "@/lib/formAnalysis";
 
-export function DataAnalysisDashboard({ workspaceId, onClose }) {
-  const [activeTab, setActiveTab] = useState("kuantitatif");
-  const [showReport, setShowReport] = useState(false);
-
-  // Mock data for table
-  const mockHeaders = ["Timestamp", "Nama Lengkap", "P1 (Skala 1-5)", "P2 (Skala 1-5)", "P3 (Skala 1-5)"];
-  const mockScores = [
-    [4, 5, 4],
-    [5, 5, 5],
-    [3, 4, 3],
-    [4, 4, 4],
-    [5, 3, 4],
-    [4, 4, 5],
-    [3, 3, 3],
-    [5, 4, 5],
-    [4, 5, 5],
-    [2, 3, 2]
-  ];
-  const mockData = mockScores.map((scores, i) => [`2024-05-${12 + (i%3)} 10:0${i}`, `Responden ${i+1}`, ...scores.map(String)]);
-
-  const handleExportExcel = () => {
-    alert("Data berhasil diekspor ke format .xlsx!");
-  };
-
-  // ---- Mathematical Calculation (Validitas & Reliabilitas) ----
-  const calculateStats = () => {
-    const k = mockScores[0].length; // num items
-    const totals = mockScores.map(row => row.reduce((a,b) => a+b, 0));
-    const meanTotal = totals.reduce((a,b) => a+b, 0) / totals.length;
-    const varTotal = totals.reduce((acc, val) => acc + Math.pow(val - meanTotal, 2), 0) / (totals.length - 1);
-
-    const itemVars = [];
-    const itemCorrelations = [];
-
-    for (let c = 0; c < k; c++) {
-      const colScores = mockScores.map(row => row[c]);
-      const meanCol = colScores.reduce((a,b) => a+b, 0) / colScores.length;
-      const varCol = colScores.reduce((acc, val) => acc + Math.pow(val - meanCol, 2), 0) / (colScores.length - 1);
-      itemVars.push(varCol);
-
-      // Pearson r (Item vs Total)
-      let sumProduct = 0, sumSqX = 0, sumSqY = 0;
-      for (let r = 0; r < colScores.length; r++) {
-        const dx = colScores[r] - meanCol;
-        const dy = totals[r] - meanTotal;
-        sumProduct += dx * dy;
-        sumSqX += dx * dx;
-        sumSqY += dy * dy;
-      }
-      itemCorrelations.push(sumProduct / Math.sqrt(sumSqX * sumSqY));
-    }
-
-    const sumItemVars = itemVars.reduce((a,b) => a+b, 0);
-    const alpha = (k / (k - 1)) * (1 - (sumItemVars / varTotal));
-
-    return { alpha: alpha.toFixed(3), itemCorrelations: itemCorrelations.map(r => r.toFixed(3)) };
-  };
-
-  const handleMathAnalysis = () => {
-    setShowReport(true);
-  };
-
-  const handleAiCoding = () => {
-    alert("AI sedang membaca sekumpulan transkrip wawancara Anda, membuat tema-tema (Thematic Analysis / Coding), dan merangkum kutipan responden untuk dimasukkan ke Bab IV.");
+function StatTile({ label, value, caption, tone = "default" }) {
+  const colorMap = {
+    default: "var(--text-main)",
+    success: "var(--success)",
+    warning: "#d97706",
+    primary: "var(--primary)",
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="glass-panel w-full max-w-5xl h-[85vh] flex flex-col rounded-xl overflow-hidden shadow-2xl bg-[var(--background)]">
-        
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-[var(--border)] bg-[var(--surface)]">
-          <div className="flex items-center gap-3">
-            <PremiumIcon name="pieChart" size={24} className="text-primary" />
-            <h2 className="text-lg font-semibold m-0">Dashboard Analisis Lapangan</h2>
-          </div>
-          
-          <div className="flex bg-[var(--surface-hover)] rounded-lg border border-[var(--border)] p-1">
-            <button 
-              className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${activeTab === 'kuantitatif' ? 'bg-[var(--primary)] text-white shadow-sm' : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'}`}
-              onClick={() => setActiveTab("kuantitatif")}
-            >
-              Kuesioner (Kuanti)
-            </button>
-            <button 
-              className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${activeTab === 'kualitatif' ? 'bg-[var(--primary)] text-white shadow-sm' : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'}`}
-              onClick={() => setActiveTab("kualitatif")}
-            >
-              Wawancara (Kuali)
-            </button>
+    <div className="glass-panel" style={{ padding: "1rem" }}>
+      <div style={{ fontSize: "0.76rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>{label}</div>
+      <div style={{ fontSize: "1.8rem", fontWeight: 700, color: colorMap[tone], marginTop: "0.35rem" }}>{value}</div>
+      {caption ? <p style={{ margin: "0.35rem 0 0 0", fontSize: "0.82rem" }}>{caption}</p> : null}
+    </div>
+  );
+}
+
+export function DataAnalysisDashboard({ workspaceId, activeFormId = null, compact = false }) {
+  const [workspaceActiveFormId, setWorkspaceActiveFormId] = useState(activeFormId);
+  const [forms, setForms] = useState([]);
+  const [responses, setResponses] = useState([]);
+  const [transcripts, setTranscripts] = useState([]);
+  const [latestSnapshot, setLatestSnapshot] = useState(null);
+  const [interpretationNotes, setInterpretationNotes] = useState("");
+  const [savingSnapshot, setSavingSnapshot] = useState(false);
+  const notesHydratedRef = useRef(false);
+
+  useEffect(() => {
+    if (!workspaceId) return undefined;
+
+    const workspaceRef = doc(db, "workspaces", workspaceId);
+    const unsubscribe = onSnapshot(workspaceRef, (snapshot) => {
+      const data = snapshot.data() || {};
+      setWorkspaceActiveFormId(activeFormId || data.activeFormId || null);
+    });
+
+    return unsubscribe;
+  }, [activeFormId, workspaceId]);
+
+  useEffect(() => {
+    if (!workspaceId) return undefined;
+
+    const formsQuery = query(collection(db, "workspaces", workspaceId, "forms"));
+    const unsubscribe = onSnapshot(formsQuery, (snapshot) => {
+      setForms(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
+    });
+
+    return unsubscribe;
+  }, [workspaceId]);
+
+  useEffect(() => {
+    if (!workspaceId) return undefined;
+
+    const transcriptsQuery = query(collection(db, "workspaces", workspaceId, "transcripts"));
+    const unsubscribe = onSnapshot(transcriptsQuery, (snapshot) => {
+      setTranscripts(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
+    });
+
+    return unsubscribe;
+  }, [workspaceId]);
+
+  useEffect(() => {
+    if (!workspaceId) return undefined;
+
+    const snapshotsQuery = query(
+      collection(db, "workspaces", workspaceId, "analysisSnapshots"),
+      orderBy("createdAt", "desc")
+    );
+
+    const unsubscribe = onSnapshot(snapshotsQuery, (snapshot) => {
+      const nextItems = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+      setLatestSnapshot(nextItems[0] || null);
+      if (!notesHydratedRef.current && nextItems[0]?.interpretationNotes) {
+        setInterpretationNotes(nextItems[0].interpretationNotes);
+        notesHydratedRef.current = true;
+      }
+    });
+
+    return unsubscribe;
+  }, [workspaceId]);
+
+  useEffect(() => {
+    if (!workspaceId || !workspaceActiveFormId) return undefined;
+
+    const responsesQuery = query(collection(db, "workspaces", workspaceId, "forms", workspaceActiveFormId, "responses"));
+    const unsubscribe = onSnapshot(responsesQuery, (snapshot) => {
+      setResponses(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
+    });
+
+    return unsubscribe;
+  }, [workspaceActiveFormId, workspaceId]);
+
+  const activeForm = useMemo(() => {
+    if (!forms.length) return null;
+    return forms.find((form) => form.id === workspaceActiveFormId) || forms[0] || null;
+  }, [forms, workspaceActiveFormId]);
+
+  const analysis = useMemo(() => {
+    if (!activeForm) return null;
+    return computeFormAnalysis(activeForm, workspaceActiveFormId ? responses : []);
+  }, [activeForm, responses, workspaceActiveFormId]);
+
+  const narrative = useMemo(() => {
+    if (!activeForm || !analysis) return "";
+    return buildAnalysisNarrative(activeForm, analysis, transcripts);
+  }, [activeForm, analysis, transcripts]);
+
+  const handleSaveSnapshot = async () => {
+    if (!activeForm || !analysis) return;
+    setSavingSnapshot(true);
+
+    try {
+      const payload = {
+        formId: activeForm.id,
+        formTitle: activeForm.title,
+        responseCount: analysis.responseCount,
+        cronbachAlpha: analysis.cronbachAlpha,
+        quantitativeQuestionCount: analysis.quantitativeQuestionCount,
+        itemStats: analysis.itemStats,
+        distributions: analysis.distributions,
+        narrative,
+        interpretationNotes,
+        transcriptCount: transcripts.length,
+        createdAt: serverTimestamp(),
+      };
+
+      await addDoc(collection(db, "workspaces", workspaceId, "analysisSnapshots"), payload);
+      await updateDoc(doc(db, "workspaces", workspaceId), {
+        responseCount: analysis.responseCount,
+        lastAnalysisAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.error("Gagal menyimpan snapshot analisis:", error);
+    } finally {
+      setSavingSnapshot(false);
+    }
+  };
+
+  if (!activeForm) {
+    return (
+      <div className="glass-panel" style={{ padding: "2rem", textAlign: "center" }}>
+        <PremiumIcon name="barChart3" size={36} className="text-muted" style={{ margin: "0 auto 0.75rem" }} />
+        <h3 style={{ margin: 0 }}>Belum Ada Form Aktif</h3>
+        <p style={{ margin: "0.5rem 0 0 0", fontSize: "0.9rem" }}>Pilih atau publikasikan form dari tab Kuesioner agar dashboard analisis dapat membaca respons.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+      <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: "1rem" }}>
+        <div>
+          <h3 style={{ fontSize: "1.1rem", margin: 0 }}>Analisis Instrumen dan Respons</h3>
+          <p style={{ margin: "0.35rem 0 0 0", fontSize: "0.85rem" }}>
+            Form aktif: <strong>{activeForm.title}</strong> • Respons terbaca: <strong>{responses.length}</strong>
+          </p>
+        </div>
+        <button className="btn btn-primary" onClick={handleSaveSnapshot} disabled={savingSnapshot}>
+          <PremiumIcon name="save" size={15} />
+          {savingSnapshot ? "Menyimpan..." : "Simpan Snapshot"}
+        </button>
+      </div>
+
+      <div className="grid md:grid-cols-4 gap-4">
+        <StatTile label="Respons" value={analysis?.responseCount ?? 0} caption="Data responden yang masuk" tone="primary" />
+        <StatTile label="Butir Numerik" value={analysis?.quantitativeQuestionCount ?? 0} caption="Siap dihitung secara statistik" />
+        <StatTile
+          label="Cronbach Alpha"
+          value={analysis?.cronbachAlpha ?? 0}
+          caption="Reliabilitas instrumen"
+          tone={(analysis?.cronbachAlpha ?? 0) >= 0.6 ? "success" : "warning"}
+        />
+        <StatTile label="Transkrip" value={transcripts.length} caption="Pengayaan kualitatif untuk pembahasan" />
+      </div>
+
+      <div className={compact ? "" : "grid md:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)] gap-4"}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          <div className="glass-panel" style={{ padding: "1rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
+              <PremiumIcon name="activity" size={16} className="text-primary" />
+              <h4 style={{ fontSize: "0.95rem", margin: 0 }}>Ringkasan Otomatis</h4>
+            </div>
+            <p style={{ margin: 0, fontSize: "0.9rem", lineHeight: 1.7, color: "var(--text-main)" }}>{narrative}</p>
           </div>
 
-          <button className="btn btn-ghost" onClick={onClose} style={{ padding: "0.5rem" }}>
-             <PremiumIcon name="x" size={20} />
-          </button>
+          <div className="glass-panel" style={{ padding: "1rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.85rem" }}>
+              <PremiumIcon name="barChart3" size={16} className="text-primary" />
+              <h4 style={{ fontSize: "0.95rem", margin: 0 }}>Statistik Butir Numerik</h4>
+            </div>
+
+            {analysis?.itemStats?.length ? (
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.84rem" }}>
+                  <thead>
+                    <tr style={{ borderBottom: "1px solid var(--border)" }}>
+                      <th style={{ textAlign: "left", padding: "0.55rem 0.35rem" }}>Butir</th>
+                      <th style={{ textAlign: "left", padding: "0.55rem 0.35rem" }}>Mean</th>
+                      <th style={{ textAlign: "left", padding: "0.55rem 0.35rem" }}>Var</th>
+                      <th style={{ textAlign: "left", padding: "0.55rem 0.35rem" }}>r item-total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {analysis.itemStats.map((item) => (
+                      <tr key={item.questionId} style={{ borderBottom: "1px solid var(--border)" }}>
+                        <td style={{ padding: "0.6rem 0.35rem", color: "var(--text-main)" }}>
+                          <div style={{ fontWeight: 600 }}>{item.variableKey || item.questionId}</div>
+                          <div style={{ fontSize: "0.76rem", color: "var(--text-muted)" }}>{item.label}</div>
+                        </td>
+                        <td style={{ padding: "0.6rem 0.35rem" }}>{item.mean}</td>
+                        <td style={{ padding: "0.6rem 0.35rem" }}>{item.variance}</td>
+                        <td style={{ padding: "0.6rem 0.35rem", color: item.itemTotalCorrelation >= 0.3 ? "var(--success)" : "var(--danger)" }}>
+                          {item.itemTotalCorrelation}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p style={{ margin: 0, fontSize: "0.85rem" }}>Belum ada butir numerik yang cukup lengkap untuk dihitung.</p>
+            )}
+          </div>
+
+          <div className="glass-panel" style={{ padding: "1rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.85rem" }}>
+              <PremiumIcon name="layers" size={16} className="text-primary" />
+              <h4 style={{ fontSize: "0.95rem", margin: 0 }}>Distribusi Jawaban</h4>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "0.9rem" }}>
+              {(analysis?.distributions || []).slice(0, compact ? 4 : 12).map((item) => (
+                <div key={item.questionId} style={{ padding: "0.85rem", border: "1px solid var(--border)", borderRadius: "10px", backgroundColor: "var(--background)" }}>
+                  <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-main)" }}>{item.label}</div>
+                  <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.2rem" }}>{item.answered} jawaban tercatat</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem", marginTop: "0.75rem" }}>
+                    {(item.distribution || []).slice(0, 5).map((distributionItem) => (
+                      <div key={`${item.questionId}_${distributionItem.label}`}>
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem", fontSize: "0.76rem", color: "var(--text-main)" }}>
+                          <span>{distributionItem.label}</span>
+                          <span>{distributionItem.count}</span>
+                        </div>
+                        <div style={{ marginTop: "0.25rem", height: "6px", borderRadius: "999px", backgroundColor: "var(--surface-hover)" }}>
+                          <div
+                            style={{
+                              width: `${Math.min(distributionItem.percentage, 100)}%`,
+                              height: "100%",
+                              borderRadius: "999px",
+                              backgroundColor: "var(--primary)",
+                            }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
 
-        {/* Content Body */}
-        <div className="flex-1 overflow-y-auto p-6 bg-[rgba(0,0,0,0.02)]">
-          
-          {activeTab === "kuantitatif" && (
-            <div className="flex flex-col gap-6 animate-fade-in h-full">
-               
-               {/* Toolbar Kuanti */}
-               <div className="flex justify-between items-center bg-[var(--surface)] p-4 rounded-xl border border-[var(--border)] shadow-sm">
-                 <div>
-                   <h3 className="font-semibold m-0 flex items-center gap-2">
-                     <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                     10 Respons Terkumpul
-                   </h3>
-                   <p className="text-xs text-muted m-0 mt-1">Data dari Kuesioner (Variabel X dan Y).</p>
-                 </div>
-                 <div className="flex gap-3">
-                   <button className="btn btn-outline flex items-center gap-2 !text-sm" onClick={handleExportExcel}>
-                     <PremiumIcon name="downloadCloud" size={16} className="text-green-600" /> Export Excel
-                   </button>
-                   <button className="btn btn-primary flex items-center gap-2 !text-sm" onClick={handleMathAnalysis}>
-                     <PremiumIcon name="barChart" size={16} /> Uji Validitas & Reliabilitas
-                   </button>
-                 </div>
-               </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          <div className="glass-panel" style={{ padding: "1rem" }}>
+            <h4 style={{ fontSize: "0.95rem", margin: 0 }}>Catatan Interpretasi</h4>
+            <p style={{ margin: "0.35rem 0 0.75rem 0", fontSize: "0.8rem" }}>
+              Gunakan ruang ini untuk menyusun kalimat pembahasan resmi sebelum dikirim ke Bab IV.
+            </p>
+            <textarea
+              className="form-textarea"
+              rows={10}
+              value={interpretationNotes}
+              onChange={(event) => setInterpretationNotes(event.target.value)}
+              placeholder="Contoh: Instrumen dinyatakan reliabel karena alpha di atas 0,70 dan sebagian besar indikator memiliki korelasi item-total memadai..."
+            />
+          </div>
 
-               {showReport ? (
-                 <div className="flex-1 bg-[var(--surface)] p-6 rounded-xl border border-[var(--border)] shadow-sm overflow-y-auto animate-fade-in">
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-                      <h3 className="font-semibold text-lg m-0 text-[var(--primary)]">Hasil Uji Statistik Instrumen</h3>
-                      <button className="btn btn-ghost !p-2" onClick={() => setShowReport(false)}>Tutup Laporan</button>
-                    </div>
-                    
-                    <div style={{ padding: "1rem", backgroundColor: "rgba(245, 158, 11, 0.1)", borderRadius: "8px", border: "1px dashed var(--border)", marginBottom: "1.5rem" }}>
-                      <p style={{ margin: 0, fontSize: "0.85rem", color: "#B45309", fontWeight: 500 }}>
-                        <PremiumIcon name="alertCircle" size={16} style={{ display: "inline", marginBottom: "2px", marginRight: "4px" }} />
-                        <strong>Disclaimer:</strong> Perhitungan matematis JS ini menggunakan rumus Pearson Product Moment & Cronbach Alpha. Untuk keperluan bab resmi, pertimbangkan mengekspor data ke Excel dan verifikasi dengan <strong>SPSS</strong> atau <strong>SMART PLS</strong> agar format output lebih komprehensif.
-                      </p>
-                    </div>
-
-                    <div className="grid md:grid-cols-2 gap-6">
-                       {/* Reliabilitas */}
-                       <div className="glass-panel p-5">
-                          <h4 style={{ margin: "0 0 1rem 0" }}>Uji Reliabilitas (Cronbach's Alpha)</h4>
-                          <div style={{ fontSize: "2.5rem", fontWeight: 700, color: calculateStats().alpha > 0.6 ? 'var(--success)' : 'var(--danger)' }}>
-                            {calculateStats().alpha}
-                          </div>
-                          <p style={{ fontSize: "0.8frem", margin: "0.5rem 0 0 0", color: "var(--text-muted)" }}>
-                            N of Items = 3 <br/>
-                            {calculateStats().alpha > 0.6 ? 
-                              <span className="text-success font-medium">Berdasarkan kaidah Nunnally (1994), nilai &gt; 0.6 dapat dikatakan Reliabel.</span> : 
-                              <span className="text-danger font-medium">Nilai di bawah 0.6 mengindikasikan instrumen kurang konsisten.</span>}
-                          </p>
-                       </div>
-
-                       {/* Validitas */}
-                       <div className="glass-panel p-5">
-                          <h4 style={{ margin: "0 0 1rem 0" }}>Uji Validitas (Item-Total Correlation / Pearson r)</h4>
-                          <table style={{ width: "100%", fontSize: "0.85rem", textAlign: "left", borderCollapse: "collapse" }}>
-                            <thead>
-                              <tr style={{ borderBottom: "1px solid var(--border)" }}>
-                                <th style={{ padding: "0.5rem 0" }}>Item Pertanyaan</th>
-                                <th style={{ padding: "0.5rem 0" }}>Nilai r Hitung</th>
-                                <th style={{ padding: "0.5rem 0" }}>Status (Asumsi r-tabel 0.3)</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {calculateStats().itemCorrelations.map((val, idx) => (
-                                <tr key={idx} style={{ borderBottom: "1px solid var(--border)" }}>
-                                  <td style={{ padding: "0.5rem 0" }}>P{idx+1}</td>
-                                  <td style={{ padding: "0.5rem 0", fontWeight: 600 }}>{val}</td>
-                                  <td style={{ padding: "0.5rem 0" }}>
-                                    {val > 0.3 ? <span style={{ color: "var(--success)" }}>Valid</span> : <span style={{ color: "var(--danger)" }}>Gugur</span>}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                       </div>
-                    </div>
-                 </div>
-               ) : (
-                 <div className="flex-1 bg-[var(--surface)] p-1 rounded-xl border border-[var(--border)] shadow-sm overflow-hidden flex flex-col">
-                   <div className="overflow-x-auto flex-1">
-                     <table className="w-full text-left text-sm border-collapse">
-                       <thead>
-                         <tr className="bg-[var(--surface-hover)] text-[var(--text-muted)] border-b border-[var(--border)]">
-                           {mockHeaders.map((h, i) => <th key={i} className="p-3 font-semibold whitespace-nowrap">{h}</th>)}
-                         </tr>
-                       </thead>
-                       <tbody>
-                         {mockData.map((row, rIdx) => (
-                           <tr key={rIdx} className="border-b border-[var(--border)] last:border-0 hover:bg-[rgba(0,0,0,0.02)] transition-colors">
-                             {row.map((cell, cIdx) => <td key={cIdx} className="p-3 text-[var(--text-main)]">{cell}</td>)}
-                           </tr>
-                         ))}
-                       </tbody>
-                     </table>
-                   </div>
-                   <div className="p-3 bg-[var(--surface-hover)] border-t border-[var(--border)] flex justify-between items-center text-xs text-muted">
-                      <span>Menampilkan 10 data dummy.</span>
-                      <button className="hover:underline">Lihat semua data &rarr;</button>
-                   </div>
-                 </div>
-               )}
-            </div>
-          )}
-
-          {activeTab === "kualitatif" && (
-            <div className="flex flex-col gap-6 animate-fade-in h-full">
-               
-               {/* Toolbar Kuali */}
-               <div className="flex justify-between items-center bg-[var(--surface)] p-4 rounded-xl border border-[var(--border)] shadow-sm">
-                 <div>
-                   <h3 className="font-semibold m-0 flex items-center gap-2">
-                     <PremiumIcon name="mic" size={18} className="text-blue-500" />
-                     Repositori Transkrip Wawancara
-                   </h3>
-                   <p className="text-xs text-muted m-0 mt-1">Unggah rekaman/transkrip manual untuk dianalisa maknanya.</p>
-                 </div>
-                 <div className="flex gap-3">
-                   <button className="btn btn-primary flex items-center gap-2 !text-sm" onClick={handleAiCoding}>
-                     <PremiumIcon name="sparkles" size={16} /> Thematic Analysis (Bab IV)
-                   </button>
-                 </div>
-               </div>
-
-               {/* Transcript Items */}
-               <div className="grid grid-cols-2 gap-4">
-                  <div className="glass-panel p-5 rounded-xl border border-[var(--border)] shadow-sm bg-[var(--surface)] cursor-pointer hover:border-[var(--primary)] transition-colors">
-                     <div className="flex justify-between items-start mb-3">
-                       <h4 className="font-medium m-0 flex items-center gap-2"><PremiumIcon name="fileText" size={16} className="text-muted"/> Informan 1 (Kepala Sekolah)</h4>
-                       <span className="text-xs bg-[var(--surface-hover)] px-2 py-1 rounded text-muted">12 Mei 2024</span>
-                     </div>
-                     <p className="text-sm text-muted line-clamp-3">
-                       "Jadi pada awalnya penerapan teknologi ini memang mengalami hambatan, terutama dari sisi adaptasi guru-guru senior. Namun pelan-pelan dengan pelatihan intensif..."
-                     </p>
-                  </div>
-                  
-                  <div className="glass-panel p-5 rounded-xl border border-dashed border-[var(--border)] shadow-sm bg-[var(--surface-hover)] cursor-pointer hover:border-[var(--primary-light)] transition-colors flex flex-col justify-center items-center text-center text-muted gap-2 min-h-[140px]">
-                     <PremiumIcon name="plus" size={24} />
-                     <span className="text-sm font-medium">Unggah Transkrip Baru</span>
-                  </div>
-               </div>
-
-            </div>
-          )}
-
+          <div className="glass-panel" style={{ padding: "1rem" }}>
+            <h4 style={{ fontSize: "0.95rem", margin: 0 }}>Snapshot Terakhir</h4>
+            {latestSnapshot ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem", marginTop: "0.75rem", fontSize: "0.82rem" }}>
+                <div><strong>Form:</strong> {latestSnapshot.formTitle}</div>
+                <div><strong>Respons:</strong> {latestSnapshot.responseCount}</div>
+                <div><strong>Alpha:</strong> {latestSnapshot.cronbachAlpha}</div>
+                <div><strong>Narasi:</strong> {latestSnapshot.narrative}</div>
+              </div>
+            ) : (
+              <p style={{ margin: "0.7rem 0 0 0", fontSize: "0.82rem" }}>Belum ada snapshot tersimpan.</p>
+            )}
+          </div>
         </div>
       </div>
     </div>

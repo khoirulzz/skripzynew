@@ -12,7 +12,6 @@ export default function AnimatedLoadingScreen({
   customLabels = null
 }) {
   const [currentLabelIndex, setCurrentLabelIndex] = useState(0);
-  const [isVisible, setIsVisible] = useState(true);
 
   const defaultLabels = [
     'sedang mencari topik penelitian relevan...',
@@ -25,10 +24,7 @@ export default function AnimatedLoadingScreen({
 
   // Rotate labels setiap 2.5 detik
   useEffect(() => {
-    if (!isLoading) {
-      setIsVisible(false);
-      return;
-    }
+    if (!isLoading) return undefined;
 
     const interval = setInterval(() => {
       setCurrentLabelIndex(prev => (prev + 1) % labels.length);
@@ -37,7 +33,7 @@ export default function AnimatedLoadingScreen({
     return () => clearInterval(interval);
   }, [isLoading, labels.length]);
 
-  if (!isLoading && !isVisible) {
+  if (!isLoading) {
     return null;
   }
 

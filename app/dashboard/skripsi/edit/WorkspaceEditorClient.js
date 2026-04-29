@@ -1,441 +1,561 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { doc, getDoc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  collection,
+  doc,
+  onSnapshot,
+  query,
+  serverTimestamp,
+  updateDoc,
+} from "firebase/firestore";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { TiptapEditor } from "@/components/editor/TiptapEditor";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
-import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import { ReferenceManager } from "@/components/workspace/ReferenceManager";
 import { ChapterAiAssistant } from "@/components/workspace/ChapterAiAssistant";
 import { DataHub } from "@/components/workspace/DataHub";
+import { DataAnalysisDashboard } from "@/components/workspace/DataAnalysisDashboard";
+import { WorkspaceNotesPanel } from "@/components/workspace/WorkspaceNotesPanel";
+import { CHAPTERS, WORKSPACE_TABS, calculateWorkspaceProgress } from "@/lib/workspaceDefaults";
 
-// ===========================================================================
-// Konfigurasi konstanta Bab
-// ===========================================================================
-const CHAPTERS = [
-  { key: "contentBab1", label: "Bab I", longLabel: "Bab I – Pendahuluan", placeholder: "Tulis latar belakang, rumusan masalah, tujuan, dan manfaat penelitian..." },
-  { key: "contentBab2", label: "Bab II", longLabel: "Bab II – Kajian Pustaka", placeholder: "Tulis tinjauan teori, penelitian terdahulu, dan kerangka berpikir..." },
-  { key: "contentBab3", label: "Bab III", longLabel: "Bab III – Metode Penelitian", placeholder: "Jelaskan jenis, setting, populasi, teknik pengambilan data, dan instrumen..." },
-  { key: "contentBab4", label: "Bab IV", longLabel: "Bab IV – Hasil & Pembahasan", placeholder: "Paparkan data, analisis, dan pembahasan temuan penelitian..." },
-  { key: "contentBab5", label: "Bab V", longLabel: "Bab V – Kesimpulan & Saran", placeholder: "Tuliskan kesimpulan akhir dan saran yang dapat ditindaklanjuti..." },
-];
-
-// ===========================================================================
-// Helper: Status badge
-// ===========================================================================
 function StatusBadge({ status }) {
-  const statusConfig = {
-    "Draft": { bg: "rgba(107,114,128,0.15)", color: "#6B7280" },
-    "Revisi": { bg: "rgba(245,158,11,0.15)", color: "#D97706" },
-    "Selesai": { bg: "rgba(16,185,129,0.15)", color: "#059669" },
-  };
-  const cfg = statusConfig[status] || statusConfig["Draft"];
+  const tone =
+    status === "Selesai" ? "rgba(16,185,129,0.15)" : status === "Revisi" ? "rgba(245,158,11,0.15)" : "rgba(107,114,128,0.15)";
+  const color = status === "Selesai" ? "var(--success)" : status === "Revisi" ? "#d97706" : "var(--text-muted)";
+
   return (
-    <span style={{ fontSize: "0.75rem", padding: "3px 10px", borderRadius: "10px", fontWeight: 600, backgroundColor: cfg.bg, color: cfg.color }}>
+    <span
+      style={{
+        fontSize: "0.74rem",
+        padding: "0.22rem 0.55rem",
+        borderRadius: "999px",
+        backgroundColor: tone,
+        color,
+        fontWeight: 600,
+      }}
+    >
       {status || "Draft"}
     </span>
   );
 }
 
-// ===========================================================================
-// Status dropdown
-// ===========================================================================
-function StatusDropdown({ currentStatus, onSelect }) {
-  const [open, setOpen] = useState(false);
-  const options = ["Draft", "Revisi", "Selesai"];
-
-  return (
-    <div style={{ position: "relative" }}>
-      <button
-        onClick={() => setOpen(!open)}
-        className="btn btn-outline"
-        style={{ gap: "0.4rem", padding: "0.35rem 0.75rem", fontSize: "0.8rem" }}
-      >
-        <StatusBadge status={currentStatus} />
-        <PremiumIcon name="chevronDown" size={14} />
-      </button>
-      {open && (
-        <div className="glass-panel" style={{ position: "absolute", top: "2.5rem", right: 0, zIndex: 20, minWidth: "130px", padding: "0.25rem" }}>
-          {options.map(opt => (
-            <button
-              key={opt}
-              className="btn btn-ghost"
-              style={{ width: "100%", justifyContent: "flex-start", padding: "0.5rem 0.75rem", fontSize: "0.85rem" }}
-              onClick={() => { onSelect(opt); setOpen(false); }}
-            >
-              {opt}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+async function persistWorkspaceDoc({
+  workspaceId,
+  nextContentBuffer,
+  activeChapter,
+  progress,
+  referenceCount,
+  responseCount,
+  methodologyType,
+  activeFormId,
+  overrides = {},
+}) {
+  await updateDoc(doc(db, "workspaces", workspaceId), {
+    ...nextContentBuffer,
+    activeChapter,
+    progress,
+    referenceCount,
+    responseCount,
+    methodologyType,
+    activeFormId,
+    updatedAt: serverTimestamp(),
+    ...overrides,
+  });
 }
 
-// ===========================================================================
-// Main Page
-// ===========================================================================
 export default function WorkspaceEditorPage() {
   const searchParams = useSearchParams();
-  const id = searchParams.get('id');
+  const id = searchParams.get("id");
   const { user } = useAuth();
 
-  const [appMode, setAppMode] = useState("editor");
   const [workspace, setWorkspace] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activeChapter, setActiveChapter] = useState(0);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
   const [notFound, setNotFound] = useState(false);
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [drawerWidth, setDrawerWidth] = useState(350);
+  const [activeChapter, setActiveChapter] = useState(0);
+  const [activeTab, setActiveTab] = useState("penulisan");
+  const [contentBuffer, setContentBuffer] = useState({});
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveState, setSaveState] = useState("saved");
   const [isMobile, setIsMobile] = useState(false);
+  const [references, setReferences] = useState([]);
+  const [forms, setForms] = useState([]);
+  const [transcripts, setTranscripts] = useState([]);
+  const [analysisSnapshots, setAnalysisSnapshots] = useState([]);
+  const [noteText, setNoteText] = useState("");
 
-  // ---- Resizer logic ----
-  const handleMouseDown = useCallback((e) => {
-    e.preventDefault();
-    const startX = e.clientX;
-    const startWidth = drawerWidth;
+  const hydratedRef = useRef(false);
 
-    function handleMouseMove(eMove) {
-      const newWidth = startWidth - (eMove.clientX - startX);
-      if (newWidth >= 250 && newWidth <= 800) setDrawerWidth(newWidth);
-    }
-    function handleMouseUp() {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    }
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-  }, [drawerWidth]);
-
-  // Mobile detection
   useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    checkMobile();
-    const resizeListener = () => checkMobile();
-    window.addEventListener("resize", resizeListener);
-    return () => window.removeEventListener("resize", resizeListener);
+    const handleResize = () => setIsMobile(window.innerWidth < 1024);
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // Local buffer for editor contents (keyed by chapter key, e.g. contentBab1)
-  const [contentBuffer, setContentBuffer] = useState({});
-
-  // ---- Fetch workspace from Firestore ----
   useEffect(() => {
-    async function fetchWorkspace() {
-      if (!user || !id) return;
-      try {
-        const docRef = doc(db, "workspaces", id);
-        const docSnap = await getDoc(docRef);
-        if (!docSnap.exists() || docSnap.data().userId !== user.uid) {
+    if (!user || !id) return undefined;
+
+    const workspaceRef = doc(db, "workspaces", id);
+    const unsubscribe = onSnapshot(
+      workspaceRef,
+      (snapshot) => {
+        if (!snapshot.exists() || snapshot.data().userId !== user.uid) {
           setNotFound(true);
+          setLoading(false);
           return;
         }
-        const data = { id: docSnap.id, ...docSnap.data() };
+
+        const data = { id: snapshot.id, ...snapshot.data() };
         setWorkspace(data);
-        // Hydrate the local buffer with saved content
-        const initial = {};
-        CHAPTERS.forEach(ch => { initial[ch.key] = data[ch.key] || ""; });
-        setContentBuffer(initial);
-      } catch (err) {
-        console.error("Error fetching workspace:", err);
-      } finally {
+
+        if (!hydratedRef.current) {
+          const initialBuffer = {};
+          CHAPTERS.forEach((chapter) => {
+            initialBuffer[chapter.key] = data[chapter.key] || "";
+          });
+          setContentBuffer(initialBuffer);
+          setActiveChapter(Number.isFinite(data.activeChapter) ? data.activeChapter : 0);
+          hydratedRef.current = true;
+        }
+
+        setLoading(false);
+      },
+      (error) => {
+        console.error("Error fetching workspace:", error);
         setLoading(false);
       }
-    }
-    fetchWorkspace();
-  }, [user, id]);
+    );
 
-  // ---- Buffer update (no Firebase write yet) ----
-  const handleEditorChange = useCallback((chapterKey, html) => {
-    setContentBuffer(prev => ({ ...prev, [chapterKey]: html }));
-    setSaved(false);
-  }, []);
+    return unsubscribe;
+  }, [id, user]);
 
-  // ---- Save to Firebase ----
-  const handleSave = useCallback(async () => {
-    if (!workspace || saving) return;
-    setSaving(true);
-    try {
-      await updateDoc(doc(db, "workspaces", workspace.id), {
-        ...contentBuffer,
-        updatedAt: serverTimestamp(),
-      });
-      setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
-    } catch (err) {
-      console.error("Gagal menyimpan:", err);
-    } finally {
-      setSaving(false);
-    }
-  }, [workspace, contentBuffer, saving]);
-
-  // ---- AI Content Insertion ----
-  const handleAiInsertContent = useCallback((generatedHtml) => {
-    const chapterKey = CHAPTERS[activeChapter].key;
-    setContentBuffer(prev => {
-      const current = prev[chapterKey] || "";
-      const newContent = current ? `${current}<br/><br/>${generatedHtml}` : generatedHtml;
-      return { ...prev, [chapterKey]: newContent };
-    });
-    setSaved(false);
-  }, [activeChapter]);
-
-  // ---- Keyboard shortcut Ctrl+S ----
   useEffect(() => {
-    const handler = (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
-        e.preventDefault();
-        handleSave();
+    if (!id) return undefined;
+    const refsQuery = query(collection(db, "workspaces", id, "references"));
+    const unsubscribe = onSnapshot(refsQuery, (snapshot) => {
+      setReferences(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
+    });
+    return unsubscribe;
+  }, [id]);
+
+  useEffect(() => {
+    if (!id) return undefined;
+    const formsQuery = query(collection(db, "workspaces", id, "forms"));
+    const unsubscribe = onSnapshot(formsQuery, (snapshot) => {
+      setForms(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
+    });
+    return unsubscribe;
+  }, [id]);
+
+  useEffect(() => {
+    if (!id) return undefined;
+    const transcriptsQuery = query(collection(db, "workspaces", id, "transcripts"));
+    const unsubscribe = onSnapshot(transcriptsQuery, (snapshot) => {
+      setTranscripts(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
+    });
+    return unsubscribe;
+  }, [id]);
+
+  useEffect(() => {
+    if (!id) return undefined;
+    const snapshotsQuery = query(collection(db, "workspaces", id, "analysisSnapshots"));
+    const unsubscribe = onSnapshot(snapshotsQuery, (snapshot) => {
+      const items = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+      items.sort((left, right) => {
+        const leftTime = left.createdAt?.seconds || 0;
+        const rightTime = right.createdAt?.seconds || 0;
+        return rightTime - leftTime;
+      });
+      setAnalysisSnapshots(items);
+    });
+    return unsubscribe;
+  }, [id]);
+
+  useEffect(() => {
+    if (!id) return undefined;
+    const noteRef = doc(db, "workspaces", id, "notes", "general");
+    const unsubscribe = onSnapshot(noteRef, (snapshot) => {
+      setNoteText(snapshot.data()?.content || "");
+    });
+    return unsubscribe;
+  }, [id]);
+
+  const activeForm = useMemo(
+    () => forms.find((item) => item.id === workspace?.activeFormId) || forms.find((item) => item.status === "published") || null,
+    [forms, workspace?.activeFormId]
+  );
+
+  const latestAnalysis = analysisSnapshots[0] || null;
+  const currentChapter = CHAPTERS[activeChapter];
+  const currentChapterReferences = useMemo(
+    () => references.filter((reference) => (reference.chapterKeys || []).includes(currentChapter?.key)),
+    [currentChapter?.key, references]
+  );
+
+  const progress = useMemo(() => calculateWorkspaceProgress(contentBuffer), [contentBuffer]);
+
+  const persistWorkspace = useCallback(
+    async (nextContentBuffer = contentBuffer, overrides = {}) => {
+      if (!workspace || isSaving) return;
+      setIsSaving(true);
+      setSaveState("saving");
+
+      try {
+        await persistWorkspaceDoc({
+          workspaceId: workspace.id,
+          nextContentBuffer,
+          activeChapter,
+          progress,
+          referenceCount: references.length,
+          responseCount: latestAnalysis?.responseCount || workspace.responseCount || 0,
+          methodologyType: workspace.methodologyType || "kuantitatif",
+          activeFormId: activeForm?.id || workspace.activeFormId || null,
+          overrides,
+        });
+        setSaveState("saved");
+      } catch (error) {
+        console.error("Gagal menyimpan workspace:", error);
+        setSaveState("error");
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [activeChapter, activeForm, contentBuffer, isSaving, latestAnalysis, progress, references.length, workspace]
+  );
+
+  useEffect(() => {
+    if (!hydratedRef.current) return undefined;
+    setSaveState("dirty");
+
+    const timeoutId = window.setTimeout(() => {
+      void persistWorkspace(contentBuffer);
+    }, 1600);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [contentBuffer, persistWorkspace]);
+
+  useEffect(() => {
+    if (!workspace) return undefined;
+
+    const timeoutId = window.setTimeout(() => {
+      void updateDoc(doc(db, "workspaces", workspace.id), {
+        progress,
+        referenceCount: references.length,
+        responseCount: latestAnalysis?.responseCount || 0,
+        activeFormId: activeForm?.id || null,
+        activeChapter,
+        updatedAt: serverTimestamp(),
+      }).catch((error) => console.error("Gagal sinkron metadata workspace:", error));
+    }, 900);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [activeChapter, activeForm?.id, latestAnalysis?.responseCount, progress, references.length, workspace]);
+
+  useEffect(() => {
+    const handler = (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        void persistWorkspace(contentBuffer);
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [handleSave]);
+  }, [contentBuffer, persistWorkspace]);
 
-  // ---- Status update ----
-  const handleStatusChange = async (newStatus) => {
+  const handleStatusChange = async (status) => {
     if (!workspace) return;
-    try {
-      await updateDoc(doc(db, "workspaces", workspace.id), { status: newStatus, updatedAt: serverTimestamp() });
-      setWorkspace(prev => ({ ...prev, status: newStatus }));
-    } catch (err) {
-      console.error("Gagal update status:", err);
-    }
+    setWorkspace((current) => ({ ...current, status }));
+    await updateDoc(doc(db, "workspaces", workspace.id), {
+      status,
+      updatedAt: serverTimestamp(),
+    });
   };
 
-  // ==== Render states ====
+  const handleMethodologyChange = async (methodologyType) => {
+    if (!workspace) return;
+    setWorkspace((current) => ({ ...current, methodologyType }));
+    await updateDoc(doc(db, "workspaces", workspace.id), {
+      methodologyType,
+      updatedAt: serverTimestamp(),
+    });
+  };
+
+  const handleEditorChange = (chapterKey, html) => {
+    setContentBuffer((current) => ({
+      ...current,
+      [chapterKey]: html,
+    }));
+  };
+
+  const handleAiInsertContent = (generatedHtml) => {
+    const chapterKey = CHAPTERS[activeChapter].key;
+    setContentBuffer((current) => {
+      const existing = current[chapterKey] || "";
+      return {
+        ...current,
+        [chapterKey]: existing ? `${existing}<p></p>${generatedHtml}` : generatedHtml,
+      };
+    });
+  };
+
   if (loading) {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "60vh", flexDirection: "column", gap: "1rem" }}>
-        <PremiumIcon name="zap" size={36} className="text-primary" />
-        <p className="text-muted">Memuat workspace...</p>
+        <PremiumIcon name="loader" size={34} className="text-primary animate-spin" />
+        <p className="text-muted">Memuat workspace penelitian...</p>
       </div>
     );
   }
 
-  if (notFound) {
+  if (notFound || !workspace) {
     return (
-      <div className="glass-panel p-8 text-center" style={{ maxWidth: "480px", margin: "4rem auto" }}>
-        <PremiumIcon name="alertCircle" size={48} className="text-danger" style={{ margin: "0 auto 1rem" }} />
-        <h2>Workspace Tidak Ditemukan</h2>
-        <p className="text-muted">Workspace ini tidak ada atau Anda tidak memiliki akses.</p>
-        <Link href="/dashboard/skripsi" className="btn btn-primary mt-4" style={{ display: "inline-flex" }}>
-          <PremiumIcon name="arrowLeft" size={16} /> Kembali ke Daftar
+      <div className="glass-panel p-8 text-center" style={{ maxWidth: "520px", margin: "3rem auto" }}>
+        <PremiumIcon name="alertCircle" size={44} className="text-danger" style={{ margin: "0 auto 1rem" }} />
+        <h2>Workspace tidak ditemukan</h2>
+        <p className="text-muted">Workspace ini tidak ada atau Anda tidak memiliki akses ke proyek tersebut.</p>
+        <Link href="/dashboard/skripsi" className="btn btn-primary" style={{ marginTop: "1rem", display: "inline-flex" }}>
+          <PremiumIcon name="arrowLeft" size={15} />
+          Kembali
         </Link>
       </div>
     );
   }
 
-  const chapterKey = CHAPTERS[activeChapter].key;
-
-  return (
-    <div style={{ display: "flex", flexDirection: "row", height: "calc(100% + 4rem)", margin: "-2rem", overflow: "hidden", backgroundColor: "var(--background)", position: "relative" }}>
-      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", height: "100%", animation: "fadeIn 0.3s ease-out", transition: "none", position: "relative" }}>
-
-        {/* ===== Top bar ===== */}
-        <div style={{
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "0.75rem 1rem", borderBottom: "1px solid var(--border)",
-          backgroundColor: "var(--background)", flexShrink: 0, gap: "1rem", flexWrap: "wrap"
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", overflow: "hidden", minWidth: 0, flex: "1 1 100%", maxWidth: "100%" }}>
-            <Link href="/dashboard/skripsi" style={{ display: "inline-flex", color: "var(--text-muted)", flexShrink: 0 }}>
-              <PremiumIcon name="arrowLeft" size={20} />
-            </Link>
-            <div style={{ overflow: "hidden", display: "flex", flexDirection: "column", minWidth: 0 }}>
-              <h2 style={{ fontSize: "1rem", fontWeight: 600, margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                {workspace?.title || "Tanpa Judul"}
-              </h2>
-              <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                {workspace?.topic?.substring(0, 80) || "Belum ada topik"}
-              </p>
-            </div>
+  const rightPanel = (
+    <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+      <div className="glass-panel" style={{ padding: "1rem" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", marginBottom: "0.7rem" }}>
+          <h3 style={{ fontSize: "0.95rem", margin: 0 }}>Konteks Cepat</h3>
+          <span style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}>{currentChapter.label}</span>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0,1fr))", gap: "0.6rem" }}>
+          <div style={{ padding: "0.75rem", borderRadius: "10px", backgroundColor: "var(--background)" }}>
+            <div style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>Referensi</div>
+            <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text-main)" }}>{references.length}</div>
           </div>
-
-          {/* View Switcher: Penulisan vs Data */}
-          <div style={{ display: "flex", backgroundColor: "var(--surface-hover)", padding: "0.25rem", borderRadius: "8px", gap: "0.25rem" }}>
-            <button
-              onClick={() => setAppMode("editor")}
-              style={{
-                padding: "0.4rem 1rem", borderRadius: "6px", fontSize: "0.85rem", fontWeight: 600, border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: "0.4rem",
-                backgroundColor: appMode === "editor" ? "var(--surface)" : "transparent",
-                color: appMode === "editor" ? "var(--primary)" : "var(--text-muted)",
-                boxShadow: appMode === "editor" ? "var(--shadow-sm)" : "none",
-              }}
-            >
-              <PremiumIcon name="squarePen" size={16} />
-            </button>
-            <button
-              onClick={() => setAppMode("data")}
-              style={{
-                padding: "0.4rem 1rem", borderRadius: "6px", fontSize: "0.85rem", fontWeight: 600, border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: "0.4rem",
-                backgroundColor: appMode === "data" ? "var(--surface)" : "transparent",
-                color: appMode === "data" ? "var(--primary)" : "var(--text-muted)",
-                boxShadow: appMode === "data" ? "var(--shadow-sm)" : "none",
-              }}
-            >
-              <PremiumIcon name="chartNoAxesCombined" size={16} />
-            </button>
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexShrink: 0 }}>
-            {appMode === "editor" && (
-              <button
-                className="btn btn-outline"
-                onClick={() => setIsDrawerOpen(!isDrawerOpen)}
-                style={{ gap: "0.4rem", padding: "0.5rem 0.75rem", fontSize: "0.85rem", backgroundColor: isDrawerOpen ? "var(--surface-hover)" : "transparent" }}
-              >
-                <PremiumIcon name="bookOpen" size={15} />
-                Referensi
-              </button>
-            )}
-
-            <StatusDropdown currentStatus={workspace?.status} onSelect={handleStatusChange} />
-
-            <button
-              className={`btn ${saved ? "btn-outline" : "btn-primary"}`}
-              onClick={handleSave}
-              disabled={saving}
-              style={{ gap: "0.4rem", padding: "0.5rem 1rem", fontSize: "0.85rem" }}
-            >
-              <PremiumIcon name={saved ? "check" : "save"} size={15} />
-              {saving ? "Menyimpan" : saved ? "Tersimpan" : "Simpan"}
-            </button>
+          <div style={{ padding: "0.75rem", borderRadius: "10px", backgroundColor: "var(--background)" }}>
+            <div style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>Respons</div>
+            <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text-main)" }}>{latestAnalysis?.responseCount || 0}</div>
           </div>
         </div>
-
-        {appMode === "data" ? (
-          <div style={{ flex: 1, overflowY: "auto", position: "relative" }}>
-            <DataHub workspaceId={id} />
-          </div>
-        ) : (
-          <>
-            {/* ===== Chapter Tabs ===== */}
-            <div style={{
-              display: "flex", gap: "0.25rem", padding: "0.5rem 1.5rem",
-              borderBottom: "1px solid var(--border)", backgroundColor: "var(--surface)",
-              overflowX: "auto", flexShrink: 0,
-            }}>
-              {CHAPTERS.map((ch, i) => (
-                <button
-                  key={ch.key}
-                  onClick={() => setActiveChapter(i)}
-                  style={{
-                    padding: "0.4rem 1rem", fontSize: "0.8rem", fontWeight: 600,
-                    borderRadius: "6px", border: "none", cursor: "pointer",
-                    fontFamily: "inherit", whiteSpace: "nowrap",
-                    backgroundColor: activeChapter === i ? "var(--primary)" : "transparent",
-                    color: activeChapter === i ? "white" : "var(--text-muted)",
-                    transition: "all 0.2s",
-                  }}
-                >
-                  {ch.label}
-                </button>
-              ))}
-            </div>
-
-            {/* ===== Chapter Title ===== */}
-            <div style={{ padding: "1.5rem 2rem 0", flexShrink: 0 }}>
-              <h1 style={{ fontSize: "1.5rem", margin: 0, color: "var(--text-main)" }}>
-                {CHAPTERS[activeChapter].longLabel}
-              </h1>
-            </div>
-
-            {/* ===== Editor Canvas ===== */}
-            <div style={{ flex: 1, overflow: "hidden", position: "relative", minWidth: 0 }}>
-              <TiptapEditor
-                key={chapterKey}   /* remount when chapter changes */
-                content={contentBuffer[chapterKey]}
-                onChange={(html) => handleEditorChange(chapterKey, html)}
-                placeholder={CHAPTERS[activeChapter].placeholder}
-              />
-
-              {/* AI Co-Writer Widget - Posisi pasti di atas editor */}
-              <div style={{ position: "absolute", right: "2rem", top: "2rem", zIndex: 9999 }}>
-                <ChapterAiAssistant
-                  activeChapter={activeChapter}
-                  workspaceContext={workspace}
-                  onInsertContent={handleAiInsertContent}
-                />
-              </div>
-            </div>
-
-            {/* ===== Keyboard shortcut hint ===== */}
-            <div style={{ padding: "0.5rem 2rem", borderTop: "1px solid var(--border)", display: "flex", justifyContent: "flex-end" }}>
-              <span style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>
-                Tekan <kbd style={{ padding: "1px 5px", border: "1px solid var(--border)", borderRadius: "4px", fontFamily: "inherit" }}>Ctrl+S</kbd> untuk menyimpan
-              </span>
-            </div>
-          </>
-        )}
-
       </div>
 
-      {/* Right Drawer */}
-      {appMode === "editor" && isDrawerOpen && (
-        <>
-          {/* Mobile Backdrop Overlay */}
-          {isMobile && (
-            <div
-              onClick={() => setIsDrawerOpen(false)}
-              style={{
-                position: "fixed",
-                inset: 0,
-                backgroundColor: "rgba(0,0,0,0.6)",
-                backdropFilter: "blur(4px)",
-                zIndex: 40,
-                cursor: "pointer",
-              }}
+      {activeTab === "penulisan" ? (
+        <div className="glass-panel" style={{ padding: "1rem" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", marginBottom: "0.75rem" }}>
+            <div>
+              <h3 style={{ fontSize: "0.95rem", margin: 0 }}>AI Bab {activeChapter + 1}</h3>
+              <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.76rem" }}>Gunakan referensi yang ditandai untuk bab aktif.</p>
+            </div>
+            <ChapterAiAssistant
+              activeChapter={activeChapter}
+              workspaceContext={workspace}
+              onInsertContent={handleAiInsertContent}
+              selectedReferences={currentChapterReferences}
+              activeForm={activeForm}
+              latestAnalysis={latestAnalysis}
+              transcripts={transcripts}
+              notes={noteText}
             />
-          )}
-
-          {/* Drag Handle (Desktop only) */}
-          {!isMobile && (
-            <div
-              onMouseDown={handleMouseDown}
-              style={{ width: "6px", cursor: "col-resize", backgroundColor: "var(--surface-hover)", zIndex: 50, flexShrink: 0 }}
-              title="Tarik untuk memperlebar Reference Hub"
-            />
-          )}
-
-          {/* Drawer Container */}
-          <div
-            style={{
-              ...(isMobile
-                ? {
-                    position: "fixed",
-                    right: 0,
-                    top: 0,
-                    bottom: 0,
-                    width: "100%",
-                    maxWidth: "400px",
-                    zIndex: 50,
-                    animation: "slideInRight 0.3s ease-out",
-                  }
-                : {
-                    width: `${drawerWidth}px`,
-                    borderLeft: "1px solid var(--border)",
-                    flexShrink: 0,
-                    display: "flex",
-                    flexDirection: "column",
-                    height: "100%",
-                  }),
-              backgroundColor: "var(--background)",
-              boxShadow: isMobile ? "0 -2px 16px rgba(0,0,0,0.2)" : "none",
-              borderLeft: isMobile ? "none" : "1px solid var(--border)",
-              display: "flex",
-              flexDirection: "column",
-            }}
-          >
-            <ReferenceManager workspaceId={id} onClose={() => setIsDrawerOpen(false)} />
           </div>
-        </>
-      )}
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+            {currentChapterReferences.length ? (
+              currentChapterReferences.slice(0, 4).map((reference) => (
+                <div key={reference.id} style={{ padding: "0.75rem", borderRadius: "10px", border: "1px solid var(--border)", backgroundColor: "var(--background)" }}>
+                  <div style={{ fontSize: "0.84rem", fontWeight: 600, color: "var(--text-main)" }}>{reference.title}</div>
+                  <div style={{ fontSize: "0.74rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
+                    {reference.authorString || (reference.authors || []).join(", ")} • {reference.year || "tanpa tahun"}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div style={{ padding: "0.85rem", border: "1px dashed var(--border)", borderRadius: "10px", fontSize: "0.8rem", color: "var(--text-muted)" }}>
+                Belum ada referensi yang ditandai untuk {currentChapter.label}.
+              </div>
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      {activeTab === "analisis" && latestAnalysis ? (
+        <div className="glass-panel" style={{ padding: "1rem" }}>
+          <h3 style={{ fontSize: "0.95rem", margin: 0 }}>Snapshot Analisis Terakhir</h3>
+          <p style={{ margin: "0.55rem 0 0 0", fontSize: "0.82rem", lineHeight: 1.6, color: "var(--text-main)" }}>
+            {latestAnalysis.narrative || "Snapshot sudah tersimpan namun narasi belum tersedia."}
+          </p>
+        </div>
+      ) : null}
+
+      <WorkspaceNotesPanel workspaceId={workspace.id} />
+    </div>
+  );
+
+  return (
+    <div style={{ margin: "-1.5rem", minHeight: "calc(100vh - 72px)", backgroundColor: "var(--background)" }}>
+      <div style={{ padding: "1rem", borderBottom: "1px solid var(--border)", backgroundColor: "var(--surface)", position: "sticky", top: 0, zIndex: 20 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: "1rem", alignItems: "center" }}>
+          <div style={{ minWidth: 0, flex: "1 1 360px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+              <Link href="/dashboard/skripsi" style={{ display: "inline-flex", color: "var(--text-muted)" }}>
+                <PremiumIcon name="arrowLeft" size={18} />
+              </Link>
+              <h1 style={{ fontSize: "1.25rem", margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {workspace.title || "Tanpa Judul"}
+              </h1>
+              <StatusBadge status={workspace.status} />
+            </div>
+            <p style={{ margin: "0.35rem 0 0 0", fontSize: "0.86rem" }}>{workspace.topic || "Topik penelitian belum diisi."}</p>
+          </div>
+
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.65rem", justifyContent: "flex-end" }}>
+            <div className="glass-panel" style={{ padding: "0.65rem 0.8rem", display: "flex", gap: "0.85rem", alignItems: "center", backgroundColor: "var(--background)" }}>
+              <span style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>Progress</span>
+              <strong style={{ fontSize: "0.9rem", color: "var(--text-main)" }}>{progress}%</strong>
+            </div>
+            <div className="glass-panel" style={{ padding: "0.65rem 0.8rem", display: "flex", gap: "0.85rem", alignItems: "center", backgroundColor: "var(--background)" }}>
+              <span style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>Form</span>
+              <strong style={{ fontSize: "0.9rem", color: "var(--text-main)" }}>{activeForm?.title || "Belum aktif"}</strong>
+            </div>
+            <div className="glass-panel" style={{ padding: "0.65rem 0.8rem", display: "flex", gap: "0.85rem", alignItems: "center", backgroundColor: "var(--background)" }}>
+              <span style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>Autosave</span>
+              <strong style={{ fontSize: "0.9rem", color: saveState === "error" ? "var(--danger)" : "var(--text-main)" }}>
+                {saveState === "saving" ? "Menyimpan..." : saveState === "dirty" ? "Perubahan baru" : saveState === "error" ? "Gagal" : "Aman"}
+              </strong>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div
+        style={{
+          display: isMobile ? "flex" : "grid",
+          flexDirection: isMobile ? "column" : undefined,
+          gridTemplateColumns: isMobile ? undefined : "250px minmax(0, 1fr) 340px",
+          gap: "1rem",
+          padding: "1rem",
+          alignItems: "start",
+        }}
+      >
+        <aside className="glass-panel" style={{ padding: "1rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
+          <div>
+            <h3 style={{ fontSize: "0.92rem", margin: 0 }}>Research Cockpit</h3>
+            <p style={{ margin: "0.3rem 0 0 0", fontSize: "0.76rem" }}>Pilih mode kerja dan bab aktif tanpa meninggalkan workspace.</p>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem" }}>
+            {WORKSPACE_TABS.map((tab) => (
+              <button
+                key={tab.key}
+                className={`btn ${activeTab === tab.key ? "btn-primary" : "btn-outline"}`}
+                style={{ justifyContent: "flex-start" }}
+                onClick={() => setActiveTab(tab.key)}
+              >
+                <PremiumIcon name={tab.icon} size={15} />
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          <div style={{ paddingTop: "0.75rem", borderTop: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: "0.65rem" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem" }}>
+              <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--text-main)" }}>Struktur Bab</span>
+              <span style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}>{progress}%</span>
+            </div>
+            {CHAPTERS.map((chapter, index) => (
+              <button
+                key={chapter.key}
+                className={`btn ${activeChapter === index ? "btn-primary" : "btn-ghost"}`}
+                style={{ justifyContent: "space-between" }}
+                onClick={() => {
+                  setActiveTab("penulisan");
+                  setActiveChapter(index);
+                }}
+              >
+                <span>{chapter.label}</span>
+                <span style={{ fontSize: "0.7rem", opacity: 0.82 }}>
+                  {(contentBuffer[chapter.key] || "").length ? "isi" : "kosong"}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <div style={{ paddingTop: "0.75rem", borderTop: "1px solid var(--border)", display: "grid", gridTemplateColumns: "repeat(2, minmax(0,1fr))", gap: "0.65rem" }}>
+            <div className="form-group" style={{ margin: 0 }}>
+              <label className="form-label">Status</label>
+              <select className="form-input" value={workspace.status || "Draft"} onChange={(event) => void handleStatusChange(event.target.value)}>
+                <option value="Draft">Draft</option>
+                <option value="Revisi">Revisi</option>
+                <option value="Selesai">Selesai</option>
+              </select>
+            </div>
+            <div className="form-group" style={{ margin: 0 }}>
+              <label className="form-label">Metode</label>
+              <select className="form-input" value={workspace.methodologyType || "kuantitatif"} onChange={(event) => void handleMethodologyChange(event.target.value)}>
+                <option value="kuantitatif">Kuantitatif</option>
+                <option value="kualitatif">Kualitatif</option>
+                <option value="mixed">Mixed Methods</option>
+              </select>
+            </div>
+          </div>
+        </aside>
+
+        <main style={{ display: "flex", flexDirection: "column", gap: "1rem", minWidth: 0 }}>
+          {activeTab === "penulisan" ? (
+            <div className="glass-panel" style={{ overflow: "hidden", minHeight: "72vh", display: "flex", flexDirection: "column" }}>
+              <div style={{ padding: "1rem 1rem 0.65rem", borderBottom: "1px solid var(--border)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", alignItems: "center", flexWrap: "wrap" }}>
+                  <div>
+                    <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                      {currentChapter.label}
+                    </div>
+                    <h2 style={{ fontSize: "1.2rem", margin: "0.2rem 0 0 0" }}>{currentChapter.longLabel}</h2>
+                  </div>
+                  <button className="btn btn-outline" onClick={() => void persistWorkspace(contentBuffer)} disabled={isSaving}>
+                    <PremiumIcon name="save" size={14} />
+                    Simpan Sekarang
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ flex: 1, minHeight: 0 }}>
+                <TiptapEditor
+                  key={currentChapter.key}
+                  content={contentBuffer[currentChapter.key] || ""}
+                  onChange={(html) => handleEditorChange(currentChapter.key, html)}
+                  placeholder={currentChapter.placeholder}
+                />
+              </div>
+
+              <div style={{ padding: "0.65rem 1rem", borderTop: "1px solid var(--border)", display: "flex", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap" }}>
+                <span style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}>
+                  Referensi terhubung untuk bab ini: <strong style={{ color: "var(--text-main)" }}>{currentChapterReferences.length}</strong>
+                </span>
+                <span style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}>
+                  Tekan <kbd style={{ padding: "1px 5px", border: "1px solid var(--border)", borderRadius: "4px" }}>Ctrl+S</kbd> untuk menyimpan manual
+                </span>
+              </div>
+            </div>
+          ) : null}
+
+          {activeTab === "referensi" ? (
+            <ReferenceManager workspaceId={workspace.id} currentChapterKey={currentChapter.key} />
+          ) : null}
+
+          {activeTab === "data" ? <DataHub workspaceId={workspace.id} /> : null}
+
+          {activeTab === "analisis" ? (
+            <div className="glass-panel" style={{ padding: "1rem" }}>
+              <DataAnalysisDashboard workspaceId={workspace.id} activeFormId={activeForm?.id || null} />
+            </div>
+          ) : null}
+        </main>
+
+        <aside>{rightPanel}</aside>
+      </div>
     </div>
   );
 }

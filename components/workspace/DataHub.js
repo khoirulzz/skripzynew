@@ -1,107 +1,203 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { collection, doc, onSnapshot, query, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
 import { FormBuilder } from "./FormBuilder";
 import { DataAnalysisDashboard } from "./DataAnalysisDashboard";
+import { TranscriptManager } from "./TranscriptManager";
+import { FORM_STATUSES, createEmptyForm, createId } from "@/lib/workspaceDefaults";
 
 export function DataHub({ workspaceId }) {
-  const [activeTab, setActiveTab] = useState("kuesioner"); // 'kuesioner', 'wawancara', 'analisis'
-  const [showFormBuilder, setShowFormBuilder] = useState(false);
+  const [activeTab, setActiveTab] = useState("kuesioner");
+  const [forms, setForms] = useState([]);
+  const [activeFormId, setActiveFormId] = useState(null);
+  const [editingFormId, setEditingFormId] = useState(null);
+
+  useEffect(() => {
+    if (!workspaceId) return undefined;
+
+    const workspaceRef = doc(db, "workspaces", workspaceId);
+    const unsubscribe = onSnapshot(workspaceRef, (snapshot) => {
+      const workspace = snapshot.data() || {};
+      setActiveFormId(workspace.activeFormId || null);
+    });
+
+    return unsubscribe;
+  }, [workspaceId]);
+
+  useEffect(() => {
+    if (!workspaceId) return undefined;
+
+    const formsQuery = query(collection(db, "workspaces", workspaceId, "forms"));
+    const unsubscribe = onSnapshot(formsQuery, (snapshot) => {
+      const nextForms = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+      nextForms.sort((left, right) => {
+        const leftTime = left.updatedAt?.seconds || 0;
+        const rightTime = right.updatedAt?.seconds || 0;
+        return rightTime - leftTime;
+      });
+      setForms(nextForms);
+      if (!editingFormId && nextForms[0] && !activeFormId) {
+        setActiveFormId(nextForms[0].id);
+      }
+    });
+
+    return unsubscribe;
+  }, [activeFormId, editingFormId, workspaceId]);
+
+  const activeForm = useMemo(
+    () => forms.find((form) => form.id === editingFormId) || null,
+    [editingFormId, forms]
+  );
+
+  const handleCreateForm = async () => {
+    const formId = createId("form");
+    const nextForm = createEmptyForm({ id: formId, title: `Instrumen ${forms.length + 1}` });
+    await setDoc(doc(db, "workspaces", workspaceId, "forms", formId), {
+      ...nextForm,
+      updatedAt: serverTimestamp(),
+    });
+    setEditingFormId(formId);
+  };
+
+  const handleActivateForm = async (formId) => {
+    await updateDoc(doc(db, "workspaces", workspaceId), {
+      activeFormId: formId,
+      updatedAt: serverTimestamp(),
+    });
+    setActiveFormId(formId);
+  };
 
   return (
-    <div className="animate-fade-in" style={{ padding: "2rem", maxWidth: "1200px", margin: "0 auto" }}>
-      
-      {/* Header Hub */}
-      <div style={{ marginBottom: "2rem" }}>
-        <h1 style={{ fontSize: "1.5rem", fontWeight: 700, margin: "0 0 0.5rem 0", display: "flex", gap: "0.75rem", alignItems: "center" }}>
-          <PremiumIcon name="database" size={30} className="text-primary" />
-          Manajemen Data Penelitian
-        </h1>
-        <p className="text-muted" style={{ margin: 0, fontSize: "1rem" }}>
-          Buat kuesioner, input transkrip wawancara, dan lakukan uji statistik dalam satu tempat terpusat.
-        </p>
+    <div className="animate-fade-in" style={{ padding: "1.5rem", maxWidth: "1400px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "1rem" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
+        <div>
+          <h1 style={{ fontSize: "1.35rem", fontWeight: 700, margin: 0, display: "flex", gap: "0.7rem", alignItems: "center" }}>
+            <PremiumIcon name="database" size={28} className="text-primary" />
+            Manajemen Data Penelitian
+          </h1>
+          <p style={{ margin: "0.35rem 0 0 0", fontSize: "0.92rem" }}>
+            Kelola form kuesioner, transkrip wawancara, dan snapshot analisis dalam satu ruang kerja.
+          </p>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.65rem", flexWrap: "wrap" }}>
+          <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
+            Form aktif: <strong style={{ color: "var(--text-main)" }}>{forms.find((item) => item.id === activeFormId)?.title || "Belum dipilih"}</strong>
+          </span>
+          <button className="btn btn-primary" onClick={handleCreateForm}>
+            <PremiumIcon name="plus" size={16} />
+            Form Baru
+          </button>
+        </div>
       </div>
 
-      {/* Internal Navigation */}
-      <div style={{ display: "flex", gap: "1rem", borderBottom: "1px solid var(--border)", marginBottom: "2rem" }}>
-        {["kuesioner", "wawancara", "analisis"].map(tab => (
-          <button 
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            style={{ 
-              padding: "0.75rem 1.5rem", 
-              borderBottom: activeTab === tab ? "2px solid var(--primary)" : "2px solid transparent",
-              color: activeTab === tab ? "var(--text-main)" : "var(--text-muted)",
-              fontWeight: activeTab === tab ? 600 : 500,
-              textTransform: "capitalize",
-              background: "transparent", borderTop: "none", borderLeft: "none", borderRight: "none", cursor: "pointer"
+      <div style={{ display: "flex", gap: "0.75rem", borderBottom: "1px solid var(--border)", paddingBottom: "0.2rem", overflowX: "auto" }}>
+        {[
+          { key: "kuesioner", label: "Kuesioner", icon: "layoutTemplate" },
+          { key: "wawancara", label: "Wawancara", icon: "mic" },
+          { key: "analisis", label: "Analisis", icon: "barChart3" },
+        ].map((tab) => (
+          <button
+            key={tab.key}
+            className="btn btn-ghost"
+            onClick={() => setActiveTab(tab.key)}
+            style={{
+              borderBottom: activeTab === tab.key ? "2px solid var(--primary)" : "2px solid transparent",
+              color: activeTab === tab.key ? "var(--primary)" : "var(--text-muted)",
+              borderRadius: 0,
+              paddingInline: "0.4rem",
             }}
           >
-            {tab === "kuesioner" ? "Skripzy Forms" : tab === "wawancara" ? "Transkrip Wawancara" : "Hasil & Analisis"}
+            <PremiumIcon name={tab.icon} size={15} />
+            {tab.label}
           </button>
         ))}
       </div>
 
-      {/* Tab: Kuesioner */}
-      {activeTab === "kuesioner" && (
-        <div className="grid md:grid-cols-2 gap-6">
-          <div className="glass-panel p-8 flex flex-col items-start gap-4">
-            <div style={{ padding: "1rem", backgroundColor: "rgba(79, 70, 229, 0.1)", borderRadius: "12px", color: "var(--primary)" }}>
-              <PremiumIcon name="layoutTemplate" size={32} />
+      {activeTab === "kuesioner" ? (
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "1rem" }}>
+          <div className="glass-panel" style={{ padding: "1rem" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem", marginBottom: "1rem", flexWrap: "wrap" }}>
+              <div>
+                <h3 style={{ fontSize: "1rem", margin: 0 }}>Daftar Form Penelitian</h3>
+                <p style={{ margin: "0.3rem 0 0 0", fontSize: "0.82rem" }}>Buat beberapa draft form, tetapi publikasikan satu form aktif untuk responden.</p>
+              </div>
             </div>
-            <h3 style={{ fontSize: "1.25rem", margin: 0 }}>Buat Skripzy Form Baru</h3>
-            <p className="text-muted text-sm" style={{ margin: 0, lineHeight: 1.5 }}>
-              Desain kuesioner dengan variabel yang terstruktur. Form ini dapat dibagikan dengan link publik dan respon akan langsung tercatat di sini.
-            </p>
-            <button className="btn btn-primary mt-2" onClick={() => setShowFormBuilder(true)}>
-              <PremiumIcon name="plus" size={18} /> Rancang Form
-            </button>
+
+            {forms.length === 0 ? (
+              <div style={{ padding: "1.5rem", border: "1px dashed var(--border)", borderRadius: "12px", textAlign: "center" }}>
+                <PremiumIcon name="layoutTemplate" size={30} className="text-muted" style={{ margin: "0 auto 0.65rem" }} />
+                <h4 style={{ margin: 0 }}>Belum Ada Form</h4>
+                <p style={{ margin: "0.4rem 0 0 0", fontSize: "0.84rem" }}>Mulai dengan membuat instrumen penelitian baru.</p>
+              </div>
+            ) : (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "0.9rem" }}>
+                {forms.map((item) => (
+                  <div key={item.id} className="glass-panel" style={{ padding: "1rem", border: item.id === activeFormId ? "1px solid var(--primary)" : "1px solid var(--border)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", alignItems: "flex-start" }}>
+                      <div>
+                        <h4 style={{ margin: 0, fontSize: "0.98rem" }}>{item.title}</h4>
+                        <p style={{ margin: "0.35rem 0 0 0", fontSize: "0.8rem", lineHeight: 1.5 }}>
+                          {item.description || "Deskripsi form belum diisi."}
+                        </p>
+                      </div>
+                      <span
+                        style={{
+                          fontSize: "0.72rem",
+                          textTransform: "capitalize",
+                          padding: "0.18rem 0.5rem",
+                          borderRadius: "999px",
+                          backgroundColor: item.status === FORM_STATUSES.published ? "rgba(16,185,129,0.12)" : "var(--surface-hover)",
+                          color: item.status === FORM_STATUSES.published ? "var(--success)" : "var(--text-muted)",
+                          fontWeight: 600,
+                        }}
+                      >
+                        {item.status || FORM_STATUSES.draft}
+                      </span>
+                    </div>
+
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginTop: "1rem", fontSize: "0.78rem", color: "var(--text-muted)" }}>
+                      <div>{item.sections?.length || 0} bagian • {item.sections?.reduce((sum, section) => sum + (section.questions?.length || 0), 0) || 0} butir</div>
+                      <div>{item.publicSlug ? `/form/${item.publicSlug}` : "Belum punya link publik"}</div>
+                    </div>
+
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "1rem" }}>
+                      <button className="btn btn-primary" onClick={() => setEditingFormId(item.id)}>
+                        <PremiumIcon name="edit3" size={14} />
+                        Edit Builder
+                      </button>
+                      <button className="btn btn-outline" onClick={() => void handleActivateForm(item.id)}>
+                        <PremiumIcon name="checkCircle" size={14} />
+                        Jadikan Aktif
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-
-          <div className="glass-panel p-8 flex flex-col items-start gap-4" style={{ opacity: 0.7 }}>
-            <div style={{ padding: "1rem", backgroundColor: "var(--surface-hover)", borderRadius: "12px", color: "var(--text-muted)" }}>
-              <PremiumIcon name="database" size={32} />
-            </div>
-            <h3 style={{ fontSize: "1.25rem", margin: 0 }}>Hubungkan Google Form</h3>
-            <p className="text-muted text-sm" style={{ margin: 0, lineHeight: 1.5 }}>
-              Punya form yang sudah disebar di Google Forms? Import data respon Anda dalam format CSV untuk diuji validitasnya.
-            </p>
-            <button className="btn btn-outline mt-2 disabled:opacity-50" disabled>
-              Segera Hadir
-            </button>
-          </div>
         </div>
-      )}
+      ) : null}
 
-      {/* Tab: Wawancara */}
-      {activeTab === "wawancara" && (
-        <div className="glass-panel p-8" style={{ textAlign: "center", minHeight: "400px", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center" }}>
-          <PremiumIcon name="mic" size={48} className="text-muted mb-4 opacity-50" />
-          <h3 style={{ fontSize: "1.5rem", margin: "0 0 1rem 0" }}>Transkrip Wawancara Kualitatif</h3>
-          <p className="text-muted max-w-lg mb-6">
-            Ketik hasil catatan lapangan/wawancara mendalam di sini, dan AI akan membantu merangkum narasi tematik untuk Anda letakkan di Bab IV.
-          </p>
-          <button className="btn btn-primary" onClick={() => alert("Fitur Editor Wawancara akan disediakan. Saat ini Anda dapat menaruh rangkuman secara manual di Laci Referensi.")}>
-            + Tambah Transkrip Baru
-          </button>
+      {activeTab === "wawancara" ? <TranscriptManager workspaceId={workspaceId} /> : null}
+      {activeTab === "analisis" ? <DataAnalysisDashboard workspaceId={workspaceId} activeFormId={activeFormId} /> : null}
+
+      {activeForm ? (
+        <div style={{ position: "fixed", inset: 0, zIndex: 100, backgroundColor: "rgba(11,15,25,0.58)", backdropFilter: "blur(6px)" }}>
+          <FormBuilder
+            key={activeForm.id}
+            workspaceId={workspaceId}
+            form={activeForm}
+            existingForms={forms}
+            onClose={() => setEditingFormId(null)}
+            onSaved={(nextForm) => {
+              setForms((current) => current.map((item) => (item.id === nextForm.id ? nextForm : item)));
+            }}
+          />
         </div>
-      )}
-
-      {/* Tab: Analisis */}
-      {activeTab === "analisis" && (
-        <div style={{ minHeight: "500px" }}>
-          <DataAnalysisDashboard workspaceId={workspaceId} />
-        </div>
-      )}
-
-      {/* Full Form Builder Modal */}
-      {showFormBuilder && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 100, backgroundColor: "var(--background)", overflowY: "auto" }}>
-          <FormBuilder workspaceId={workspaceId} onClose={() => setShowFormBuilder(false)} />
-        </div>
-      )}
-
+      ) : null}
     </div>
   );
 }

@@ -10,6 +10,10 @@
     "trailingSlash": true,
     "rewrites": [
       {
+        "source": "/form/**",
+        "destination": "/form/index.html"
+      },
+      {
         "source": "/dashboard/tools/notebook/**",
         "destination": "/dashboard/tools/notebook/index/index.html"
       }

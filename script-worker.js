@@ -9,12 +9,230 @@ const RETRYABLE_STATUS = new Set([401, 403, 408, 429, 500, 502, 503, 504]);
 function createCorsHeaders(extra = {}) {
     return {
         "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "Content-Type, x-skripzy-secret, x-api-group, Authorization",
+        "Access-Control-Allow-Methods": "POST, GET, PATCH, DELETE, OPTIONS",
         "Content-Type": "application/json",
         ...extra,
     };
 }
 
-export default {
+function getFirebaseConfig(env) {
+    return {
+        projectId: env.FIREBASE_PROJECT_ID || "skripzy-4fbaa",
+        webApiKey: env.FIREBASE_WEB_API_KEY || "AIzaSyB2YYmDJHpb3Ou8GZzpYWc-b0CuBx4nLJQ",
+    };
+}
+
+function extractBearerToken(request) {
+    const authHeader = request.headers.get("Authorization") || "";
+    if (!authHeader.startsWith("Bearer ")) return null;
+    return authHeader.slice(7).trim();
+}
+
+function slugify(value = "") {
+    return String(value)
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/(^-|-$)+/g, "")
+        .slice(0, 80);
+}
+
+async function verifyFirebaseToken(idToken, env) {
+    if (!idToken) return null;
+
+    const { webApiKey } = getFirebaseConfig(env);
+    const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${webApiKey}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken }),
+    });
+
+    if (!response.ok) {
+        return null;
+    }
+
+    const data = await response.json().catch(() => ({}));
+    const user = data?.users?.[0];
+    if (!user?.localId) return null;
+
+    return {
+        uid: user.localId,
+        email: user.email || "",
+    };
+}
+
+function toFirestoreValue(value) {
+    if (value === null || value === undefined) {
+        return { nullValue: null };
+    }
+
+    if (Array.isArray(value)) {
+        return {
+            arrayValue: {
+                values: value.map((entry) => toFirestoreValue(entry)),
+            },
+        };
+    }
+
+    if (typeof value === "object") {
+        const fields = {};
+        Object.entries(value).forEach(([key, entry]) => {
+            if (entry === undefined) return;
+            fields[key] = toFirestoreValue(entry);
+        });
+        return {
+            mapValue: { fields },
+        };
+    }
+
+    if (typeof value === "boolean") {
+        return { booleanValue: value };
+    }
+
+    if (typeof value === "number") {
+        if (Number.isInteger(value)) {
+            return { integerValue: String(value) };
+        }
+        return { doubleValue: value };
+    }
+
+    return { stringValue: String(value) };
+}
+
+function toFirestoreDocument(payload = {}) {
+    const fields = {};
+    Object.entries(payload).forEach(([key, value]) => {
+        if (value === undefined) return;
+        fields[key] = toFirestoreValue(value);
+    });
+    return { fields };
+}
+
+function fromFirestoreValue(value) {
+    if (value === null || value === undefined) return null;
+    if ("stringValue" in value) return value.stringValue;
+    if ("integerValue" in value) return Number(value.integerValue);
+    if ("doubleValue" in value) return value.doubleValue;
+    if ("booleanValue" in value) return value.booleanValue;
+    if ("timestampValue" in value) return value.timestampValue;
+    if ("nullValue" in value) return null;
+    if ("arrayValue" in value) {
+        return (value.arrayValue.values || []).map((entry) => fromFirestoreValue(entry));
+    }
+    if ("mapValue" in value) {
+        const result = {};
+        Object.entries(value.mapValue.fields || {}).forEach(([key, entry]) => {
+            result[key] = fromFirestoreValue(entry);
+        });
+        return result;
+    }
+    return null;
+}
+
+function fromFirestoreDocument(document) {
+    const plain = {};
+    Object.entries(document?.fields || {}).forEach(([key, value]) => {
+        plain[key] = fromFirestoreValue(value);
+    });
+    plain.id = document?.name?.split("/").pop() || null;
+    return plain;
+}
+
+async function firestoreRequest(env, path, { method = "GET", authToken = null, body = null, query = "" } = {}) {
+    const { projectId, webApiKey } = getFirebaseConfig(env);
+    const baseUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${path}`;
+    const url = `${baseUrl}${query ? `?${query}` : `?key=${webApiKey}`}`;
+    const headers = {
+        "Content-Type": "application/json",
+    };
+
+    if (authToken) {
+        headers.Authorization = `Bearer ${authToken}`;
+    }
+
+    return fetch(url, {
+        method,
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+    });
+}
+
+function parsePublicFormSlug(pathname) {
+    const match = pathname.match(/^\/public\/forms\/([^/]+)(?:\/responses)?$/);
+    return match?.[1] || null;
+}
+
+async function getPublicFormSnapshot(env, slug) {
+    const response = await firestoreRequest(env, `public_forms/${slugify(slug)}`, { method: "GET" });
+    if (!response.ok) {
+        return null;
+    }
+
+    const data = await response.json().catch(() => null);
+    if (!data) return null;
+    return fromFirestoreDocument(data);
+}
+
+async function proxyGeminiGeneration({ env, body, groupHeader, model, systemInstruction = null, temperature = 0.6 }) {
+    const API_GROUPS = {
+        group_1: [env.GEMINI_API_KEY_1, env.GEMINI_API_KEY_2],
+        group_2: [env.GEMINI_API_KEY_3, env.GEMINI_API_KEY_4],
+        group_3: [env.GEMINI_API_KEY_5, env.GEMINI_API_KEY_6],
+        group_4: [env.GEMINI_API_KEY_7, env.GEMINI_API_KEY_8]
+    };
+
+    const groupsToTry = (groupHeader || "group_3").split(",").map((item) => item.trim()).filter(Boolean);
+    const finalGroups = groupsToTry.length ? groupsToTry : ["group_3"];
+
+    const payload = {
+        contents: [
+            {
+                role: "user",
+                parts: [{ text: body.prompt }],
+            }
+        ],
+        generationConfig: {
+            temperature,
+        },
+    };
+
+    if (systemInstruction) {
+        payload.systemInstruction = { parts: [{ text: systemInstruction }] };
+    }
+
+    let lastError = null;
+
+    for (const groupName of finalGroups) {
+        const keys = (API_GROUPS[groupName] || []).filter(Boolean);
+        for (const key of keys) {
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+                if (text) {
+                    return { text, model };
+                }
+                lastError = { status: 500, body: "Empty response from Gemini" };
+                continue;
+            }
+
+            const errorText = await response.text();
+            lastError = { status: response.status, body: errorText };
+            if (!RETRYABLE_STATUS.has(response.status)) break;
+        }
+    }
+
+    throw new Error(lastError?.body || "Gagal menghasilkan konten AI workspace.");
+}
+
+const worker = {
     async fetch(request, env, ctx) {
         // Definisi Grup API Key
         const API_GROUPS = {
@@ -29,16 +247,222 @@ export default {
             return new Response(null, {
                 headers: {
                     "Access-Control-Allow-Origin": "*",
-                    "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
-                    "Access-Control-Allow-Headers": "Content-Type, x-skripzy-secret, x-api-group",
+                    "Access-Control-Allow-Methods": "POST, GET, PATCH, DELETE, OPTIONS",
+                    "Access-Control-Allow-Headers": "Content-Type, x-skripzy-secret, x-api-group, Authorization",
                     "Access-Control-Max-Age": "86400",
                 },
             });
         }
 
+        const url = new URL(request.url);
+        const isPublicFormEndpoint = url.pathname.startsWith("/public/forms/");
+        const isWorkspacePublishEndpoint = url.pathname === "/workspace/forms/publish";
+        const isWorkspaceAiEndpoint = url.pathname === "/workspace/ai/chapter-generate";
+
+        if (isPublicFormEndpoint) {
+            const slug = parsePublicFormSlug(url.pathname);
+            if (!slug) {
+                return new Response(JSON.stringify({ error: "Slug form tidak valid." }), {
+                    status: 400,
+                    headers: createCorsHeaders(),
+                });
+            }
+
+            if (request.method === "GET" && !url.pathname.endsWith("/responses")) {
+                const publicForm = await getPublicFormSnapshot(env, slug);
+                if (!publicForm || publicForm.status !== "published") {
+                    return new Response(JSON.stringify({ error: "Form publik tidak ditemukan." }), {
+                        status: 404,
+                        headers: createCorsHeaders(),
+                    });
+                }
+
+                return new Response(JSON.stringify({ form: publicForm }), {
+                    status: 200,
+                    headers: createCorsHeaders(),
+                });
+            }
+
+            if (request.method === "POST" && url.pathname.endsWith("/responses")) {
+                const publicForm = await getPublicFormSnapshot(env, slug);
+                if (!publicForm || publicForm.status !== "published") {
+                    return new Response(JSON.stringify({ error: "Form publik tidak aktif." }), {
+                        status: 404,
+                        headers: createCorsHeaders(),
+                    });
+                }
+
+                const payload = await request.json().catch(() => null);
+                if (!payload?.answers || typeof payload.answers !== "object") {
+                    return new Response(JSON.stringify({ error: "Jawaban form tidak valid." }), {
+                        status: 400,
+                        headers: createCorsHeaders(),
+                    });
+                }
+
+                const responseBody = {
+                    fields: toFirestoreDocument({
+                        workspaceId: publicForm.workspaceId,
+                        formId: publicForm.formId,
+                        publicSlug: publicForm.publicSlug,
+                        submittedFrom: "public-form",
+                        submittedAt: new Date().toISOString(),
+                        answers: payload.answers,
+                        answersLabeled: payload.answersLabeled || {},
+                        metadata: {
+                            userAgent: request.headers.get("User-Agent") || "",
+                            locale: payload.locale || "",
+                        },
+                    }).fields,
+                };
+
+                const firestoreResponse = await firestoreRequest(
+                    env,
+                    `workspaces/${publicForm.workspaceId}/forms/${publicForm.formId}/responses`,
+                    {
+                        method: "POST",
+                        body: responseBody,
+                    }
+                );
+
+                const firestoreData = await firestoreResponse.json().catch(() => ({}));
+                if (!firestoreResponse.ok) {
+                    return new Response(JSON.stringify({ error: firestoreData.error?.message || "Gagal menyimpan respons publik." }), {
+                        status: firestoreResponse.status,
+                        headers: createCorsHeaders(),
+                    });
+                }
+
+                return new Response(JSON.stringify({
+                    ok: true,
+                    responseId: firestoreData?.name?.split("/").pop() || null,
+                }), {
+                    status: 200,
+                    headers: createCorsHeaders(),
+                });
+            }
+        }
+
+        if (isWorkspacePublishEndpoint) {
+            const authToken = extractBearerToken(request);
+            const session = await verifyFirebaseToken(authToken, env);
+            if (!session) {
+                return new Response(JSON.stringify({ error: "Sesi owner tidak valid." }), {
+                    status: 401,
+                    headers: createCorsHeaders(),
+                });
+            }
+
+            const payload = await request.json().catch(() => null);
+            const slug = slugify(payload?.slug || payload?.snapshot?.publicSlug || "");
+            if (!slug) {
+                return new Response(JSON.stringify({ error: "Slug publik wajib diisi." }), {
+                    status: 400,
+                    headers: createCorsHeaders(),
+                });
+            }
+
+            if (payload?.mode === "unpublish") {
+                const deleteResponse = await firestoreRequest(env, `public_forms/${slug}`, {
+                    method: "DELETE",
+                    authToken,
+                });
+
+                if (!deleteResponse.ok && deleteResponse.status !== 404) {
+                    const errorData = await deleteResponse.json().catch(() => ({}));
+                    return new Response(JSON.stringify({ error: errorData.error?.message || "Gagal menghapus snapshot form publik." }), {
+                        status: deleteResponse.status,
+                        headers: createCorsHeaders(),
+                    });
+                }
+
+                return new Response(JSON.stringify({ ok: true, mode: "unpublish", slug }), {
+                    status: 200,
+                    headers: createCorsHeaders(),
+                });
+            }
+
+            const snapshot = {
+                ...(payload?.snapshot || {}),
+                ownerId: session.uid,
+                publicSlug: slug,
+                status: "published",
+                updatedAt: new Date().toISOString(),
+                publishedAt: payload?.snapshot?.publishedAt || new Date().toISOString(),
+            };
+
+            const publishResponse = await firestoreRequest(env, `public_forms/${slug}`, {
+                method: "PATCH",
+                authToken,
+                body: toFirestoreDocument(snapshot),
+            });
+
+            const publishData = await publishResponse.json().catch(() => ({}));
+            if (!publishResponse.ok) {
+                return new Response(JSON.stringify({ error: publishData.error?.message || "Gagal mempublikasikan snapshot form." }), {
+                    status: publishResponse.status,
+                    headers: createCorsHeaders(),
+                });
+            }
+
+            return new Response(JSON.stringify({
+                ok: true,
+                mode: "publish",
+                slug,
+                documentId: publishData?.name?.split("/").pop() || slug,
+            }), {
+                status: 200,
+                headers: createCorsHeaders(),
+            });
+        }
+
+        if (isWorkspaceAiEndpoint) {
+            const authToken = extractBearerToken(request);
+            const session = await verifyFirebaseToken(authToken, env);
+            if (!session) {
+                return new Response(JSON.stringify({ error: "Sesi owner tidak valid." }), {
+                    status: 401,
+                    headers: createCorsHeaders(),
+                });
+            }
+
+            const payload = await request.json().catch(() => null);
+            if (!payload?.prompt) {
+                return new Response(JSON.stringify({ error: "Prompt AI workspace wajib diisi." }), {
+                    status: 400,
+                    headers: createCorsHeaders(),
+                });
+            }
+
+            try {
+                const result = await proxyGeminiGeneration({
+                    env,
+                    body: payload,
+                    groupHeader: payload.group || "group_3",
+                    model: payload.model || "gemini-2.5-flash",
+                    systemInstruction: payload.systemInstruction || "Anda adalah co-writer akademik Skripzy. Jawab dalam bahasa Indonesia akademik yang jelas, terstruktur, dan siap ditempel ke draft skripsi.",
+                    temperature: typeof payload.temperature === "number" ? payload.temperature : 0.65,
+                });
+
+                return new Response(JSON.stringify({
+                    ok: true,
+                    uid: session.uid,
+                    text: result.text,
+                    model: result.model,
+                }), {
+                    status: 200,
+                    headers: createCorsHeaders(),
+                });
+            } catch (error) {
+                return new Response(JSON.stringify({ error: error.message || "Gagal menghasilkan konten AI workspace." }), {
+                    status: 500,
+                    headers: createCorsHeaders(),
+                });
+            }
+        }
+
         // 2. Keamanan Sederhana: Memakai Custom Secret
         const EXPECTED_SECRET = env.WORKER_SECRET || "skripzy1234";
-        const url = new URL(request.url);
 
         // Cek secret dari Header (REST) ATAU Query Param (WebSocket dari browser)
         const incomingSecret = request.headers.get("x-skripzy-secret") || url.searchParams.get("secret");
@@ -363,3 +787,5 @@ export default {
         }
     },
 };
+
+export default worker;

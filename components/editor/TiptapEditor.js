@@ -114,7 +114,7 @@ export function TiptapEditor({ content, onChange, placeholder = "Mulai menulis a
     if (editor && content !== editor.getHTML()) {
       editor.commands.setContent(content || "", false);
     }
-  }, [content]);
+  }, [content, editor]);
 
   if (!editor) return null;
 

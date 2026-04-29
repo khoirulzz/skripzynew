@@ -7,6 +7,7 @@ import { db } from "@/lib/firebase";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { createWorkspacePayload } from "@/lib/workspaceDefaults";
 
 const TEMPLATES = [
   { id: "sinta2", name: "Jurnal Nasional (SINTA 2)", desc: "Format IMRaD standar, maks 6000 kata.", icon: "fileText" },
@@ -61,16 +62,17 @@ export default function ConvertPage() {
         const templateInfo = TEMPLATES.find(t => t.id === selectedTemplate);
         
         const docRef = await addDoc(collection(db, "workspaces"), {
-          userId: user.uid,
-          type: "jurnal",
-          title: `[${templateInfo.name}] ${sourceSkripsi.title || "Jurnal Baru"}`,
-          topic: `Hasil konversi AI dari Skripsi. Template: ${templateInfo.name}. Topik asli: ${sourceSkripsi.topic}`,
-          status: "Draft",
+          ...createWorkspacePayload({
+            userId: user.uid,
+            type: "jurnal",
+            title: `[${templateInfo.name}] ${sourceSkripsi.title || "Jurnal Baru"}`,
+            topic: `Hasil konversi AI dari Skripsi. Template: ${templateInfo.name}. Topik asli: ${sourceSkripsi.topic}`,
+          }),
           contentBab1: "<h2>Abstract</h2><p>Penelitian ini bertujuan untuk...</p><h2>1. Introduction</h2><p>Latar belakang diubah secara otomatis...</p>",
           contentBab2: "<h2>2. Methods</h2><p>Metodologi dirangkum menjadi satu paragraf teknis...</p>",
           contentBab3: "<h2>3. Results and Discussion</h2><p>Penggabungan hasil dan pembahasan sesuai format IMRaD...</p>",
           contentBab4: "<h2>4. Conclusion</h2><p>Kesimpulan padat dan jelas...</p>",
-          contentBab5: "", // Biasanya jurnal cuma 4 bab utama
+          contentBab5: "",
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
         });

@@ -1,179 +1,399 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { addDoc, collection, doc, onSnapshot, serverTimestamp, updateDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
+import { useAuth } from "@/components/providers/AuthProvider";
+import { searchPapersWithFallback, getErrorMessage } from "@/lib/referenceApis";
+import { indexDocument } from "@/lib/ragService";
+import { extractTextFromPDF } from "@/lib/pdfText";
+import { CHAPTERS } from "@/lib/workspaceDefaults";
 
-export function ReferenceManager({ workspaceId, onClose }) {
-  const [showFormBuilder, setShowFormBuilder] = useState(false);
-  const [showDataDashboard, setShowDataDashboard] = useState(false);
-  const [activeTab, setActiveTab] = useState("jurnal");
-  const [journals, setJournals] = useState([
-    // Mock data for initial UI
-    { id: "1", title: "Implementasi Artificial Intelligence dalam Pendidikan", author: "Budi, dkk.", year: 2023, selected: false },
-    { id: "2", title: "Pengaruh Teknologi LLM Terhadap Kinerja Mahasiswa", author: "Susi Susanti", year: 2024, selected: false },
-  ]);
+const WORKER_URL = process.env.NEXT_PUBLIC_WORKER_URL || "https://apikey.skripzy-app.workers.dev";
+const WORKER_SECRET = process.env.NEXT_PUBLIC_WORKER_SECRET || "skripzy1234";
 
-  const [citationStyle, setCitationStyle] = useState("APA");
+function buildBibtex(reference) {
+  const author = Array.isArray(reference.authors) ? reference.authors.join(" and ") : reference.authorString || "Unknown";
+  const keyBase = (reference.title || "referensi").split(" ").slice(0, 3).join("").toLowerCase();
+  return `@article{${keyBase || "referensi"}${reference.year || ""},\n  title={${reference.title || "Tanpa Judul"}},\n  author={${author}},\n  year={${reference.year || ""}},\n  url={${reference.displayUrl || reference.url || ""}}\n}`;
+}
 
-  const toggleSelectJournal = (id) => {
-    setJournals(journals.map(j => j.id === id ? { ...j, selected: !j.selected } : j));
+function downloadText(filename, content) {
+  const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
+export function ReferenceManager({ workspaceId, currentChapterKey = null, onClose = null, compact = false }) {
+  const { user } = useAuth();
+  const [references, setReferences] = useState([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [yearRange, setYearRange] = useState("5");
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [error, setError] = useState("");
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [uploadingId, setUploadingId] = useState("");
+  const [uploadLabel, setUploadLabel] = useState("");
+
+  useEffect(() => {
+    if (!workspaceId) return undefined;
+
+    const refsCollection = collection(db, "workspaces", workspaceId, "references");
+    const unsubscribe = onSnapshot(refsCollection, (snapshot) => {
+      const nextItems = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+      nextItems.sort((left, right) => {
+        const leftTime = left.updatedAt?.seconds || 0;
+        const rightTime = right.updatedAt?.seconds || 0;
+        return rightTime - leftTime;
+      });
+      setReferences(nextItems);
+    });
+
+    return unsubscribe;
+  }, [workspaceId]);
+
+  const chapterReferences = useMemo(() => {
+    if (!currentChapterKey) return references;
+    return references.filter((reference) => (reference.chapterKeys || []).includes(currentChapterKey));
+  }, [currentChapterKey, references]);
+
+  const handleSearch = async (event) => {
+    event.preventDefault();
+    if (!searchTerm.trim()) return;
+    setSearching(true);
+    setError("");
+
+    try {
+      const result = await searchPapersWithFallback(searchTerm, { limit: 8, yearRange });
+      setSearchResults(result.papers || []);
+    } catch (searchError) {
+      console.error(searchError);
+      setError(getErrorMessage(searchError));
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const handleImportReference = async (paper) => {
+    await addDoc(collection(db, "workspaces", workspaceId, "references"), {
+      title: paper.title,
+      authors: paper.authors || [],
+      authorString: paper.authorString,
+      year: paper.year || "",
+      abstract: paper.abstract || "",
+      url: paper.url || "",
+      displayUrl: paper.displayUrl || paper.url || "",
+      venue: paper.venue || "",
+      citationApa: `${paper.authorString} (${paper.year}). ${paper.title}. ${paper.venue || "Sumber tidak diketahui"}.`,
+      chapterKeys: currentChapterKey ? [currentChapterKey] : [],
+      notes: "",
+      hasFullText: !!paper.hasFullText,
+      pdfUrl: "",
+      indexedAt: null,
+      chunkCount: 0,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  };
+
+  const toggleSelected = (referenceId) => {
+    setSelectedIds((current) =>
+      current.includes(referenceId) ? current.filter((item) => item !== referenceId) : [...current, referenceId]
+    );
+  };
+
+  const toggleChapterLink = async (reference, chapterKey) => {
+    const nextChapterKeys = (reference.chapterKeys || []).includes(chapterKey)
+      ? reference.chapterKeys.filter((item) => item !== chapterKey)
+      : [...(reference.chapterKeys || []), chapterKey];
+
+    await updateDoc(doc(db, "workspaces", workspaceId, "references", reference.id), {
+      chapterKeys: nextChapterKeys,
+      updatedAt: serverTimestamp(),
+    });
+  };
+
+  const updateReferenceNotes = async (referenceId, notes) => {
+    await updateDoc(doc(db, "workspaces", workspaceId, "references", referenceId), {
+      notes,
+      updatedAt: serverTimestamp(),
+    });
+  };
+
+  const handleUploadPdf = async (reference, file) => {
+    if (!file || !user) return;
+    setUploadingId(reference.id);
+    setUploadLabel("Mengekstrak PDF...");
+
+    try {
+      const text = await extractTextFromPDF(file);
+
+      setUploadLabel("Meminta signature Cloudinary...");
+      const signatureResponse = await fetch(`${WORKER_URL}/api/cloudinary-sign`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-skripzy-secret": WORKER_SECRET,
+        },
+        body: JSON.stringify({ folder: "Referensi" }),
+      });
+
+      if (!signatureResponse.ok) {
+        throw new Error("Gagal mendapatkan signature Cloudinary.");
+      }
+
+      const { signature, timestamp, apiKey, cloudName } = await signatureResponse.json();
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("signature", signature);
+      formData.append("timestamp", timestamp);
+      formData.append("api_key", apiKey);
+      formData.append("folder", "Referensi");
+
+      setUploadLabel("Mengunggah PDF...");
+      const uploadResponse = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error("Upload PDF ke Cloudinary gagal.");
+      }
+
+      const uploadData = await uploadResponse.json();
+
+      setUploadLabel("Membangun index RAG...");
+      const chunkCount = await indexDocument(
+        user.uid,
+        {
+          workspaceId,
+          referenceId: reference.id,
+          documentId: reference.id,
+          title: reference.title,
+          text,
+          cloudinaryUrl: uploadData.secure_url,
+          author: reference.authorString || "",
+          year: reference.year || "",
+        }
+      );
+
+      await updateDoc(doc(db, "workspaces", workspaceId, "references", reference.id), {
+        pdfUrl: uploadData.secure_url,
+        fileName: file.name,
+        indexedAt: serverTimestamp(),
+        chunkCount,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (uploadError) {
+      console.error("Gagal mengunggah referensi:", uploadError);
+      setError(uploadError.message || "Gagal mengunggah PDF referensi.");
+    } finally {
+      setUploadingId("");
+      setUploadLabel("");
+    }
   };
 
   const handleExportBibtex = () => {
-    const selected = journals.filter(j => j.selected);
-    if (selected.length === 0) {
-      alert("Pilih minimal satu jurnal untuk diekspor!");
-      return;
-    }
-    alert(`File .bib berhasil dibuat untuk ${selected.length} jurnal dan siap diimpor ke Mendeley! (Mock)`);
+    const selectedReferences = references.filter((reference) => selectedIds.includes(reference.id));
+    if (!selectedReferences.length) return;
+    downloadText("skripzy-referensi.bib", selectedReferences.map((reference) => buildBibtex(reference)).join("\n\n"));
   };
 
-  const handleFileUpload = (e) => {
-    if (e.target.files && e.target.files.length > 0) {
-      alert(`File "${e.target.files[0].name}" siap diunggah & diekstrak full-textnya untuk Context Caching Gemini!`);
-    }
+  const handleExportApa = () => {
+    const selectedReferences = references.filter((reference) => selectedIds.includes(reference.id));
+    if (!selectedReferences.length) return;
+    downloadText(
+      "skripzy-referensi-apa.txt",
+      selectedReferences
+        .map((reference) => reference.citationApa || `${reference.authorString} (${reference.year}). ${reference.title}.`)
+        .join("\n")
+    );
   };
+
+  const displayedReferences = compact ? chapterReferences.slice(0, 5) : references;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", animation: "slideInRight 0.3s ease" }}>
-      {/* Drawer Header */}
-      <div style={{ 
-        padding: "0.8rem 1rem", 
-        borderBottom: "1px solid var(--border)",
-        display: "flex", justifyContent: "space-between", alignItems: "center",
-        backgroundColor: "var(--surface)", flexShrink: 0
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          <PremiumIcon name="bookMarked" size={18} className="text-primary" />
-          <h3 style={{ fontSize: "0.95rem", margin: 0, fontWeight: 600 }}>Reference Hub</h3>
+    <div style={{ display: "flex", flexDirection: "column", gap: "1rem", height: "100%" }}>
+      <div className="glass-panel" style={{ padding: "1rem" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", marginBottom: "0.85rem" }}>
+          <div>
+            <h3 style={{ fontSize: "1rem", margin: 0 }}>Reference Hub</h3>
+            <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.82rem" }}>
+              Cari jurnal, upload PDF, dan tandai referensi yang dipakai tiap bab.
+            </p>
+          </div>
+          {onClose ? (
+            <button className="btn btn-ghost" onClick={onClose}>
+              <PremiumIcon name="x" size={16} />
+            </button>
+          ) : null}
         </div>
-        <button onClick={onClose} className="btn btn-ghost" style={{ padding: "0.25rem", color: "var(--text-muted)" }}>
-          <PremiumIcon name="x" size={18} />
-        </button>
-      </div>
 
-      {/* Tabs */}
-      <div style={{ display: "flex", borderBottom: "1px solid var(--border)", backgroundColor: "var(--surface)", flexShrink: 0 }}>
-        {["jurnal", "catatan", "data"].map((tabLabel) => (
-          <button
-            key={tabLabel}
-            onClick={() => setActiveTab(tabLabel)}
-            style={{
-              flex: 1, padding: "0.6rem 0", fontSize: "0.8rem", fontWeight: 600,
-              textTransform: "capitalize", border: "none", cursor: "pointer",
-              backgroundColor: "transparent",
-              color: activeTab === tabLabel ? "var(--primary)" : "var(--text-muted)",
-              borderBottom: activeTab === tabLabel ? "2px solid var(--primary)" : "2px solid transparent",
-              transition: "all 0.2s"
-            }}
-          >
-            {tabLabel}
+        <form onSubmit={handleSearch} style={{ display: "grid", gridTemplateColumns: compact ? "1fr" : "minmax(0,1fr) 160px auto", gap: "0.65rem" }}>
+          <input
+            type="text"
+            className="form-input"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder="Cari referensi ilmiah..."
+          />
+          {!compact ? (
+            <select className="form-input" value={yearRange} onChange={(event) => setYearRange(event.target.value)}>
+              <option value="3">3 tahun</option>
+              <option value="5">5 tahun</option>
+              <option value="10">10 tahun</option>
+              <option value="all">Semua</option>
+            </select>
+          ) : null}
+          <button className="btn btn-primary" type="submit" disabled={searching}>
+            <PremiumIcon name="search" size={14} />
+            {searching ? "Mencari..." : "Cari"}
           </button>
-        ))}
-      </div>
+        </form>
 
-      {/* Content Area */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "1rem" }}>
-        {activeTab === "jurnal" && (
-          <div className="animate-fade-in" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            
-            {/* Upload Area */}
-            <label style={{
-              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-              padding: "1.5rem 1rem", border: "2px dashed var(--border)", borderRadius: "8px",
-              cursor: "pointer", backgroundColor: "var(--surface-hover)", gap: "0.5rem", textAlign: "center"
-            }}>
-              <PremiumIcon name="uploadCloud" size={24} className="text-muted" />
-              <span style={{ fontSize: "0.80rem", color: "var(--text-muted)" }}>Upload Jurnal (PDF)</span>
-              <span style={{ fontSize: "0.65rem", color: "var(--text-muted)", opacity: 0.7 }}>File akan diekstrak untuk Gemini Context</span>
-              <input type="file" accept=".pdf" style={{ display: "none" }} onChange={handleFileUpload} />
-            </label>
+        {error ? (
+          <div style={{ marginTop: "0.75rem", padding: "0.75rem", borderRadius: "10px", backgroundColor: "rgba(239,68,68,0.08)", color: "var(--danger)", fontSize: "0.82rem" }}>
+            {error}
+          </div>
+        ) : null}
 
-            {/* Citations Control */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.5rem" }}>
-               <select 
-                 value={citationStyle} 
-                 onChange={(e) => setCitationStyle(e.target.value)}
-                 style={{ 
-                   fontSize: "0.75rem", padding: "0.2rem 0.5rem", borderRadius: "4px", 
-                   backgroundColor: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-main)", outline: "none"
-                 }}
-               >
-                 <option value="APA">Style: APA (American Psych.)</option>
-                 <option value="IEEE">Style: IEEE</option>
-               </select>
-
-               <button 
-                 onClick={handleExportBibtex}
-                 className="btn btn-outline" 
-                 style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem", gap: "0.25rem" }}
-                 title="Ekspor ke .bib untuk Mendeley"
-               >
-                 <PremiumIcon name="download" size={12} /> BibTeX
-               </button>
-            </div>
-
-            {/* List Jurnal */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-              {journals.map(j => (
-                <div key={j.id} className="glass-panel" style={{ 
-                  padding: "0.75rem", borderRadius: "8px", 
-                  border: j.selected ? "1px solid var(--primary)" : "1px solid var(--border)",
-                  display: "flex", gap: "0.5rem", alignItems: "flex-start", cursor: "pointer", transition: "all 0.2s"
-                }} onClick={() => toggleSelectJournal(j.id)}>
-                  
-                  <input type="checkbox" checked={j.selected} readOnly style={{ marginTop: "4px", cursor: "pointer" }} />
-                  
-                  <div style={{ flex: 1 }}>
-                    <h4 style={{ fontSize: "0.8rem", margin: "0 0 0.2rem 0", lineHeight: "1.3" }}>{j.title}</h4>
-                    <p style={{ fontSize: "0.7rem", color: "var(--text-muted)", margin: 0 }}>
-                      {j.author} ({j.year})
-                    </p>
+        {searchResults.length ? (
+          <div style={{ marginTop: "1rem", display: "flex", flexDirection: "column", gap: "0.65rem" }}>
+            {searchResults.map((paper) => (
+              <div key={paper.id} style={{ padding: "0.85rem", borderRadius: "10px", border: "1px solid var(--border)", backgroundColor: "var(--background)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", alignItems: "flex-start" }}>
+                  <div>
+                    <div style={{ fontSize: "0.9rem", fontWeight: 600, color: "var(--text-main)" }}>{paper.title}</div>
+                    <div style={{ fontSize: "0.76rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
+                      {paper.authorString} • {paper.year || "Tanpa tahun"} {paper.venue ? `• ${paper.venue}` : ""}
+                    </div>
                   </div>
-                  
-                  <button className="btn btn-ghost" style={{ padding: "0.2rem" }} title="Lihat Abstract">
-                    <PremiumIcon name="chevronRight" size={14} className="text-muted" />
+                  <button className="btn btn-outline" onClick={() => void handleImportReference(paper)}>
+                    <PremiumIcon name="plus" size={14} />
+                    Import
                   </button>
                 </div>
-              ))}
-            </div>
-
+              </div>
+            ))}
           </div>
-        )}
+        ) : null}
+      </div>
 
-        {activeTab === "catatan" && (
-          <div className="animate-fade-in" style={{ textAlign: "center", paddingTop: "2rem" }}>
-            <PremiumIcon name="edit3" size={32} className="text-muted" style={{ margin: "0 auto 1rem" }}/>
-            <p style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>Tulis catatan ide atau insight penting di sini.</p>
-            <button className="btn btn-primary mt-2" style={{ fontSize: "0.8rem", margin: "0 auto" }}>+ Tambah Catatan</button>
-          </div>
-        )}
-
-        {activeTab === "data" && (
-          <div className="animate-fade-in" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            
-            <div className="glass-panel p-5 text-center" style={{ display: "flex", flexDirection: "column", gap: "0.5rem", alignItems: "center" }}>
-               <PremiumIcon name="database" size={36} className="text-muted opacity-50" />
-               <h4 style={{ margin: 0 }}>Data & Kuesioner Telah Dipindah!</h4>
-               <p className="text-muted text-xs m-0 mb-2">Semua fitur desain Form, Olah Wawancara, dan SPSS dipusatkan pada opsi <strong>"Manajemen Data"</strong> (klik di Menu Bar Atas, sebelah kiri tombol Referensi).</p>
-               <button className="btn btn-outline" style={{ fontSize: "0.8rem", padding: "0.4rem 0.8rem" }} onClick={onClose}>
-                 Tutup Referensi & Buka DataHub
-               </button>
+      {!compact ? (
+        <div className="glass-panel" style={{ padding: "1rem" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", marginBottom: "0.85rem" }}>
+            <div>
+              <h3 style={{ fontSize: "1rem", margin: 0 }}>Referensi Workspace</h3>
+              <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.8rem" }}>
+                Pilih referensi untuk ekspor BibTeX atau APA.
+              </p>
             </div>
-
-            <div className="glass-panel p-5">
-               <h4 style={{ margin: "0 0 0.5rem 0", fontSize: "0.85rem" }}>Manual Input (Ringkasan Hasil)</h4>
-               <p className="text-muted text-xs mb-3">Jika Anda telah melakukan analisis di DataHub atau dari software luar (SPSS/PLS), masukkan nilai jadinya di sini agar bisa ditarik AI saat menulis Bab 4.</p>
-               <textarea 
-                 className="form-input" 
-                 rows={6} 
-                 placeholder="Contoh:\n- Validitas: Pearson r (0.81) Valid.\n- Reliabilitas: Alpha 0.89.\n- Hasil Wawancara: Responden mayoritas puas dengan kecepatan layanan." 
-                 style={{ fontSize: "0.8rem" }}
-               />
-               <button className="btn btn-primary" style={{ marginTop: "0.5rem", width: "100%", fontSize: "0.8rem" }}>Simpan Data Internal</button>
+            <div style={{ display: "flex", gap: "0.5rem" }}>
+              <button className="btn btn-outline" onClick={handleExportBibtex} disabled={!selectedIds.length}>
+                <PremiumIcon name="download" size={14} />
+                BibTeX
+              </button>
+              <button className="btn btn-outline" onClick={handleExportApa} disabled={!selectedIds.length}>
+                <PremiumIcon name="downloadCloud" size={14} />
+                APA
+              </button>
             </div>
-
           </div>
+        </div>
+      ) : null}
+
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem", overflowY: "auto", paddingRight: "0.15rem" }}>
+        {displayedReferences.length === 0 ? (
+          <div className="glass-panel" style={{ padding: "1.2rem", textAlign: "center" }}>
+            <PremiumIcon name="bookMarked" size={30} className="text-muted" style={{ margin: "0 auto 0.65rem" }} />
+            <h4 style={{ margin: 0 }}>Belum Ada Referensi</h4>
+            <p style={{ margin: "0.4rem 0 0 0", fontSize: "0.82rem" }}>
+              Import jurnal dari pencarian di atas atau unggah PDF setelah referensi ditambahkan.
+            </p>
+          </div>
+        ) : (
+          displayedReferences.map((reference) => (
+            <div key={reference.id} className="glass-panel" style={{ padding: "1rem" }}>
+              <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-start" }}>
+                {!compact ? (
+                  <input type="checkbox" checked={selectedIds.includes(reference.id)} onChange={() => toggleSelected(reference.id)} style={{ marginTop: "0.25rem" }} />
+                ) : null}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", alignItems: "flex-start" }}>
+                    <div>
+                      <div style={{ fontSize: "0.95rem", fontWeight: 600, color: "var(--text-main)" }}>{reference.title}</div>
+                      <div style={{ fontSize: "0.76rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
+                        {reference.authorString || (reference.authors || []).join(", ")} • {reference.year || "Tanpa tahun"}
+                      </div>
+                    </div>
+                    {reference.displayUrl ? (
+                      <a href={reference.displayUrl} target="_blank" rel="noreferrer" className="btn btn-ghost" style={{ padding: "0.35rem" }}>
+                        <PremiumIcon name="globe" size={15} />
+                      </a>
+                    ) : null}
+                  </div>
+
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "0.45rem", marginTop: "0.8rem" }}>
+                    {CHAPTERS.map((chapter) => {
+                      const selected = (reference.chapterKeys || []).includes(chapter.key);
+                      return (
+                        <button
+                          key={`${reference.id}_${chapter.key}`}
+                          className={`btn ${selected ? "btn-primary" : "btn-outline"}`}
+                          style={{ padding: "0.28rem 0.55rem", fontSize: "0.72rem" }}
+                          onClick={() => void toggleChapterLink(reference, chapter.key)}
+                        >
+                          {chapter.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {!compact ? (
+                    <>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.65rem", marginTop: "0.85rem", flexWrap: "wrap" }}>
+                        <label className="btn btn-outline" style={{ cursor: "pointer" }}>
+                          <PremiumIcon name="uploadCloud" size={14} />
+                          {uploadingId === reference.id ? uploadLabel || "Memproses..." : reference.pdfUrl ? "Ganti PDF" : "Upload PDF"}
+                          <input
+                            type="file"
+                            accept=".pdf"
+                            style={{ display: "none" }}
+                            onChange={(event) => void handleUploadPdf(reference, event.target.files?.[0])}
+                          />
+                        </label>
+                        {reference.pdfUrl ? (
+                          <a href={reference.pdfUrl} target="_blank" rel="noreferrer" className="btn btn-ghost">
+                            <PremiumIcon name="fileText" size={14} />
+                            PDF
+                          </a>
+                        ) : null}
+                        {reference.chunkCount ? (
+                          <span style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}>
+                            {reference.chunkCount} chunk terindeks
+                          </span>
+                        ) : null}
+                      </div>
+
+                      <textarea
+                        className="form-textarea"
+                        rows={3}
+                        style={{ marginTop: "0.85rem" }}
+                        defaultValue={reference.notes || ""}
+                        placeholder="Catatan teori, kutipan penting, atau alasan memilih referensi ini..."
+                        onBlur={(event) => void updateReferenceNotes(reference.id, event.target.value)}
+                      />
+                    </>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          ))
         )}
       </div>
     </div>

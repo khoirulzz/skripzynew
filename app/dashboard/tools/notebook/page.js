@@ -159,7 +159,12 @@ export default function NotebookPage() {
       console.log("Starting document indexing...");
       // 3. Index ke Firestore (Vektorisasi)
       const docId = `doc_${Date.now()}`;
-      const indexedChunks = await indexDocument(user.uid, docId, file.name, text, uploadData.secure_url);
+      const indexedChunks = await indexDocument(user.uid, {
+        documentId: docId,
+        title: file.name,
+        text,
+        cloudinaryUrl: uploadData.secure_url,
+      });
       console.log(`Document indexed with ${indexedChunks} chunks`);
 
       // 4. Potong kredit

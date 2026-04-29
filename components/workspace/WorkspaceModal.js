@@ -5,6 +5,7 @@ import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useRouter } from "next/navigation";
+import { createWorkspacePayload } from "@/lib/workspaceDefaults";
 
 export function WorkspaceModal({ onClose, type = "skripsi" }) {
   const { user } = useAuth();
@@ -20,16 +21,12 @@ export function WorkspaceModal({ onClose, type = "skripsi" }) {
 
     try {
       const docRef = await addDoc(collection(db, "workspaces"), {
-        userId: user.uid,
-        type: type, // "skripsi" or "jurnal"
-        title: formData.title,
-        topic: formData.topic,
-        status: "Draft",
-        contentBab1: "", 
-        contentBab2: "",
-        contentBab3: "",
-        contentBab4: "",
-        contentBab5: "",
+        ...createWorkspacePayload({
+          userId: user.uid,
+          type,
+          title: formData.title,
+          topic: formData.topic,
+        }),
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });

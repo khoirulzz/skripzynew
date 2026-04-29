@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import ReactMarkdown from "react-markdown";
 import { callGemini, MODELS } from "@/lib/callWorker";
@@ -20,36 +20,70 @@ const DOSEN_PROFILES = [
   { id: "suportif", label: "Dosen Suportif", desc: "Menggiring opini, membimbing memberikan saran perbaikan.", temp: 0.8 },
 ];
 
+function readPersistedSidangState() {
+  const defaults = {
+    isSessionActive: false,
+    skripsiTitle: "",
+    dosenProfile: "kritis",
+    sidangMode: "skripsi",
+    sessionInsight: null,
+    docName: "",
+    questionCount: 0,
+    sanggahanCount: 0,
+    maxQuestions: 10,
+    maxSanggahan: 0,
+    isFinished: false,
+    messages: [],
+  };
+
+  if (typeof window === "undefined") return defaults;
+
+  const saved = sessionStorage.getItem("simulasi_sidang_state");
+  if (!saved) return defaults;
+
+  try {
+    const parsed = JSON.parse(saved);
+    if (!parsed?.isSessionActive) return defaults;
+    return {
+      ...defaults,
+      ...parsed,
+    };
+  } catch {
+    return defaults;
+  }
+}
+
 export default function SimulasiSidangPage() {
   const { user, userData } = useAuth();
   const { toolMap } = useBillingCatalog();
   const credits = userData?.credits ?? 0;
   const plan = userData?.plan || "free";
   const sessionCost = toolMap["simulasi-sidang"]?.creditCost ?? COST_SESSION;
+  const initialSession = useMemo(() => readPersistedSidangState(), []);
 
   // Setup State
-  const [isSessionActive, setIsSessionActive] = useState(false);
-  const [skripsiTitle, setSkripsiTitle] = useState("");
-  const [dosenProfile, setDosenProfile] = useState("kritis");
-  const [sidangMode, setSidangMode] = useState("skripsi");
+  const [isSessionActive, setIsSessionActive] = useState(initialSession.isSessionActive);
+  const [skripsiTitle, setSkripsiTitle] = useState(initialSession.skripsiTitle);
+  const [dosenProfile, setDosenProfile] = useState(initialSession.dosenProfile);
+  const [sidangMode, setSidangMode] = useState(initialSession.sidangMode);
 
   // Document State
   const [extractionStatus, setExtractionStatus] = useState("");
   const [setupLoading, setSetupLoading] = useState(false);
   const [setupError, setSetupError] = useState("");
-  const [sessionInsight, setSessionInsight] = useState(null);
-  const [docName, setDocName] = useState("");
+  const [sessionInsight, setSessionInsight] = useState(initialSession.sessionInsight);
+  const [docName, setDocName] = useState(initialSession.docName);
 
   // Session Limits & Tracking
-  const [questionCount, setQuestionCount] = useState(0);
-  const [sanggahanCount, setSanggahanCount] = useState(0);
-  const [maxQuestions, setMaxQuestions] = useState(10);
-  const [maxSanggahan, setMaxSanggahan] = useState(0);
-  const [isFinished, setIsFinished] = useState(false);
+  const [questionCount, setQuestionCount] = useState(initialSession.questionCount);
+  const [sanggahanCount, setSanggahanCount] = useState(initialSession.sanggahanCount);
+  const [maxQuestions, setMaxQuestions] = useState(initialSession.maxQuestions);
+  const [maxSanggahan, setMaxSanggahan] = useState(initialSession.maxSanggahan);
+  const [isFinished, setIsFinished] = useState(initialSession.isFinished);
   const [showConfirmEnd, setShowConfirmEnd] = useState(false);
 
   // Chat State
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState(initialSession.messages);
   const [currentInput, setCurrentInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
 
@@ -57,32 +91,6 @@ export default function SimulasiSidangPage() {
   const [isRecording, setIsRecording] = useState(false);
   const recognitionRef = useRef(null);
   const chatEndRef = useRef(null);
-
-  // 1. PERSIST STATE DENGAN SESSION STORAGE
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const saved = sessionStorage.getItem("simulasi_sidang_state");
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          if (parsed.isSessionActive) {
-            setIsSessionActive(parsed.isSessionActive);
-            setSkripsiTitle(parsed.skripsiTitle || "");
-            setDosenProfile(parsed.dosenProfile || "kritis");
-            setSidangMode(parsed.sidangMode || "skripsi");
-            setSessionInsight(parsed.sessionInsight || null);
-            setDocName(parsed.docName || "");
-            setQuestionCount(parsed.questionCount || 0);
-            setSanggahanCount(parsed.sanggahanCount || 0);
-            setMaxQuestions(parsed.maxQuestions || 10);
-            setMaxSanggahan(parsed.maxSanggahan || 0);
-            setIsFinished(parsed.isFinished || false);
-            setMessages(parsed.messages || []);
-          }
-        } catch (e) { }
-      }
-    }
-  }, []);
 
   useEffect(() => {
     if (isSessionActive) {

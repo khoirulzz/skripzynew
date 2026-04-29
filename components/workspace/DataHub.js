@@ -39,13 +39,10 @@ export function DataHub({ workspaceId }) {
         return rightTime - leftTime;
       });
       setForms(nextForms);
-      if (!editingFormId && nextForms[0] && !activeFormId) {
-        setActiveFormId(nextForms[0].id);
-      }
     });
 
     return unsubscribe;
-  }, [activeFormId, editingFormId, workspaceId]);
+  }, [workspaceId]);
 
   const activeForm = useMemo(
     () => forms.find((form) => form.id === editingFormId) || null,

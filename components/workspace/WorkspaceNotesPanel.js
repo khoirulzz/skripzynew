@@ -5,9 +5,10 @@ import { doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
 
-export function WorkspaceNotesPanel({ workspaceId }) {
+export function WorkspaceNotesPanel({ workspaceId, collapsible = false, defaultCollapsed = false, rows = 10 }) {
   const [content, setContent] = useState("");
   const [status, setStatus] = useState("idle");
+  const [isExpanded, setIsExpanded] = useState(!defaultCollapsed);
 
   useEffect(() => {
     if (!workspaceId) return undefined;
@@ -52,18 +53,27 @@ export function WorkspaceNotesPanel({ workspaceId }) {
           <PremiumIcon name="edit3" size={16} className="text-primary" />
           <h4 style={{ fontSize: "0.95rem", margin: 0 }}>Catatan Workspace</h4>
         </div>
-        <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>
-          {status === "saving" ? "Menyimpan..." : status === "saved" ? "Tersimpan" : status === "error" ? "Gagal simpan" : "Auto-save aktif"}
-        </span>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
+          <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>
+            {status === "saving" ? "Menyimpan..." : status === "saved" ? "Tersimpan" : status === "error" ? "Gagal simpan" : "Auto-save aktif"}
+          </span>
+          {collapsible ? (
+            <button className="btn btn-ghost" style={{ padding: "0.3rem" }} onClick={() => setIsExpanded((current) => !current)}>
+              <PremiumIcon name={isExpanded ? "chevronDown" : "chevronRight"} size={15} />
+            </button>
+          ) : null}
+        </div>
       </div>
 
-      <textarea
-        className="form-textarea"
-        rows={10}
-        placeholder="Tulis poin penting, rencana revisi, atau insight pembimbing di sini..."
-        value={content}
-        onChange={(event) => setContent(event.target.value)}
-      />
+      {!collapsible || isExpanded ? (
+        <textarea
+          className="form-textarea workspace-scroll"
+          rows={rows}
+          placeholder="Tulis poin penting, rencana revisi, atau insight pembimbing di sini..."
+          value={content}
+          onChange={(event) => setContent(event.target.value)}
+        />
+      ) : null}
     </div>
   );
 }

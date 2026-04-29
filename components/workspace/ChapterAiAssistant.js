@@ -60,6 +60,8 @@ export function ChapterAiAssistant({
   latestAnalysis = null,
   transcripts = [],
   notes = "",
+  floating = false,
+  offsetRight = 16,
 }) {
   const { user, userData } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
@@ -183,19 +185,50 @@ ${instruction || "Tidak ada arahan tambahan."}
     }
   };
 
+  const shellStyle = floating
+    ? {
+        position: "fixed",
+        right: `${offsetRight}px`,
+        bottom: "1rem",
+        zIndex: 36,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "flex-end",
+        gap: "0.75rem",
+        maxWidth: "calc(100vw - 1.25rem)",
+      }
+    : { position: "relative" };
+
+  const panelStyle = {
+    width: floating ? "min(360px, calc(100vw - 1.25rem))" : "320px",
+    maxWidth: "calc(100vw - 1.25rem)",
+    maxHeight: "min(78vh, 560px)",
+    overflowY: "auto",
+    padding: "1rem",
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.85rem",
+    boxShadow: "var(--shadow-lg)",
+  };
+
   return (
-    <div style={{ position: "relative" }}>
+    <div style={shellStyle}>
       {!isOpen ? (
         <button
           className="btn btn-primary"
-          style={{ borderRadius: "999px", padding: "0.75rem", boxShadow: "0 12px 24px rgba(79,70,229,0.28)" }}
+          style={{
+            borderRadius: "999px",
+            padding: floating ? "0.85rem 1rem" : "0.75rem",
+            boxShadow: "0 12px 24px rgba(79,70,229,0.28)",
+          }}
           onClick={() => setIsOpen(true)}
           title="Workspace AI Writer"
         >
           <PremiumIcon name="sparkles" size={18} />
+          {floating ? "AI Bab" : null}
         </button>
       ) : (
-        <div className="glass-panel" style={{ width: "320px", padding: "1rem", display: "flex", flexDirection: "column", gap: "0.85rem", boxShadow: "var(--shadow-lg)" }}>
+        <div className="glass-panel workspace-scroll" style={panelStyle}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem" }}>
             <div>
               <div style={{ fontSize: "0.78rem", color: "var(--primary)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>
@@ -203,7 +236,7 @@ ${instruction || "Tidak ada arahan tambahan."}
               </div>
               <h4 style={{ fontSize: "0.98rem", margin: "0.2rem 0 0 0" }}>{config.title}</h4>
             </div>
-            <button className="btn btn-ghost" onClick={() => setIsOpen(false)} style={{ padding: "0.3rem" }}>
+            <button className="btn btn-ghost" onClick={() => setIsOpen(false)} style={{ padding: "0.3rem", flexShrink: 0 }}>
               <PremiumIcon name="x" size={14} />
             </button>
           </div>

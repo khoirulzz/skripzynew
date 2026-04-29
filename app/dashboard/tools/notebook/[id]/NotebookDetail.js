@@ -11,12 +11,16 @@ import { deductCredits } from "@/lib/credits";
 import { indexDocument, searchSimilarChunks } from "@/lib/ragService";
 import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { searchPapersWithFallback, getErrorMessage } from "@/lib/referenceApis";
+import AnimatedLoadingScreen from "@/components/workspace/AnimatedLoadingScreen";
 
 // PDF.js import is now dynamically loaded in extractTextFromPDF to prevent SSR errors
 
 
 const COST_INDEXING = 5;
 const COST_QUERY = 1;
+const MAX_FILE_SIZE_MB = 3;
+const MAX_JOURNALS_PER_NOTEBOOK = 10;
 
 export default function NotebookDetailPage({ params }) {
   const { user, userData } = useAuth();
@@ -39,6 +43,15 @@ export default function NotebookDetailPage({ params }) {
   const [selectedDocForViewer, setSelectedDocForViewer] = useState(null);
   const [viewerPage, setViewerPage] = useState(1);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // Search state
+  const [showSearchModal, setShowSearchModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchYear, setSearchYear] = useState("5");
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchApiAttempt, setSearchApiAttempt] = useState("core");
+  const [searchError, setSearchError] = useState("");
 
   // Local query caching
   const [queryCache, setQueryCache] = useState({});
@@ -122,6 +135,24 @@ export default function NotebookDetailPage({ params }) {
     const file = e.target.files[0];
     if (!file || !user) {
       console.error("No file selected or user not authenticated");
+      return;
+    }
+
+    // Validasi: hanya PDF
+    if (!file.name.toLowerCase().endsWith(".pdf")) {
+      alert("Hanya file PDF yang diperbolehkan.");
+      return;
+    }
+
+    // Validasi: ukuran maks 3MB
+    if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
+      alert(`Ukuran file terlalu besar. Maksimal ${MAX_FILE_SIZE_MB}MB.`);
+      return;
+    }
+
+    // Validasi: maks 10 jurnal per notebook
+    if (documents.length >= MAX_JOURNALS_PER_NOTEBOOK) {
+      alert(`Maksimal ${MAX_JOURNALS_PER_NOTEBOOK} jurnal per notebook.`);
       return;
     }
 
@@ -287,6 +318,80 @@ ATURAN:
     }
   };
 
+  const handleSearch = async (e) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) return;
+    setIsSearching(true);
+    setSearchError("");
+    setSearchResults([]);
+    setSearchApiAttempt("core");
+    try {
+      const result = await searchPapersWithFallback(searchQuery, { limit: 10, yearRange: searchYear });
+      setSearchResults(result.papers);
+      setSearchApiAttempt(result.source);
+      if (result.papers.length === 0) {
+        setSearchError("Tidak ditemukan hasil. Coba ubah kata kunci.");
+      }
+    } catch (err) {
+      setSearchError(getErrorMessage(err));
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleAddFromSearch = async (paper) => {
+    if (documents.length >= MAX_JOURNALS_PER_NOTEBOOK) {
+      alert(`Maksimal ${MAX_JOURNALS_PER_NOTEBOOK} jurnal per notebook.`);
+      return;
+    }
+    if (credits < COST_INDEXING) {
+      alert(`Kredit tidak cukup. Butuh ${COST_INDEXING} kredit.`);
+      return;
+    }
+
+    setIsUploading(true);
+    setShowSearchModal(false); // Close modal
+    setUploadProgress(`Mengambil ${paper.title}...`);
+
+    try {
+      // 1. Ambil PDF (coba langsung, fallback ke allorigins proxy jika CORS diblokir)
+      let res;
+      try {
+        res = await fetch(paper.pdfUrl);
+        if (!res.ok) throw new Error("Direct fetch failed");
+      } catch (directErr) {
+        // Fallback to allorigins public proxy
+        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(paper.pdfUrl)}`;
+        res = await fetch(proxyUrl);
+      }
+      
+      if (!res.ok) throw new Error(`Gagal mengambil PDF: HTTP ${res.status}`);
+      const blob = await res.blob();
+      const file = new File([blob], `${paper.title.substring(0, 30)}.pdf`, { type: "application/pdf" });
+
+      setUploadProgress("Mengekstrak teks...");
+      // 2. Ekstrak teks
+      const text = await extractTextFromPDF(file);
+      
+      setUploadProgress("Membuat index vektor (AI)...");
+      // 3. Index ke Firestore menggunakan URL external
+      const docId = `doc_${Date.now()}`;
+      await indexDocument(user.uid, notebookId, docId, paper.title, text, paper.pdfUrl);
+
+      // 4. Potong kredit
+      await deductCredits(user.uid, COST_INDEXING);
+      
+      setUploadProgress("Selesai!");
+      fetchDocuments();
+    } catch (err) {
+      console.error("Add from search error:", err);
+      alert("Gagal menambahkan referensi: " + err.message);
+    } finally {
+      setIsUploading(false);
+      setUploadProgress("");
+    }
+  };
+
   const toggleDocSelection = (docId) => {
     setSelectedDocs(prev =>
       prev.includes(docId) ? prev.filter(id => id !== docId) : [...prev, docId]
@@ -351,12 +456,23 @@ ATURAN:
           <div className="glass-panel" style={{ padding: "1rem", display: "flex", flexDirection: "column", gap: "1rem", flex: 1, minHeight: 0, width: "320px", boxShadow: "var(--shadow-md)" }}>
             <div style={{ display: "flex", alignItems: "center", justifyItems: "space-between", justifyContent: "space-between" }}>
               <h3 style={{ fontWeight: 600, fontSize: "0.875rem", margin: 0 }}>Referensi Saya</h3>
-              <label style={{ cursor: "pointer", display: "flex" }}>
-                <input type="file" accept=".pdf" style={{ display: "none" }} onChange={handleUpload} disabled={isUploading} />
-                <div style={{ padding: "0.4rem", backgroundColor: "rgba(79, 70, 229, 0.1)", color: "var(--primary)", borderRadius: "var(--radius-sm)", transition: "background-color 0.2s" }} onMouseOver={(e) => e.currentTarget.style.backgroundColor = "rgba(79, 70, 229, 0.2)"} onMouseOut={(e) => e.currentTarget.style.backgroundColor = "rgba(79, 70, 229, 0.1)"}>
-                  <PremiumIcon name="plus" size={16} />
-                </div>
-              </label>
+              <div style={{ display: "flex", gap: "0.5rem" }}>
+                <button 
+                  onClick={() => setShowSearchModal(true)} 
+                  style={{ padding: 0, background: "transparent", border: "none", cursor: "pointer", display: "flex" }} 
+                  disabled={isUploading}
+                >
+                  <div style={{ padding: "0.4rem", backgroundColor: "rgba(16, 185, 129, 0.1)", color: "var(--success)", borderRadius: "var(--radius-sm)", transition: "background-color 0.2s" }} onMouseOver={(e) => e.currentTarget.style.backgroundColor = "rgba(16, 185, 129, 0.2)"} onMouseOut={(e) => e.currentTarget.style.backgroundColor = "rgba(16, 185, 129, 0.1)"}>
+                    <PremiumIcon name="search" size={16} />
+                  </div>
+                </button>
+                <label style={{ cursor: "pointer", display: "flex", margin: 0 }}>
+                  <input type="file" accept=".pdf" style={{ display: "none" }} onChange={handleUpload} disabled={isUploading} />
+                  <div style={{ padding: "0.4rem", backgroundColor: "rgba(79, 70, 229, 0.1)", color: "var(--primary)", borderRadius: "var(--radius-sm)", transition: "background-color 0.2s" }} onMouseOver={(e) => e.currentTarget.style.backgroundColor = "rgba(79, 70, 229, 0.2)"} onMouseOut={(e) => e.currentTarget.style.backgroundColor = "rgba(79, 70, 229, 0.1)"}>
+                    <PremiumIcon name="plus" size={16} />
+                  </div>
+                </label>
+              </div>
             </div>
 
             {isUploading && (
@@ -609,6 +725,152 @@ ATURAN:
               >
                 <PremiumIcon name="chevronRight" size={16} />
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Search Reference Modal */}
+      {showSearchModal && (
+        <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)", zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }} onClick={() => setShowSearchModal(false)}>
+          <div style={{ backgroundColor: "var(--background)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", boxShadow: "var(--shadow-lg)", maxWidth: "56rem", width: "100%", maxHeight: "90vh", display: "flex", flexDirection: "column", height: "85vh" }} onClick={(e) => e.stopPropagation()}>
+            {/* Modal Header */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "1rem", borderBottom: "1px solid var(--border)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                <div style={{ width: "32px", height: "32px", borderRadius: "8px", backgroundColor: "rgba(16, 185, 129, 0.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <PremiumIcon name="search" size={18} style={{ color: "var(--success)" }} />
+                </div>
+                <div>
+                  <h3 style={{ fontWeight: 600, fontSize: "1rem", margin: 0 }}>Cari Referensi Jurnal</h3>
+                  <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: 0 }}>Temukan dan tambahkan jurnal global tanpa perlu mengunduh</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowSearchModal(false)}
+                style={{ padding: "0.25rem", background: "transparent", border: "none", cursor: "pointer", borderRadius: "var(--radius-sm)", color: "var(--text-main)" }}
+                onMouseOver={(e) => e.currentTarget.style.backgroundColor = "var(--surface-hover)"}
+                onMouseOut={(e) => e.currentTarget.style.backgroundColor = "transparent"}
+              >
+                <PremiumIcon name="x" size={18} />
+              </button>
+            </div>
+
+            {/* Search Input Area */}
+            <div style={{ padding: "1rem", borderBottom: "1px solid var(--border)", backgroundColor: "var(--surface-hover)" }}>
+              <form onSubmit={handleSearch} style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
+                <input
+                  type="text"
+                  placeholder="Contoh: Machine learning in education"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  style={{ flex: 1, minWidth: "200px", padding: "0.6rem 1rem", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", backgroundColor: "var(--background)", color: "var(--text-main)", outline: "none", fontSize: "0.875rem" }}
+                  onFocus={(e) => e.target.style.borderColor = "var(--primary)"}
+                  onBlur={(e) => e.target.style.borderColor = "var(--border)"}
+                />
+                <select
+                  value={searchYear}
+                  onChange={(e) => setSearchYear(e.target.value)}
+                  style={{ padding: "0.6rem 1rem", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", backgroundColor: "var(--background)", color: "var(--text-main)", outline: "none", fontSize: "0.875rem" }}
+                >
+                  <option value="3">3 Tahun Terakhir</option>
+                  <option value="5">5 Tahun Terakhir</option>
+                  <option value="10">10 Tahun Terakhir</option>
+                  <option value="all">Semua Tahun</option>
+                </select>
+                <button
+                  type="submit"
+                  disabled={!searchQuery.trim() || isSearching}
+                  style={{ padding: "0.6rem 1.25rem", borderRadius: "var(--radius-sm)", background: "linear-gradient(135deg, #10B981, #059669)", color: "white", border: "none", cursor: (!searchQuery.trim() || isSearching) ? "not-allowed" : "pointer", fontWeight: 600, fontSize: "0.875rem", opacity: (!searchQuery.trim() || isSearching) ? 0.5 : 1 }}
+                >
+                  {isSearching ? "Mencari..." : "Cari"}
+                </button>
+              </form>
+            </div>
+
+            {/* Search Results */}
+            <div className="custom-scrollbar" style={{ flex: 1, overflowY: "auto", padding: "1rem", backgroundColor: "var(--background)" }}>
+              {searchError && (
+                <div style={{ padding: "1rem", backgroundColor: "rgba(239, 68, 68, 0.1)", color: "var(--danger)", borderRadius: "var(--radius-sm)", display: "flex", gap: "0.75rem", alignItems: "flex-start", marginBottom: "1rem" }}>
+                  <PremiumIcon name="alertCircle" size={18} style={{ flexShrink: 0, marginTop: "2px" }} />
+                  <p style={{ margin: 0, fontSize: "0.875rem" }}>{searchError}</p>
+                </div>
+              )}
+
+              {isSearching && (
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%" }}>
+                  <AnimatedLoadingScreen isLoading={true} apiAttempt={searchApiAttempt} />
+                </div>
+              )}
+
+              {!isSearching && searchResults.length === 0 && !searchError && (
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--text-muted)", opacity: 0.5 }}>
+                  <PremiumIcon name="search" size={48} style={{ marginBottom: "1rem" }} />
+                  <p style={{ margin: 0, fontSize: "0.875rem" }}>Cari referensi untuk ditambahkan ke notebook ini.</p>
+                </div>
+              )}
+
+              {!isSearching && searchResults.length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                  <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                    Menampilkan hasil pencarian dari sumber terpercaya (Core UK / OpenAlex / Unpaywall)
+                  </p>
+                  
+                  {searchResults.map((paper, idx) => (
+                    <div key={idx} style={{ padding: "1rem", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--surface-hover)" }}>
+                      <h4 style={{ margin: "0 0 0.5rem 0", fontSize: "1rem", fontWeight: 600 }}>{paper.title}</h4>
+                      <p style={{ margin: "0 0 0.5rem 0", fontSize: "0.8rem", color: "var(--text-muted)" }}>
+                        {paper.authorString} • {paper.year || "Tahun tidak diketahui"} {paper.venue ? `• ${paper.venue}` : ""}
+                      </p>
+                      
+                      <p style={{ fontSize: "0.85rem", lineHeight: 1.5, margin: "0 0 1rem 0", color: "var(--text-main)", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                        {paper.abstract || <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}>Abstrak tidak tersedia.</span>}
+                      </p>
+
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+                        {paper.hasFullText ? (
+                          <>
+                            <button
+                              onClick={() => handleAddFromSearch(paper)}
+                              style={{ display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.4rem 0.8rem", backgroundColor: "rgba(79, 70, 229, 0.1)", color: "var(--primary)", border: "1px solid rgba(79, 70, 229, 0.2)", borderRadius: "var(--radius-sm)", cursor: "pointer", fontSize: "0.75rem", fontWeight: 600 }}
+                              onMouseOver={(e) => e.currentTarget.style.backgroundColor = "rgba(79, 70, 229, 0.2)"}
+                              onMouseOut={(e) => e.currentTarget.style.backgroundColor = "rgba(79, 70, 229, 0.1)"}
+                            >
+                              <PremiumIcon name="plus" size={14} />
+                              Tambahkan ke Notebook (-{COST_INDEXING} Kredit)
+                            </button>
+                            <a
+                              href={paper.displayUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.4rem 0.8rem", backgroundColor: "transparent", color: "var(--text-main)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", cursor: "pointer", fontSize: "0.75rem", fontWeight: 600, textDecoration: "none" }}
+                              onMouseOver={(e) => e.currentTarget.style.backgroundColor = "var(--surface-hover)"}
+                              onMouseOut={(e) => e.currentTarget.style.backgroundColor = "transparent"}
+                            >
+                              <PremiumIcon name="eye" size={14} />
+                              Preview PDF
+                            </a>
+                          </>
+                        ) : (
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.4rem 0.8rem", backgroundColor: "rgba(239, 68, 68, 0.1)", color: "var(--danger)", border: "1px solid rgba(239, 68, 68, 0.2)", borderRadius: "var(--radius-sm)", fontSize: "0.75rem", fontWeight: 600 }}>
+                            <PremiumIcon name="alertCircle" size={14} />
+                            Full-Text PDF Tidak Tersedia Terbuka
+                          </div>
+                        )}
+                        {paper.url && paper.url.startsWith("http") && (
+                          <a
+                            href={paper.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ marginLeft: "auto", fontSize: "0.75rem", color: "var(--text-muted)", textDecoration: "underline" }}
+                          >
+                            Sumber Asli
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>

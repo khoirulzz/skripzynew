@@ -6,6 +6,9 @@
   --primary-light: #EEF2FF;
   
   --background: #F9FAFB;
+  --glow-1: rgba(79, 70, 229, 0.08);
+  --glow-2: rgba(16, 185, 129, 0.05);
+  --glow-3: rgba(168, 85, 247, 0.04);
   --surface: #FFFFFF;
   --surface-hover: #F3F4F6;
   
@@ -31,6 +34,9 @@
   --primary-light: #3730A3;
   
   --background: #0B0F19; /* Sangat pekat tapi ada tone biru */
+  --glow-1: rgba(99, 102, 241, 0.15);
+  --glow-2: rgba(16, 185, 129, 0.10);
+  --glow-3: rgba(236, 72, 153, 0.08);
   --surface: #111827;
   --surface-hover: #1F2937;
   
@@ -49,13 +55,56 @@
   padding: 0;
 }
 
+html {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
 body {
   font-family: 'Outfit', sans-serif;
   background-color: var(--background);
+  background-image: 
+    /* Enhanced radial gradients for depth */
+    radial-gradient(circle at 15% 20%, var(--glow-1), transparent 45%),
+    radial-gradient(circle at 85% 80%, var(--glow-2), transparent 45%),
+    radial-gradient(circle at 50% 50%, var(--glow-3), transparent 60%),
+    /* Additional accent glows */
+    radial-gradient(circle at 10% 90%, rgba(99, 102, 241, 0.03), transparent 40%),
+    radial-gradient(circle at 90% 10%, rgba(16, 185, 129, 0.03), transparent 40%);
+  background-attachment: fixed;
   color: var(--text-main);
   transition: background-color 0.3s ease, color 0.3s ease;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  position: relative;
+  width: 100%;
+  min-height: 100vh;
+}
+
+/* Decorative elements using pseudo-elements */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: 
+    linear-gradient(135deg, transparent 0%, rgba(79, 70, 229, 0.02) 50%, transparent 100%),
+    linear-gradient(45deg, transparent 0%, rgba(16, 185, 129, 0.02) 50%, transparent 100%);
+  pointer-events: none;
+  z-index: -1;
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  right: -50%;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle at 120% 20%, rgba(168, 85, 247, 0.08), transparent 50%);
+  pointer-events: none;
+  animation: subtle-float 20s ease-in-out infinite;
+  z-index: -1;
 }
 
 /* Typography utilities */
@@ -80,6 +129,13 @@ a {
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes subtle-float {
+  0%, 100% { transform: translateX(0px) translateY(0px); }
+  25% { transform: translateX(-30px) translateY(-15px); }
+  50% { transform: translateX(-60px) translateY(0px); }
+  75% { transform: translateX(-30px) translateY(15px); }
 }
 
 .animate-fade-in {
@@ -808,5 +864,3 @@ a {
   font-style: italic;
   color: var(--text-muted);
 }
-
-

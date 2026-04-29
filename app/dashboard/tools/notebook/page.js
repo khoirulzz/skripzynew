@@ -1,545 +1,322 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
-import { useBillingCatalog } from "@/lib/useBillingCatalog";
 import Link from "next/link";
-import ReactMarkdown from "react-markdown";
-import { callGeminiStream, MODELS } from "@/lib/callWorker";
-import { deductCredits } from "@/lib/credits";
-import { indexDocument, searchSimilarChunks } from "@/lib/ragService";
-import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
+import { useRouter } from "next/navigation";
+import {
+  collection, query, where, getDocs, addDoc, deleteDoc, doc, serverTimestamp, orderBy
+} from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
-// PDF.js import is now dynamically loaded in extractTextFromPDF to prevent SSR errors
+const MAX_NOTEBOOKS_FREE = 5;
+const MAX_JOURNALS_PER_NOTEBOOK = 10;
 
-
-const COST_INDEXING = 5;
-const COST_QUERY = 1;
-
-export default function NotebookPage() {
+export default function NotebookDashboardPage() {
   const { user, userData } = useAuth();
-  const { toolMap } = useBillingCatalog();
-  const credits = userData?.credits ?? 0;
+  const router = useRouter();
+  const plan = userData?.plan || "free";
 
-  const [documents, setDocuments] = useState([]);
-  const [selectedDocs, setSelectedDocs] = useState([]);
-  const [messages, setMessages] = useState([]);
-  const [input, setInput] = useState("");
-
-  const [isUploading, setIsUploading] = useState(false);
-  const [isQuerying, setIsQuerying] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState("");
-
-  const [selectedDocForViewer, setSelectedDocForViewer] = useState(null);
-  const [viewerPage, setViewerPage] = useState(1);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-
-  const chatEndRef = useRef(null);
+  const [notebooks, setNotebooks] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [newTitle, setNewTitle] = useState("");
+  const [newDesc, setNewDesc] = useState("");
+  const [isCreating, setIsCreating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [docCounts, setDocCounts] = useState({});
 
   useEffect(() => {
-    if (user) {
-      fetchDocuments();
-    }
+    if (user) fetchNotebooks();
   }, [user]);
 
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  const fetchDocuments = async () => {
+  const fetchNotebooks = async () => {
+    setIsLoading(true);
     try {
-      // Kita ambil dari koleksi 'references' atau semacamnya
-      // Untuk demo ini kita ambil dari 'reference_chunks' yang unik berdasarkan document_id
       const q = query(
-        collection(db, "reference_chunks"),
+        collection(db, "notebooks"),
         where("user_id", "==", user.uid),
         orderBy("created_at", "desc")
       );
-      const snapshot = await getDocs(q);
+      const snap = await getDocs(q);
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setNotebooks(list);
 
-      // Ambil unik document_id
-      const docsMap = {};
-      snapshot.docs.forEach(doc => {
-        const data = doc.data();
-        if (!docsMap[data.document_id]) {
-          docsMap[data.document_id] = {
-            id: data.document_id,
-            title: data.document_title,
-            url: data.cloudinary_url,
-            createdAt: data.created_at?.toDate()
-          };
-        }
+      // Count unique documents per notebook from reference_chunks
+      const chunksQ = query(
+        collection(db, "reference_chunks"),
+        where("user_id", "==", user.uid)
+      );
+      const chunksSnap = await getDocs(chunksQ);
+      const counts = {};
+      chunksSnap.docs.forEach(d => {
+        const data = d.data();
+        const nbId = data.notebook_id;
+        if (!nbId) return;
+        if (!counts[nbId]) counts[nbId] = new Set();
+        counts[nbId].add(data.document_id);
       });
-
-      setDocuments(Object.values(docsMap));
+      const finalCounts = {};
+      Object.keys(counts).forEach(k => { finalCounts[k] = counts[k].size; });
+      setDocCounts(finalCounts);
     } catch (err) {
-      console.error("Error fetching documents:", err);
-    }
-  };
-
-  const extractTextFromPDF = async (file) => {
-    // Dynamic import to prevent SSR issues on Firebase/Vercel
-    const pdfjsLib = await import("pdfjs-dist");
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.mjs`;
-
-    const arrayBuffer = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-    let fullText = "";
-
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const content = await page.getTextContent();
-      const strings = content.items.map(item => item.str);
-      fullText += `[Halaman ${i}]\n` + strings.join(" ") + "\n\n";
-    }
-
-    return fullText;
-  };
-
-  const handleUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file || !user) {
-      console.error("No file selected or user not authenticated");
-      return;
-    }
-
-    if (credits < COST_INDEXING) {
-      alert(`Kredit tidak cukup. Butuh ${COST_INDEXING} kredit.`);
-      return;
-    }
-
-    setIsUploading(true);
-    setUploadProgress("Membaca file...");
-
-    try {
-      console.log("Starting PDF text extraction...");
-      // 1. Ekstrak teks di client
-      const text = await extractTextFromPDF(file);
-      console.log(`Extracted text length: ${text.length} characters`);
-
-      setUploadProgress("Mengunggah file ke Cloudinary...");
-      console.log("Requesting Cloudinary signature...");
-      // 2. Upload ke Cloudinary (via worker sign)
-      const sigRes = await fetch(`${process.env.NEXT_PUBLIC_WORKER_URL}/api/cloudinary-sign`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-skripzy-secret": "skripzy1234" },
-        body: JSON.stringify({ folder: "Referensi" })
-      });
-
-      if (!sigRes.ok) {
-        throw new Error(`Cloudinary signature failed: ${sigRes.status}`);
-      }
-
-      const { signature, timestamp, apiKey, cloudName } = await sigRes.json();
-      console.log("Cloudinary signature obtained successfully");
-
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("signature", signature);
-      formData.append("timestamp", timestamp);
-      formData.append("api_key", apiKey);
-      formData.append("folder", "Referensi");
-
-      console.log("Uploading to Cloudinary...");
-      const uploadRes = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`, {
-        method: "POST",
-        body: formData
-      });
-
-      if (!uploadRes.ok) {
-        throw new Error(`Cloudinary upload failed: ${uploadRes.status}`);
-      }
-
-      const uploadData = await uploadRes.json();
-      console.log("Cloudinary upload successful:", uploadData.secure_url);
-
-      setUploadProgress("Membuat index vektor (AI)...");
-      console.log("Starting document indexing...");
-      // 3. Index ke Firestore (Vektorisasi)
-      const docId = `doc_${Date.now()}`;
-      const indexedChunks = await indexDocument(user.uid, {
-        documentId: docId,
-        title: file.name,
-        text,
-        cloudinaryUrl: uploadData.secure_url,
-      });
-      console.log(`Document indexed with ${indexedChunks} chunks`);
-
-      // 4. Potong kredit
-      console.log("Deducting credits...");
-      await deductCredits(user.uid, COST_INDEXING);
-
-      setUploadProgress("Selesai!");
-      console.log("Upload process completed successfully");
-      fetchDocuments();
-    } catch (err) {
-      console.error("Upload error:", err);
-      alert("Gagal mengupload: " + err.message);
+      console.error("Error fetching notebooks:", err);
     } finally {
-      setIsUploading(false);
-      setUploadProgress("");
+      setIsLoading(false);
     }
   };
 
-  const handleSendMessage = async (e) => {
-    e.preventDefault();
-    if (!input.trim() || isQuerying || !user) {
-      console.log("Query blocked:", { hasInput: !!input.trim(), isQuerying, hasUser: !!user });
+  const handleCreate = async () => {
+    if (!newTitle.trim()) return;
+    if (plan === "free" && notebooks.length >= MAX_NOTEBOOKS_FREE) {
+      alert(`Pengguna gratis hanya bisa membuat maksimal ${MAX_NOTEBOOKS_FREE} notebook. Upgrade ke Pro untuk unlimited!`);
       return;
     }
-
-    if (credits < COST_QUERY) {
-      alert(`Kredit tidak cukup. Butuh ${COST_QUERY} kredit.`);
-      return;
-    }
-
-    console.log("Starting query process...");
-    const userMessage = { role: "user", text: input };
-    setMessages(prev => [...prev, userMessage]);
-    setInput("");
-    setIsQuerying(true);
-
+    setIsCreating(true);
     try {
-      console.log(`Searching for chunks with ${selectedDocs.length} selected documents...`);
-      // 1. Cari chunk relevan
-      const chunks = await searchSimilarChunks(user.uid, input, selectedDocs, 5);
-      console.log(`Found ${chunks.length} relevant chunks`);
-
-      // 2. Rakit context
-      const context = chunks.map((c, i) =>
-        `[Sumber ${i + 1}: ${c.document_title}, Hal ${c.page_number}]:\n${c.text_content}`
-      ).join("\n\n");
-      console.log(`Context length: ${context.length} characters`);
-
-      const systemInstruction = `Kamu adalah Asisten Notebook Skripzy. Tugasmu adalah menjawab pertanyaan pengguna HANYA berdasarkan referensi yang diberikan di bawah ini.
-      
-REFERENSI:
-${context}
-
-ATURAN:
-1. Jawab dalam bahasa Indonesia yang profesional namun mudah dimengerti.
-2. Jika jawaban tidak ada di referensi, katakan "Maaf, informasi tersebut tidak ditemukan dalam referensi yang Anda pilih."
-3. Berikan sitasi di akhir setiap poin atau paragraf menggunakan format [Sumber X, Hal Y].
-4. Fokus pada fakta yang ada di teks.`;
-
-      const aiMessage = { role: "assistant", text: "" };
-      setMessages(prev => [...prev, aiMessage]);
-
-      console.log("Starting AI streaming response...");
-      let fullAiResponse = "";
-      await callGeminiStream({
-        prompt: input,
-        systemInstruction,
-        model: MODELS.primary,
-        onStream: (text) => {
-          fullAiResponse = text;
-          setMessages(prev => {
-            const updated = [...prev];
-            updated[updated.length - 1].text = text;
-            return updated;
-          });
-        }
+      await addDoc(collection(db, "notebooks"), {
+        user_id: user.uid,
+        title: newTitle.trim(),
+        description: newDesc.trim() || "Notebook referensi penelitian",
+        created_at: serverTimestamp(),
       });
-
-      console.log("AI response completed, deducting credits...");
-      // Potong kredit query
-      await deductCredits(user.uid, COST_QUERY);
-      console.log("Query process completed successfully");
-
+      setNewTitle("");
+      setNewDesc("");
+      setShowCreateModal(false);
+      fetchNotebooks();
     } catch (err) {
-      console.error("Query error:", err);
-      setMessages(prev => [...prev, { role: "assistant", text: "Maaf, terjadi kesalahan: " + err.message }]);
+      console.error("Error creating notebook:", err);
+      alert("Gagal membuat notebook: " + err.message);
     } finally {
-      setIsQuerying(false);
+      setIsCreating(false);
     }
   };
 
-  const toggleDocSelection = (docId) => {
-    setSelectedDocs(prev =>
-      prev.includes(docId) ? prev.filter(id => id !== docId) : [...prev, docId]
-    );
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      // Delete all chunks belonging to this notebook
+      const chunksQ = query(
+        collection(db, "reference_chunks"),
+        where("notebook_id", "==", deleteTarget.id)
+      );
+      const chunksSnap = await getDocs(chunksQ);
+      const deletePromises = chunksSnap.docs.map(d => deleteDoc(doc(db, "reference_chunks", d.id)));
+      await Promise.all(deletePromises);
+
+      // Delete the notebook itself
+      await deleteDoc(doc(db, "notebooks", deleteTarget.id));
+      setDeleteTarget(null);
+      fetchNotebooks();
+    } catch (err) {
+      console.error("Error deleting notebook:", err);
+      alert("Gagal menghapus notebook: " + err.message);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
-  const openPdfViewer = (doc) => {
-    setSelectedDocForViewer(doc);
-    setViewerPage(1);
-  };
-
-  const closePdfViewer = () => {
-    setSelectedDocForViewer(null);
-  };
+  const canCreate = plan !== "free" || notebooks.length < MAX_NOTEBOOKS_FREE;
 
   return (
-    <div className="animate-fade-in" style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 120px)", color: "var(--text-main)", position: "relative" }}>
+    <div className="animate-fade-in" style={{ maxWidth: "1080px", margin: "0 auto", color: "var(--text-main)" }}>
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.5rem" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "2rem", flexWrap: "wrap", gap: "1rem" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-          <Link href="/dashboard" style={{ color: "var(--text-muted)", transition: "color 0.2s" }} onMouseOver={(e) => e.currentTarget.style.color = "var(--text-main)"} onMouseOut={(e) => e.currentTarget.style.color = "var(--text-muted)"}>
+          <Link href="/dashboard" style={{ color: "var(--text-muted)", transition: "color 0.2s" }}
+            onMouseOver={e => e.currentTarget.style.color = "var(--text-main)"}
+            onMouseOut={e => e.currentTarget.style.color = "var(--text-muted)"}>
             <PremiumIcon name="arrowLeft" size={20} />
           </Link>
           <div>
-            <h1 style={{ fontSize: "1.25rem", fontWeight: 700, margin: 0 }}>Notebook Referensi</h1>
-            <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", margin: 0 }}>Kelola jurnal & tanya jawab berbasis RAG</p>
+            <h1 style={{ fontSize: "1.5rem", fontWeight: 700, margin: 0 }}>Notebook Referensi</h1>
+            <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", margin: "0.25rem 0 0 0" }}>
+              Kelola projek referensi & tanya jawab berbasis RAG
+            </p>
           </div>
         </div>
-        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.5rem" }}>
-          <button
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            style={{
-              display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.4rem 0.75rem",
-              borderRadius: "var(--radius-sm)", border: "1px solid", transition: "all 0.2s",
-              backgroundColor: isSidebarOpen ? "var(--primary)" : "var(--surface-hover)",
-              color: isSidebarOpen ? "white" : "var(--text-main)",
-              borderColor: isSidebarOpen ? "var(--primary)" : "var(--border)",
-              cursor: "pointer"
-            }}
-          >
-            <PremiumIcon name="bookMarked" size={16} />
-            <span style={{ fontSize: "0.875rem", fontWeight: 600 }}>{isSidebarOpen ? "Tutup Referensi" : "Pilih Referensi"}</span>
-            {selectedDocs.length > 0 && !isSidebarOpen && (
-              <span style={{ marginLeft: "0.25rem", backgroundColor: "var(--primary)", color: "white", fontSize: "0.65rem", padding: "0.1rem 0.4rem", borderRadius: "9999px", fontWeight: "bold" }}>
-                {selectedDocs.length}
-              </span>
-            )}
-          </button>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.4rem 0.75rem", backgroundColor: "var(--surface-hover)", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)" }}>
-            <PremiumIcon name="zap" size={14} style={{ color: "var(--primary)" }} />
-            <span style={{ fontSize: "0.875rem", fontWeight: 600 }}>{credits} Kredit</span>
-          </div>
-        </div>
+        <button
+          onClick={() => canCreate ? setShowCreateModal(true) : alert(`Maksimal ${MAX_NOTEBOOKS_FREE} notebook untuk plan gratis.`)}
+          style={{
+            display: "flex", alignItems: "center", gap: "0.5rem",
+            padding: "0.6rem 1.25rem", borderRadius: "var(--radius-sm)",
+            background: "linear-gradient(135deg, #4F46E5, #7C3AED)", color: "white",
+            border: "none", cursor: "pointer", fontWeight: 600, fontSize: "0.875rem",
+            transition: "all 0.2s", boxShadow: "0 2px 8px rgba(79,70,229,0.3)",
+            opacity: canCreate ? 1 : 0.5,
+          }}
+          onMouseOver={e => { if (canCreate) e.currentTarget.style.transform = "translateY(-1px)"; }}
+          onMouseOut={e => e.currentTarget.style.transform = "translateY(0)"}
+        >
+          <PremiumIcon name="plus" size={16} /> Buat Notebook
+        </button>
       </div>
 
-      <div style={{ display: "flex", flex: 1, gap: "1.5rem", minHeight: 0, position: "relative", overflow: "hidden" }}>
-        {/* Sidebar: Documents */}
-        <div style={{
-          display: "flex", flexDirection: "column", transition: "all 0.3s ease-in-out", height: "100%", overflow: "hidden",
-          width: isSidebarOpen ? "320px" : "0px", opacity: isSidebarOpen ? 1 : 0, margin: 0
-        }}>
-          <div className="glass-panel" style={{ padding: "1rem", display: "flex", flexDirection: "column", gap: "1rem", flex: 1, minHeight: 0, width: "320px", boxShadow: "var(--shadow-md)" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyItems: "space-between", justifyContent: "space-between" }}>
-              <h3 style={{ fontWeight: 600, fontSize: "0.875rem", margin: 0 }}>Referensi Saya</h3>
-              <label style={{ cursor: "pointer", display: "flex" }}>
-                <input type="file" accept=".pdf" style={{ display: "none" }} onChange={handleUpload} disabled={isUploading} />
-                <div style={{ padding: "0.4rem", backgroundColor: "rgba(79, 70, 229, 0.1)", color: "var(--primary)", borderRadius: "var(--radius-sm)", transition: "background-color 0.2s" }} onMouseOver={(e) => e.currentTarget.style.backgroundColor = "rgba(79, 70, 229, 0.2)"} onMouseOut={(e) => e.currentTarget.style.backgroundColor = "rgba(79, 70, 229, 0.1)"}>
-                  <PremiumIcon name="plus" size={16} />
-                </div>
-              </label>
-            </div>
+      {/* Limit Info */}
+      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1.5rem", fontSize: "0.75rem", color: "var(--text-muted)" }}>
+        <PremiumIcon name="layers" size={14} />
+        <span>{notebooks.length}{plan === "free" ? ` / ${MAX_NOTEBOOKS_FREE}` : ""} Notebook</span>
+        <span style={{ margin: "0 0.25rem" }}>•</span>
+        <span>Maks. {MAX_JOURNALS_PER_NOTEBOOK} jurnal per notebook</span>
+        <span style={{ margin: "0 0.25rem" }}>•</span>
+        <span>PDF &lt; 3MB</span>
+      </div>
 
-            {isUploading && (
-              <div style={{ padding: "0.75rem", backgroundColor: "rgba(79, 70, 229, 0.05)", border: "1px solid rgba(79, 70, 229, 0.2)", borderRadius: "var(--radius-sm)" }} className="animate-pulse">
-                <p style={{ fontSize: "0.75rem", fontWeight: 500, color: "var(--primary)", marginBottom: "0.25rem", margin: 0 }}>{uploadProgress}</p>
-                <div style={{ height: "4px", backgroundColor: "rgba(79, 70, 229, 0.2)", borderRadius: "9999px", overflow: "hidden", marginTop: "0.5rem" }}>
-                  <div className="animate-progress-loading" style={{ height: "100%", backgroundColor: "var(--primary)", width: "60%" }}></div>
-                </div>
-              </div>
-            )}
-
-            <div className="custom-scrollbar" style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.5rem", paddingRight: "0.25rem" }}>
-              {documents.length === 0 && !isUploading && (
-                <div style={{ textAlign: "center", padding: "2.5rem 0", opacity: 0.5 }}>
-                  <div style={{ display: "flex", justifyContent: "center", marginBottom: "0.5rem" }}><PremiumIcon name="fileText" size={32} /></div>
-                  <p style={{ fontSize: "0.75rem", margin: 0 }}>Belum ada jurnal.<br />Klik + untuk mengunggah.</p>
-                </div>
-              )}
-              {documents.map(doc => (
-                <div
-                  key={doc.id}
-                  style={{
-                    padding: "0.75rem", borderRadius: "var(--radius-sm)", border: "1px solid", transition: "all 0.2s", cursor: "pointer", display: "flex", alignItems: "flex-start", gap: "0.75rem",
-                    borderColor: selectedDocs.includes(doc.id) ? "var(--primary)" : "var(--border)",
-                    backgroundColor: selectedDocs.includes(doc.id) ? "rgba(79, 70, 229, 0.05)" : "var(--surface-hover)"
-                  }}
-                  onClick={() => toggleDocSelection(doc.id)}
-                >
+      {/* Grid */}
+      {isLoading ? (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "1.25rem" }}>
+          {[1, 2, 3].map(i => (
+            <div key={i} className="glass-panel animate-pulse" style={{ height: "180px", borderRadius: "var(--radius-md)" }} />
+          ))}
+        </div>
+      ) : notebooks.length === 0 ? (
+        <div className="glass-panel" style={{ padding: "4rem 2rem", textAlign: "center" }}>
+          <div style={{ width: "72px", height: "72px", borderRadius: "50%", backgroundColor: "rgba(79,70,229,0.1)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1.25rem" }}>
+            <PremiumIcon name="bookMarked" size={36} style={{ color: "var(--primary)" }} />
+          </div>
+          <h3 style={{ fontSize: "1.1rem", fontWeight: 700, margin: "0 0 0.5rem" }}>Belum ada Notebook</h3>
+          <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", margin: "0 0 1.5rem", maxWidth: "360px", marginLeft: "auto", marginRight: "auto" }}>
+            Buat notebook baru untuk mulai mengunggah jurnal referensi dan berdiskusi dengan AI.
+          </p>
+          <button onClick={() => setShowCreateModal(true)} style={{
+            padding: "0.6rem 1.5rem", borderRadius: "var(--radius-sm)",
+            background: "linear-gradient(135deg, #4F46E5, #7C3AED)", color: "white",
+            border: "none", cursor: "pointer", fontWeight: 600, fontSize: "0.875rem",
+          }}>
+            <PremiumIcon name="plus" size={16} /> Buat Notebook Pertama
+          </button>
+        </div>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "1.25rem" }}>
+          {notebooks.map(nb => {
+            const journalCount = docCounts[nb.id] || 0;
+            return (
+              <div
+                key={nb.id}
+                className="glass-panel"
+                style={{
+                  padding: "1.5rem", cursor: "pointer", transition: "all 0.2s",
+                  display: "flex", flexDirection: "column", gap: "1rem", position: "relative",
+                }}
+                onClick={() => router.push(`/dashboard/tools/notebook/${nb.id}`)}
+                onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.boxShadow = "var(--shadow-lg)"; }}
+                onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = ""; }}
+              >
+                {/* Icon & Delete */}
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
                   <div style={{
-                    marginTop: "0.125rem", width: "16px", height: "16px", borderRadius: "4px", border: "1px solid", display: "flex", alignItems: "center", justifyContent: "center", transition: "colors 0.2s", flexShrink: 0,
-                    backgroundColor: selectedDocs.includes(doc.id) ? "var(--primary)" : "transparent",
-                    borderColor: selectedDocs.includes(doc.id) ? "var(--primary)" : "var(--border)"
+                    width: "44px", height: "44px", borderRadius: "10px",
+                    backgroundColor: "rgba(79,70,229,0.1)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
                   }}>
-                    {selectedDocs.includes(doc.id) && <PremiumIcon name="check" size={10} style={{ color: "white" }} />}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: "0.75rem", fontWeight: 700, margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{doc.title}</p>
-                    <p style={{ fontSize: "0.65rem", color: "var(--text-muted)", margin: "0.25rem 0 0 0" }}>
-                      {doc.createdAt?.toLocaleDateString()}
-                    </p>
+                    <PremiumIcon name="bookMarked" size={22} style={{ color: "#4F46E5" }} />
                   </div>
                   <button
-                    onClick={(e) => { e.stopPropagation(); openPdfViewer(doc); }}
-                    style={{ padding: "0.25rem", color: "var(--text-muted)", background: "transparent", border: "none", cursor: "pointer", transition: "color 0.2s" }}
-                    onMouseOver={(e) => e.currentTarget.style.color = "var(--primary)"}
-                    onMouseOut={(e) => e.currentTarget.style.color = "var(--text-muted)"}
-                    title="Lihat PDF"
+                    onClick={e => { e.stopPropagation(); setDeleteTarget(nb); }}
+                    style={{ padding: "0.35rem", background: "transparent", border: "none", cursor: "pointer", color: "var(--text-muted)", borderRadius: "var(--radius-sm)", transition: "all 0.2s" }}
+                    onMouseOver={e => { e.currentTarget.style.color = "#EF4444"; e.currentTarget.style.backgroundColor = "rgba(239,68,68,0.1)"; }}
+                    onMouseOut={e => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.backgroundColor = "transparent"; }}
+                    title="Hapus notebook"
                   >
-                    <PremiumIcon name="eye" size={14} />
+                    <PremiumIcon name="trash" size={14} />
                   </button>
                 </div>
-              ))}
-            </div>
 
-            <div style={{ paddingTop: "0.5rem", borderTop: "1px solid var(--border)", marginTop: "auto" }}>
-              <p style={{ fontSize: "0.65rem", color: "var(--text-muted)", margin: 0, lineHeight: 1.5 }}>
-                * Pilih jurnal di atas untuk mengaktifkan konteks chat. Indexing membutuhkan 5 kredit.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Main: Chat */}
-        <div className="glass-panel" style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-          {/* Chat Messages */}
-          <div className="custom-scrollbar" style={{ flex: 1, overflowY: "auto", padding: "1rem", display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-            {messages.length === 0 && (
-              <div style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", maxWidth: "24rem", margin: "0 auto" }}>
-                <div style={{ width: "64px", height: "64px", backgroundColor: "rgba(79, 70, 229, 0.1)", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "1rem" }}>
-                  <PremiumIcon name="messageSquare" size={32} style={{ color: "var(--primary)" }} />
+                {/* Title & Desc */}
+                <div>
+                  <h4 style={{ fontSize: "1rem", fontWeight: 700, margin: "0 0 0.25rem", color: "var(--text-main)" }}>
+                    {nb.title}
+                  </h4>
+                  <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", margin: 0, lineHeight: 1.4, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                    {nb.description}
+                  </p>
                 </div>
-                <h2 style={{ fontSize: "1.125rem", fontWeight: 700, marginBottom: "0.5rem", margin: 0 }}>Mulai Diskusi</h2>
-                <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", margin: 0 }}>
-                  Unggah jurnal penelitianmu, centang di sidebar, lalu tanyakan apa saja. AI akan menjawab berdasarkan referensi tersebut.
-                </p>
-              </div>
-            )}
 
-            {messages.map((msg, idx) => (
-              <div key={idx} style={{ display: "flex", justifyContent: msg.role === "user" ? "flex-end" : "flex-start" }}>
-                <div style={{
-                  maxWidth: "85%", padding: "1rem", borderRadius: "1rem",
-                  backgroundColor: msg.role === "user" ? "var(--primary)" : "var(--surface-hover)",
-                  color: msg.role === "user" ? "white" : "var(--text-main)",
-                  border: msg.role === "user" ? "none" : "1px solid var(--border)",
-                  borderTopRightRadius: msg.role === "user" ? 0 : "1rem",
-                  borderTopLeftRadius: msg.role === "user" ? "1rem" : 0
+                {/* Footer Stats */}
+                <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginTop: "auto", paddingTop: "0.75rem", borderTop: "1px solid var(--border)" }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: "0.3rem", fontSize: "0.7rem", color: "var(--text-muted)" }}>
+                    <PremiumIcon name="fileText" size={12} /> {journalCount} / {MAX_JOURNALS_PER_NOTEBOOK} jurnal
+                  </span>
+                  <span style={{ display: "flex", alignItems: "center", gap: "0.3rem", fontSize: "0.7rem", color: "var(--text-muted)" }}>
+                    <PremiumIcon name="calendar" size={12} />
+                    {nb.created_at?.toDate ? nb.created_at.toDate().toLocaleDateString("id-ID") : "—"}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Create Modal */}
+      {showCreateModal && (
+        <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}
+          onClick={() => setShowCreateModal(false)}>
+          <div style={{ backgroundColor: "var(--background)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", boxShadow: "var(--shadow-lg)", maxWidth: "28rem", width: "100%", padding: "2rem" }}
+            onClick={e => e.stopPropagation()}>
+            <h3 style={{ fontSize: "1.125rem", fontWeight: 700, margin: "0 0 1.25rem" }}>Buat Notebook Baru</h3>
+
+            <label style={{ fontSize: "0.8rem", fontWeight: 600, marginBottom: "0.35rem", display: "block", color: "var(--text-muted)" }}>Judul Notebook *</label>
+            <input
+              type="text" placeholder="Contoh: Literatur Review Bab 2"
+              value={newTitle} onChange={e => setNewTitle(e.target.value)}
+              style={{ width: "100%", padding: "0.7rem 1rem", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", backgroundColor: "var(--surface-hover)", color: "var(--text-main)", fontSize: "0.875rem", outline: "none", marginBottom: "1rem", boxSizing: "border-box" }}
+              onFocus={e => e.target.style.borderColor = "var(--primary)"}
+              onBlur={e => e.target.style.borderColor = "var(--border)"}
+            />
+
+            <label style={{ fontSize: "0.8rem", fontWeight: 600, marginBottom: "0.35rem", display: "block", color: "var(--text-muted)" }}>Deskripsi (opsional)</label>
+            <textarea
+              placeholder="Deskripsi singkat notebook ini..."
+              value={newDesc} onChange={e => setNewDesc(e.target.value)} rows={3}
+              style={{ width: "100%", padding: "0.7rem 1rem", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", backgroundColor: "var(--surface-hover)", color: "var(--text-main)", fontSize: "0.875rem", outline: "none", resize: "vertical", marginBottom: "1.5rem", boxSizing: "border-box", fontFamily: "inherit" }}
+              onFocus={e => e.target.style.borderColor = "var(--primary)"}
+              onBlur={e => e.target.style.borderColor = "var(--border)"}
+            />
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
+              <button onClick={() => setShowCreateModal(false)}
+                style={{ padding: "0.6rem 1.25rem", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", background: "transparent", color: "var(--text-main)", cursor: "pointer", fontWeight: 600, fontSize: "0.85rem" }}>
+                Batal
+              </button>
+              <button onClick={handleCreate} disabled={!newTitle.trim() || isCreating}
+                style={{
+                  padding: "0.6rem 1.5rem", borderRadius: "var(--radius-sm)",
+                  background: "linear-gradient(135deg, #4F46E5, #7C3AED)", color: "white",
+                  border: "none", cursor: !newTitle.trim() || isCreating ? "not-allowed" : "pointer",
+                  fontWeight: 600, fontSize: "0.85rem", opacity: !newTitle.trim() || isCreating ? 0.5 : 1,
                 }}>
-                  <div className={`markdown-body ${msg.role === "user" ? "text-white" : ""}`}>
-                    <ReactMarkdown>{msg.text}</ReactMarkdown>
-                  </div>
-                </div>
-              </div>
-            ))}
-            <div ref={chatEndRef} />
-          </div>
-
-          {/* Input Area */}
-          <div style={{ padding: "1rem", borderTop: "1px solid var(--border)", backgroundColor: "rgba(255, 255, 255, 0.02)" }}>
-            <form onSubmit={handleSendMessage} style={{ position: "relative", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              <div style={{ position: "relative", flex: 1 }}>
-                <input
-                  type="text"
-                  placeholder={selectedDocs.length > 0 ? "Tanyakan sesuatu tentang referensi..." : "Pilih referensi di sidebar terlebih dahulu..."}
-                  style={{
-                    width: "100%", backgroundColor: "var(--surface-hover)", border: "1px solid var(--border)", borderRadius: "0.75rem",
-                    padding: "0.75rem 1rem", paddingRight: "3rem", outline: "none", fontSize: "0.875rem", color: "var(--text-main)",
-                    transition: "border-color 0.2s"
-                  }}
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  disabled={selectedDocs.length === 0 || isQuerying}
-                  onFocus={(e) => e.target.style.borderColor = "var(--primary)"}
-                  onBlur={(e) => e.target.style.borderColor = "var(--border)"}
-                />
-                <div style={{ position: "absolute", right: "0.75rem", top: "50%", transform: "translateY(-50%)", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                  {isQuerying ? (
-                    <div style={{ width: "20px", height: "20px", border: "2px solid var(--primary)", borderTopColor: "transparent", borderRadius: "50%" }} className="animate-spin-slow"></div>
-                  ) : (
-                    <button
-                      type="submit"
-                      disabled={!input.trim() || selectedDocs.length === 0}
-                      style={{
-                        padding: "0.4rem", backgroundColor: "var(--primary)", color: "white", borderRadius: "0.5rem", border: "none",
-                        cursor: (!input.trim() || selectedDocs.length === 0) ? "not-allowed" : "pointer",
-                        opacity: (!input.trim() || selectedDocs.length === 0) ? 0.3 : 1,
-                        transition: "all 0.2s", display: "flex", alignItems: "center", justifyContent: "center"
-                      }}
-                    >
-                      <PremiumIcon name="send" size={16} />
-                    </button>
-                  )}
-                </div>
-              </div>
-            </form>
-            <div style={{ marginTop: "0.5rem", display: "flex", alignItems: "center", justifyItems: "center", justifyContent: "center", gap: "1rem", fontSize: "0.65rem", color: "var(--text-muted)" }}>
-              <span style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
-                <PremiumIcon name="zap" size={10} /> 1 kredit / tanya
-              </span>
-              <span style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
-                <PremiumIcon name="check" size={10} /> Konteks: {selectedDocs.length} Jurnal
-              </span>
+                {isCreating ? "Membuat..." : "Buat Notebook"}
+              </button>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
-      <style jsx global>{`
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 6px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: var(--border);
-          border-radius: 10px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: var(--text-muted);
-        }
-        
-        @keyframes progress-loading {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(200%); }
-        }
-        .animate-progress-loading {
-          animation: progress-loading 1.5s infinite linear;
-        }
-        
-        .markdown-body p { margin-bottom: 0.5rem; }
-        .markdown-body p:last-child { margin-bottom: 0; }
-      `}</style>
-
-      {/* PDF Viewer Modal */}
-      {selectedDocForViewer && (
-        <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
-          <div style={{ backgroundColor: "var(--background)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", boxShadow: "var(--shadow-lg)", maxWidth: "56rem", width: "100%", maxHeight: "90vh", display: "flex", flexDirection: "column", height: "85vh" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "1rem", borderBottom: "1px solid var(--border)" }}>
-              <h3 style={{ fontWeight: 600, fontSize: "0.875rem", margin: 0 }}>{selectedDocForViewer.title}</h3>
-              <button
-                onClick={closePdfViewer}
-                style={{ padding: "0.25rem", background: "transparent", border: "none", cursor: "pointer", borderRadius: "var(--radius-sm)", color: "var(--text-main)" }}
-                onMouseOver={(e) => e.currentTarget.style.backgroundColor = "var(--surface-hover)"}
-                onMouseOut={(e) => e.currentTarget.style.backgroundColor = "transparent"}
-              >
-                <PremiumIcon name="x" size={18} />
-              </button>
+      {/* Delete Confirmation Modal */}
+      {deleteTarget && (
+        <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}
+          onClick={() => setDeleteTarget(null)}>
+          <div style={{ backgroundColor: "var(--background)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", boxShadow: "var(--shadow-lg)", maxWidth: "24rem", width: "100%", padding: "2rem", textAlign: "center" }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ width: "48px", height: "48px", borderRadius: "50%", backgroundColor: "rgba(239,68,68,0.1)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1rem" }}>
+              <PremiumIcon name="alertTriangle" size={24} style={{ color: "#EF4444" }} />
             </div>
-            <div style={{ flex: 1, padding: "1rem", minHeight: 0 }}>
-              <iframe
-                src={`${selectedDocForViewer.url}#page=${viewerPage}`}
-                style={{ width: "100%", height: "100%", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)" }}
-                title={selectedDocForViewer.title}
-              />
-            </div>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", padding: "1rem", borderTop: "1px solid var(--border)" }}>
-              <button
-                onClick={() => setViewerPage(Math.max(1, viewerPage - 1))}
-                disabled={viewerPage <= 1}
-                style={{ padding: "0.5rem", background: "transparent", border: "none", cursor: viewerPage <= 1 ? "not-allowed" : "pointer", borderRadius: "var(--radius-sm)", opacity: viewerPage <= 1 ? 0.3 : 1, color: "var(--text-main)" }}
-                onMouseOver={(e) => { if (viewerPage > 1) e.currentTarget.style.backgroundColor = "var(--surface-hover)"; }}
-                onMouseOut={(e) => e.currentTarget.style.backgroundColor = "transparent"}
-              >
-                <PremiumIcon name="chevronLeft" size={16} />
+            <h3 style={{ fontSize: "1rem", fontWeight: 700, margin: "0 0 0.5rem" }}>Hapus Notebook?</h3>
+            <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", margin: "0 0 1.5rem" }}>
+              &ldquo;{deleteTarget.title}&rdquo; dan semua referensi di dalamnya akan dihapus permanen.
+            </p>
+            <div style={{ display: "flex", justifyContent: "center", gap: "0.75rem" }}>
+              <button onClick={() => setDeleteTarget(null)}
+                style={{ padding: "0.6rem 1.25rem", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", background: "transparent", color: "var(--text-main)", cursor: "pointer", fontWeight: 600, fontSize: "0.85rem" }}>
+                Batal
               </button>
-              <span style={{ fontSize: "0.875rem", padding: "0 0.75rem" }}>Halaman {viewerPage}</span>
-              <button
-                onClick={() => setViewerPage(viewerPage + 1)}
-                style={{ padding: "0.5rem", background: "transparent", border: "none", cursor: "pointer", borderRadius: "var(--radius-sm)", color: "var(--text-main)" }}
-                onMouseOver={(e) => e.currentTarget.style.backgroundColor = "var(--surface-hover)"}
-                onMouseOut={(e) => e.currentTarget.style.backgroundColor = "transparent"}
-              >
-                <PremiumIcon name="chevronRight" size={16} />
+              <button onClick={handleDelete} disabled={isDeleting}
+                style={{ padding: "0.6rem 1.5rem", borderRadius: "var(--radius-sm)", backgroundColor: "#EF4444", color: "white", border: "none", cursor: isDeleting ? "not-allowed" : "pointer", fontWeight: 600, fontSize: "0.85rem", opacity: isDeleting ? 0.5 : 1 }}>
+                {isDeleting ? "Menghapus..." : "Ya, Hapus"}
               </button>
             </div>
           </div>

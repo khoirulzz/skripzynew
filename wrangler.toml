@@ -1,4 +1,4 @@
-name = "skripzy-app"
+name = "apikey"
 main = "script-worker.js"
 compatibility_date = "2024-01-01"
 
@@ -7,7 +7,26 @@ WORKER_SECRET = "skripzy1234"
 FIREBASE_PROJECT_ID = "skripzy-4fbaa"
 FIREBASE_WEB_API_KEY = "AIzaSyB2YYmDJHpb3Ou8GZzpYWc-b0CuBx4nLJQ"
 
+# DOKU Payment Gateway (Sandbox Environment)
+# ⚠️ These are SANDBOX credentials — change to production before deploying to live
+DOKU_CLIENT_ID = "BRN-0298-1777951038478"
+DOKU_BASE_URL = "https://api-sandbox.doku.com"
+DOKU_CALLBACK_URL = "https://app.skripzy.id/dashboard/langganan/"
+
+# ⚠️ DOKU_SECRET_KEY MUST be set via Cloudflare Dashboard as encrypted secret
+# DO NOT commit secret key to this file!
+# Setup:
+#   1. Local dev: npx wrangler secret put DOKU_SECRET_KEY
+#      Enter: SK-uY7Ec2HESumno4fBYxnO (sandbox)
+#   2. Production: Set via Cloudflare Dashboard > Settings > Variables > Secrets
+#      Value: SK-MnZHN1i1ZruKgBNHkLa3 (production)
+#      Then change DOKU_CLIENT_ID to BRN-0255-1777888777297
+
 # Environment variables (akan di-set di Cloudflare Dashboard)
 # GEMINI_API_KEY_1, GEMINI_API_KEY_2, etc.
 # CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET
 # CORE_API_KEY
+
+[[vectorize]]
+binding = "VECTOR_INDEX"
+index_name = "skripzy-index"

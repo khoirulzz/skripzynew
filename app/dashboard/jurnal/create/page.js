@@ -69,6 +69,7 @@ Anda adalah AI penganalisis struktur jurnal akademik.
 Tugas Anda adalah membaca pedoman/template jurnal di bawah ini dan mengekstrak struktur penulisannya.
 
 ATURAN KELUARAN:
+- Tuliskan section jurnal utama saja, bagian seperti identitas jurnal, daftar isi, atau bagian administratif lainnya tidak perlu dimasukkan.
 - KEMBALIKAN HANYA SEBUAH JSON ARRAY, TANPA MARKDOWN FENCE, TANPA TEKS LAIN.
 - Setiap elemen array harus berupa objek dengan format:
   {

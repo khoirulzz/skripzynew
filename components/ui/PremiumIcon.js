@@ -7,7 +7,7 @@ import {
   ArrowLeft, Save, Sparkles, Plus, X, Check, ChevronDown, BookOpen,
   BarChart2, MessageSquare, Volume, Upload, AlertCircle, Radio, BookMarked, Mic, Wand2,
   Menu, LayoutTemplate, Activity, Layers, Search, Edit, Copy, Trash, Globe, Circle, Type, ChevronDownSquare, PieChart, DownloadCloud, BrainCircuit, Box, CheckCircle, Coins, ChartNoAxesCombined, SquarePen, BarChart3, Users, Tag, Gift, LogOut, Loader,
-  Calendar, Inbox, Ticket, ArrowRight, FileOutput, AlertTriangle, Eye, Wallet, ChevronLeft, Clock3, Pause, Play, XCircle, Download, UploadCloud, Pencil
+  Calendar, Inbox, Ticket, MoreVertical, ArrowRight, FileOutput, AlertTriangle, Eye, Wallet, ChevronLeft, Clock3, Pause, Play, XCircle, Download, UploadCloud, Pencil
 } from "lucide-react";
 
 // Register all icons used in the app here
@@ -41,6 +41,7 @@ const icons = {
   sparkles: Sparkles,
   plus: Plus,
   x: X,
+  moreVertical: MoreVertical,
   check: Check,
   chevronDown: ChevronDown,
   bookOpen: BookOpen,

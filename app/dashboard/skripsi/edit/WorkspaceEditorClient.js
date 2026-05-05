@@ -109,7 +109,10 @@ export default function WorkspaceEditorPage() {
   const [contentBuffer, setContentBuffer] = useState({});
   const [isSaving, setIsSaving] = useState(false);
   const [saveState, setSaveState] = useState("saved");
-  const [isMobile, setIsMobile] = useState(false);
+const [isMobile, setIsMobile] = useState(false);
+  const [isSm, setIsSm] = useState(false);
+  const [isXs, setIsXs] = useState(false);
+  const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
   const [isLeftRailCollapsed, setIsLeftRailCollapsed] = useState(false);
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(false);
   const [references, setReferences] = useState([]);
@@ -129,6 +132,8 @@ export default function WorkspaceEditorPage() {
     const handleResize = () => {
       const width = window.innerWidth;
       setIsMobile(width < 1024);
+      setIsSm(width < 768);
+      setIsXs(width < 480);
 
       if (!leftRailTouchedRef.current) {
         setIsLeftRailCollapsed(width < 1320);
@@ -405,12 +410,12 @@ export default function WorkspaceEditorPage() {
           <h3 style={{ fontSize: "0.95rem", margin: 0 }}>Konteks Cepat</h3>
           <span style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}>{currentChapter.label}</span>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0,1fr))", gap: "0.6rem" }}>
-          <div style={{ padding: "0.75rem", borderRadius: "10px", backgroundColor: "var(--background)" }}>
+        <div style={{ display: "grid", gridTemplateColumns: isSm ? "1fr" : "repeat(2, minmax(0,1fr))", gap: "0.6rem" }}>
+          <div style={{ padding: isSm ? "0.65rem" : "0.75rem", borderRadius: "10px", backgroundColor: "var(--background)" }}>
             <div style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>Referensi</div>
             <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text-main)" }}>{references.length}</div>
           </div>
-          <div style={{ padding: "0.75rem", borderRadius: "10px", backgroundColor: "var(--background)" }}>
+          <div style={{ padding: isSm ? "0.65rem" : "0.75rem", borderRadius: "10px", backgroundColor: "var(--background)" }}>
             <div style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>Respons</div>
             <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text-main)" }}>{latestAnalysis?.responseCount || 0}</div>
           </div>
@@ -555,48 +560,66 @@ export default function WorkspaceEditorPage() {
     <div style={{ margin: "-1.5rem", minHeight: "calc(100vh - 72px)", backgroundColor: "var(--background)" }}>
       <div
         style={{
-          padding: "0.75rem 1rem",
+          padding: isSm ? "0.5rem 0.75rem" : "0.75rem 1rem",
           borderBottom: "1px solid var(--border)",
           backgroundColor: "color-mix(in srgb, var(--surface) 92%, transparent)",
           backdropFilter: "blur(10px)",
-          position: "sticky",
-          top: 0,
+          position: "static",
           zIndex: 20,
         }}
       >
-        <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: "0.9rem", alignItems: "center" }}>
-          <div style={{ minWidth: 0, flex: "1 1 360px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.65rem", flexWrap: "wrap" }}>
-              <Link href="/dashboard/skripsi" style={{ display: "inline-flex", color: "var(--text-muted)" }}>
-                <PremiumIcon name="arrowLeft" size={18} />
+        <div style={{ display: "flex", flexDirection: isXs ? "column" : "row", flexWrap: "wrap", justifyContent: "space-between", gap: isXs ? "0.6rem" : "0.9rem", alignItems: isXs ? "stretch" : "center" }}>
+          <div style={{ minWidth: 0, flex: isSm ? "auto" : "1 1 360px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: isXs ? "0.3rem" : "0.65rem", flexWrap: isSm ? "nowrap" : "wrap" }}>
+              <Link href="/dashboard/skripsi" style={{ display: "inline-flex", color: "var(--text-muted)", flexShrink: 0 }}>
+                <PremiumIcon name="arrowLeft" size={isSm ? 14 : 18} />
               </Link>
-              <h1 style={{ fontSize: "1.05rem", margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              <h1 style={{ fontSize: isSm ? "0.85rem" : "1.05rem", margin: 0, whiteSpace: isSm ? "normal" : "nowrap", overflow: "hidden", textOverflow: isSm ? "clip" : "ellipsis", lineHeight: isSm ? 1.3 : 1, minWidth: 0, flex: 1, wordBreak: "break-word" }}>
                 {workspace.title || "Tanpa Judul"}
               </h1>
-              <StatusBadge status={workspace.status} />
+              {!isSm ? <StatusBadge status={workspace.status} /> : (
+                <div style={{ display: "inline-flex", padding: "0.2rem 0.45rem", borderRadius: "999px", fontSize: "0.6rem", backgroundColor: workspace.status === "Selesai" ? "rgba(16,185,129,0.15)" : workspace.status === "Revisi" ? "rgba(245,158,11,0.15)" : "rgba(107,114,128,0.15)", color: workspace.status === "Selesai" ? "var(--success)" : workspace.status === "Revisi" ? "#d97706" : "var(--text-muted)", fontWeight: 600, flexShrink: 0 }} title={workspace.status || "Draft"}>●</div>
+              )}
             </div>
-            <p
-              style={{
-                margin: "0.25rem 0 0 0",
-                fontSize: "0.78rem",
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                maxWidth: "860px",
-              }}
-            >
-              {workspace.topic || "Topik penelitian belum diisi."}
-            </p>
+            {!isSm ? (
+              <p
+                style={{
+                  margin: "0.25rem 0 0 0",
+                  fontSize: "0.78rem",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  maxWidth: "860px",
+                  color: "var(--text-muted)",
+                }}
+              >
+                {workspace.topic || "Topik penelitian belum diisi."}
+              </p>
+            ) : null}
           </div>
 
-          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.45rem", justifyContent: "flex-end" }}>
-            <SummaryChip label="Progress" value={`${progress}%`} tone={progress >= 100 ? "success" : "default"} />
-            <SummaryChip label="Form" value={activeForm?.title || "Belum aktif"} />
-            <SummaryChip
-              label="Autosave"
-              value={saveState === "saving" ? "Menyimpan..." : saveState === "dirty" ? "Perubahan baru" : saveState === "error" ? "Gagal" : "Aman"}
-              tone={saveState === "error" ? "danger" : saveState === "saved" ? "success" : "default"}
-            />
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.35rem", justifyContent: "flex-end", flexShrink: 0 }}>
+            {(isHeaderExpanded || !isSm) ? (
+              <>
+                <SummaryChip label="Progress" value={`${progress}%`} tone={progress >= 100 ? "success" : "default"} />
+                <SummaryChip label="Form" value={activeForm?.title || "Belum aktif"} />
+                <SummaryChip
+                  label="Autosave"
+                  value={saveState === "saving" ? "Menyimpan..." : saveState === "dirty" ? "Perubahan baru" : saveState === "error" ? "Gagal" : "Aman"}
+                  tone={saveState === "error" ? "danger" : saveState === "saved" ? "success" : "default"}
+                />
+              </>
+            ) : null}
+            {isSm ? (
+              <button
+                className="btn btn-ghost"
+                style={{ padding: "0.3rem", minWidth: 0, flexShrink: 0 }}
+                onClick={() => setIsHeaderExpanded((prev) => !prev)}
+                title={isHeaderExpanded ? "Tutup metadata" : "Buka metadata"}
+              >
+                <PremiumIcon name="moreVertical" size={14} />
+              </button>
+            ) : null}
           </div>
         </div>
       </div>
@@ -605,37 +628,84 @@ export default function WorkspaceEditorPage() {
         style={{
           display: "flex",
           flexDirection: isMobile ? "column" : "row",
-          gap: "1rem",
-          padding: "1rem",
+          gap: isMobile ? "0.5rem" : isSm ? "0.75rem" : "1rem",
+          padding: isMobile ? "0.5rem" : isSm ? "0.75rem" : "1rem",
           alignItems: "start",
         }}
       >
-        <aside
-          className="glass-panel workspace-scroll"
-          style={{
-            width: isMobile ? "100%" : isLeftRailCollapsed ? "82px" : "248px",
-            flexShrink: 0,
-            padding: isLeftRailCollapsed ? "0.85rem 0.65rem" : "1rem",
-            display: "flex",
-            flexDirection: "column",
-            gap: "1rem",
-            position: isMobile ? "static" : "sticky",
-            top: "84px",
-            maxHeight: isMobile ? "none" : "calc(100vh - 100px)",
-            transition: "width 0.2s ease, padding 0.2s ease",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.65rem" }}>
-            <div style={{ minWidth: 0, display: "flex", alignItems: "center", gap: "0.55rem" }}>
-              <PremiumIcon name="layoutTemplate" size={16} className="text-primary" />
-              {!isLeftRailCollapsed ? (
-                <div>
-                  <h3 style={{ fontSize: "0.92rem", margin: 0 }}>Research Cockpit</h3>
-                  <p style={{ margin: "0.2rem 0 0 0", fontSize: "0.74rem" }}>Mode kerja dan navigasi bab.</p>
-                </div>
-              ) : null}
+        {isMobile ? (
+          <div className="glass-panel" style={{ padding: "0.5rem", display: "flex", flexDirection: "column", gap: "0.5rem", width: "100%" }}>
+            <div style={{ display: "flex", gap: "0.5rem", overflowX: "auto", paddingBottom: "0.25rem", scrollSnapType: "x mandatory" }}>
+              {WORKSPACE_TABS.map((tab) => (
+                <button
+                  key={tab.key}
+                  className={`btn ${activeTab === tab.key ? "btn-primary" : "btn-outline"}`}
+                  style={{ 
+                    padding: "0.45rem 0.7rem",
+                    fontSize: "0.8rem",
+                    whiteSpace: "nowrap",
+                    flexShrink: 0,
+                    scrollSnapAlign: "start"
+                  }}
+                  onClick={() => setActiveTab(tab.key)}
+                  title={tab.label}
+                >
+                  <PremiumIcon name={tab.icon} size={13} style={{ marginRight: "0.3rem" }} />
+                  {tab.label}
+                </button>
+              ))}
             </div>
-            {!isMobile ? (
+            <div style={{ display: "flex", gap: "0.5rem", overflowX: "auto", paddingBottom: "0.25rem", scrollSnapType: "x mandatory" }}>
+              {CHAPTERS.map((chapter, index) => (
+                <button
+                  key={chapter.key}
+                  className={`btn ${activeChapter === index ? "btn-primary" : "btn-ghost"}`}
+                  style={{ 
+                    padding: "0.45rem 0.65rem",
+                    fontSize: "0.75rem",
+                    fontWeight: 600,
+                    minWidth: "2.2rem",
+                    whiteSpace: "nowrap",
+                    flexShrink: 0,
+                    scrollSnapAlign: "start"
+                  }}
+                  onClick={() => {
+                    setActiveTab("penulisan");
+                    setActiveChapter(index);
+                  }}
+                  title={chapter.longLabel}
+                >
+                  {index + 1}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <aside
+            className="glass-panel workspace-scroll"
+            style={{
+              width: isLeftRailCollapsed ? "82px" : "248px",
+              flexShrink: 0,
+              padding: isLeftRailCollapsed ? "0.85rem 0.65rem" : "1rem",
+              display: "flex",
+              flexDirection: "column",
+              gap: isSm ? "0.5rem" : "1rem",
+              position: "sticky",
+              top: "84px",
+              maxHeight: "calc(100vh - 100px)",
+              transition: "width 0.2s ease, padding 0.2s ease",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.65rem" }}>
+              <div style={{ minWidth: 0, display: "flex", alignItems: "center", gap: "0.55rem" }}>
+                <PremiumIcon name="layoutTemplate" size={16} className="text-primary" />
+                {!isLeftRailCollapsed ? (
+                  <div>
+                    <h3 style={{ fontSize: "0.92rem", margin: 0 }}>Research Cockpit</h3>
+                    <p style={{ margin: "0.2rem 0 0 0", fontSize: "0.74rem" }}>Mode kerja dan navigasi bab.</p>
+                  </div>
+                ) : null}
+              </div>
               <button
                 className="btn btn-ghost"
                 style={{ padding: "0.35rem" }}
@@ -644,76 +714,81 @@ export default function WorkspaceEditorPage() {
               >
                 <PremiumIcon name={isLeftRailCollapsed ? "chevronRight" : "chevronLeft"} size={15} />
               </button>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem" }}>
+              {WORKSPACE_TABS.map((tab) => (
+                <button
+                  key={tab.key}
+                  className={`btn ${activeTab === tab.key ? "btn-primary" : "btn-outline"}`}
+                  style={{ 
+                    justifyContent: isLeftRailCollapsed ? "center" : "flex-start", 
+                    paddingInline: isLeftRailCollapsed ? "0.5rem" : undefined,
+                    ...(isXs && { padding: "0.4rem 0.6rem", fontSize: "0.8rem" }),
+                    ...(isSm && isLeftRailCollapsed && { padding: "0.45rem" })
+                  }}
+                  onClick={() => setActiveTab(tab.key)}
+                  title={tab.label}
+                >
+                  <PremiumIcon name={tab.icon} size={15} />
+                  {!isLeftRailCollapsed ? tab.label : null}
+                </button>
+              ))}
+            </div>
+
+            <div style={{ paddingTop: "0.75rem", borderTop: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: "0.65rem" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem" }}>
+                {!isLeftRailCollapsed ? <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--text-main)" }}>Struktur Bab</span> : null}
+                <span style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}>{progress}%</span>
+              </div>
+              {CHAPTERS.map((chapter, index) => (
+                <button
+                  key={chapter.key}
+                  className={`btn ${activeChapter === index ? "btn-primary" : "btn-ghost"}`}
+                  style={{ justifyContent: isLeftRailCollapsed ? "center" : "space-between", paddingInline: isLeftRailCollapsed ? "0.5rem" : undefined }}
+                  onClick={() => {
+                    setActiveTab("penulisan");
+                    setActiveChapter(index);
+                  }}
+                  title={chapter.longLabel}
+                >
+                  <span>{isLeftRailCollapsed ? `${index + 1}` : chapter.label}</span>
+                  {!isLeftRailCollapsed ? (
+                    <span style={{ fontSize: "0.7rem", opacity: 0.82 }}>
+                      {(contentBuffer[chapter.key] || "").length ? "isi" : "kosong"}
+                    </span>
+                  ) : null}
+                </button>
+              ))}
+            </div>
+
+            {!isLeftRailCollapsed ? (
+              <div style={{ paddingTop: "0.75rem", borderTop: "1px solid var(--border)", display: isSm ? "flex" : "grid", flexDirection: isSm ? "column" : "row", gridTemplateColumns: "repeat(2, minmax(0,1fr))", gap: isSm ? "0.5rem" : "0.65rem" }}>
+                <div className="form-group" style={{ margin: 0, ...(isXs && { fontSize: "0.8rem" }) }}>
+                  <label className="form-label">Status</label>
+                  <select className="form-input" value={workspace.status || "Draft"} onChange={(event) => void handleStatusChange(event.target.value)}>
+                    <option value="Draft">Draft</option>
+                    <option value="Revisi">Revisi</option>
+                    <option value="Selesai">Selesai</option>
+                  </select>
+                </div>
+                <div className="form-group" style={{ margin: 0, ...(isXs && { fontSize: "0.8rem" }) }}>
+                  <label className="form-label">Metode</label>
+                  <select className="form-input" value={workspace.methodologyType || "kuantitatif"} onChange={(event) => void handleMethodologyChange(event.target.value)}>
+                    <option value="kuantitatif">Kuantitatif</option>
+                    <option value="kualitatif">Kualitatif</option>
+                    <option value="mixed">Mixed Methods</option>
+                  </select>
+                </div>
+              </div>
             ) : null}
-          </div>
+          </aside>
+        )}
 
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem" }}>
-            {WORKSPACE_TABS.map((tab) => (
-              <button
-                key={tab.key}
-                className={`btn ${activeTab === tab.key ? "btn-primary" : "btn-outline"}`}
-                style={{ justifyContent: isLeftRailCollapsed ? "center" : "flex-start", paddingInline: isLeftRailCollapsed ? "0.5rem" : undefined }}
-                onClick={() => setActiveTab(tab.key)}
-                title={tab.label}
-              >
-                <PremiumIcon name={tab.icon} size={15} />
-                {!isLeftRailCollapsed ? tab.label : null}
-              </button>
-            ))}
-          </div>
-
-          <div style={{ paddingTop: "0.75rem", borderTop: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: "0.65rem" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem" }}>
-              {!isLeftRailCollapsed ? <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--text-main)" }}>Struktur Bab</span> : null}
-              <span style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}>{progress}%</span>
-            </div>
-            {CHAPTERS.map((chapter, index) => (
-              <button
-                key={chapter.key}
-                className={`btn ${activeChapter === index ? "btn-primary" : "btn-ghost"}`}
-                style={{ justifyContent: isLeftRailCollapsed ? "center" : "space-between", paddingInline: isLeftRailCollapsed ? "0.5rem" : undefined }}
-                onClick={() => {
-                  setActiveTab("penulisan");
-                  setActiveChapter(index);
-                }}
-                title={chapter.longLabel}
-              >
-                <span>{isLeftRailCollapsed ? `${index + 1}` : chapter.label}</span>
-                {!isLeftRailCollapsed ? (
-                  <span style={{ fontSize: "0.7rem", opacity: 0.82 }}>
-                    {(contentBuffer[chapter.key] || "").length ? "isi" : "kosong"}
-                  </span>
-                ) : null}
-              </button>
-            ))}
-          </div>
-
-          {!isLeftRailCollapsed ? (
-            <div style={{ paddingTop: "0.75rem", borderTop: "1px solid var(--border)", display: "grid", gridTemplateColumns: "repeat(2, minmax(0,1fr))", gap: "0.65rem" }}>
-              <div className="form-group" style={{ margin: 0 }}>
-                <label className="form-label">Status</label>
-                <select className="form-input" value={workspace.status || "Draft"} onChange={(event) => void handleStatusChange(event.target.value)}>
-                  <option value="Draft">Draft</option>
-                  <option value="Revisi">Revisi</option>
-                  <option value="Selesai">Selesai</option>
-                </select>
-              </div>
-              <div className="form-group" style={{ margin: 0 }}>
-                <label className="form-label">Metode</label>
-                <select className="form-input" value={workspace.methodologyType || "kuantitatif"} onChange={(event) => void handleMethodologyChange(event.target.value)}>
-                  <option value="kuantitatif">Kuantitatif</option>
-                  <option value="kualitatif">Kualitatif</option>
-                  <option value="mixed">Mixed Methods</option>
-                </select>
-              </div>
-            </div>
-          ) : null}
-        </aside>
-
-        <main style={{ display: "flex", flexDirection: "column", gap: "1rem", minWidth: 0, flex: 1 }}>
-          <div className="glass-panel" style={{ padding: "0.75rem 0.9rem", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", flexWrap: "wrap" }}>
+        <main style={{ display: "flex", flexDirection: "column", gap: isMobile ? "0.5rem" : "1rem", minWidth: 0, flex: 1 }}>
+          <div className="glass-panel" style={{ padding: isSm ? "0.6rem 0.75rem" : "0.75rem 0.9rem", display: "flex", flexDirection: isSm ? "column" : "row", alignItems: isSm ? "stretch" : "center", justifyContent: "space-between", gap: isSm ? "0.5rem" : "0.75rem", flexWrap: "wrap" }}>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+              <div style={{ fontSize: isSm ? "0.7rem" : "0.75rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
                 {WORKSPACE_TABS.find((tab) => tab.key === activeTab)?.label || "Workspace"}
               </div>
               <div style={{ fontSize: "0.86rem", color: "var(--text-main)", fontWeight: 600 }}>
@@ -744,8 +819,16 @@ export default function WorkspaceEditorPage() {
           </div>
 
           {activeTab === "penulisan" ? (
-            <div className="glass-panel" style={{ overflow: "hidden", minHeight: "72vh", display: "flex", flexDirection: "column" }}>
-              <div style={{ padding: "1rem 1rem 0.65rem", borderBottom: "1px solid var(--border)" }}>
+            <div style={{ position: "relative", display: "flex", flexDirection: "column", minHeight: "72vh", overflow: "hidden" }}>
+              <div style={{ 
+                position: isMobile ? "relative" : "sticky",
+                top: 0,
+                zIndex: 10,
+                backgroundColor: "var(--surface)",
+                borderBottom: "1px solid var(--border)",
+                padding: isMobile ? "0.65rem 0.5rem 0.45rem" : "1rem 1rem 0.65rem",
+                flexShrink: 0
+              }}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", alignItems: "center", flexWrap: "wrap" }}>
                   <div>
                     <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
@@ -756,22 +839,24 @@ export default function WorkspaceEditorPage() {
                 </div>
               </div>
 
-              <div style={{ flex: 1, minHeight: 0 }}>
-                <TiptapEditor
-                  key={currentChapter.key}
-                  content={contentBuffer[currentChapter.key] || ""}
-                  onChange={(html) => handleEditorChange(currentChapter.key, html)}
-                  placeholder={currentChapter.placeholder}
-                />
-              </div>
+              <div className="glass-panel" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden", margin: 0, borderRadius: 0 }}>
+                <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+                  <TiptapEditor
+                    key={currentChapter.key}
+                    content={contentBuffer[currentChapter.key] || ""}
+                    onChange={(html) => handleEditorChange(currentChapter.key, html)}
+                    placeholder={currentChapter.placeholder}
+                  />
+                </div>
 
-              <div style={{ padding: "0.65rem 1rem", borderTop: "1px solid var(--border)", display: "flex", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap" }}>
-                <span style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}>
-                  Referensi terhubung untuk bab ini: <strong style={{ color: "var(--text-main)" }}>{currentChapterReferences.length}</strong>
-                </span>
-                <span style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}>
-                  Tekan <kbd style={{ padding: "1px 5px", border: "1px solid var(--border)", borderRadius: "4px" }}>Ctrl+S</kbd> untuk menyimpan manual
-                </span>
+                <div style={{ padding: "0.65rem 1rem", borderTop: "1px solid var(--border)", display: "flex", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap", flexShrink: 0 }}>
+                  <span style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}>
+                    Referensi terhubung untuk bab ini: <strong style={{ color: "var(--text-main)" }}>{currentChapterReferences.length}</strong>
+                  </span>
+                  <span style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}>
+                    Tekan <kbd style={{ padding: "1px 5px", border: "1px solid var(--border)", borderRadius: "4px" }}>Ctrl+S</kbd> untuk menyimpan manual
+                  </span>
+                </div>
               </div>
             </div>
           ) : null}

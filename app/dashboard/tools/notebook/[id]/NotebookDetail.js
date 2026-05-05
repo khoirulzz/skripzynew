@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, use } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
 import { useBillingCatalog } from "@/lib/useBillingCatalog";
@@ -9,16 +9,17 @@ import ReactMarkdown from "react-markdown";
 import { callGeminiStream, MODELS } from "@/lib/callWorker";
 import { deductCredits } from "@/lib/credits";
 import { indexDocument, searchSimilarChunks } from "@/lib/ragService";
-import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
+import { collection, query, where, getDocs, orderBy, writeBatch } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { searchPapersWithFallback, getErrorMessage } from "@/lib/referenceApis";
 import AnimatedLoadingScreen from "@/components/workspace/AnimatedLoadingScreen";
 
 // PDF.js import is now dynamically loaded in extractTextFromPDF to prevent SSR errors
 
+const WORKER_URL = process.env.NEXT_PUBLIC_WORKER_URL || "https://apikey.skripzy-app.workers.dev";
+const WORKER_SECRET = process.env.NEXT_PUBLIC_WORKER_SECRET || "skripzy1234";
 
-const COST_INDEXING = 5;
-const COST_QUERY = 1;
+// Credit costs are now dynamic from useBillingCatalog
 const MAX_FILE_SIZE_MB = 3;
 const MAX_JOURNALS_PER_NOTEBOOK = 10;
 
@@ -27,8 +28,13 @@ export default function NotebookDetailPage({ params }) {
   const { toolMap } = useBillingCatalog();
   const credits = userData?.credits ?? 0;
 
-  // In Next.js 14/15 client components, params might be a promise or an object. Safe unwrapping:
-  const notebookId = params?.id;
+  // Dynamic costs from useBillingCatalog
+  const indexingCost = toolMap["notebook-referensi"]?.creditCost ?? 5;
+  const queryCost = toolMap["notebook-referensi"]?.creditCost ?? 1; // Same tool, different operation
+
+  // In Next.js 15, params is a promise
+  const unwrappedParams = use(params);
+  const notebookId = unwrappedParams.id;
 
   const [notebook, setNotebook] = useState(null);
   const [documents, setDocuments] = useState([]);
@@ -43,6 +49,7 @@ export default function NotebookDetailPage({ params }) {
   const [selectedDocForViewer, setSelectedDocForViewer] = useState(null);
   const [viewerPage, setViewerPage] = useState(1);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   // Search state
   const [showSearchModal, setShowSearchModal] = useState(false);
@@ -88,8 +95,7 @@ export default function NotebookDetailPage({ params }) {
       const q = query(
         collection(db, "reference_chunks"),
         where("user_id", "==", user.uid),
-        where("notebook_id", "==", notebookId),
-        orderBy("created_at", "desc")
+        where("notebook_id", "==", notebookId)
       );
       const snapshot = await getDocs(q);
 
@@ -101,12 +107,14 @@ export default function NotebookDetailPage({ params }) {
             id: data.document_id,
             title: data.document_title,
             url: data.cloudinary_url,
-            createdAt: data.created_at?.toDate()
+            createdAt: data.created_at?.toDate() || new Date()
           };
         }
       });
 
-      setDocuments(Object.values(docsMap));
+      const docsArray = Object.values(docsMap);
+      docsArray.sort((a, b) => b.createdAt - a.createdAt);
+      setDocuments(docsArray);
     } catch (err) {
       console.error("Error fetching documents:", err);
     }
@@ -131,101 +139,167 @@ export default function NotebookDetailPage({ params }) {
     return fullText;
   };
 
-  const handleUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file || !user) {
-      console.error("No file selected or user not authenticated");
-      return;
-    }
+  const processFiles = async (files) => {
+    if (!user) return;
 
-    // Validasi: hanya PDF
-    if (!file.name.toLowerCase().endsWith(".pdf")) {
+    // Filter files
+    const pdfFiles = Array.from(files).filter(file => file.name.toLowerCase().endsWith(".pdf"));
+
+    if (pdfFiles.length === 0) {
       alert("Hanya file PDF yang diperbolehkan.");
       return;
     }
 
-    // Validasi: ukuran maks 3MB
-    if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
-      alert(`Ukuran file terlalu besar. Maksimal ${MAX_FILE_SIZE_MB}MB.`);
-      return;
+    let processedCount = 0;
+
+    for (const file of pdfFiles) {
+      if (documents.length + processedCount >= MAX_JOURNALS_PER_NOTEBOOK) {
+        alert(`Maksimal ${MAX_JOURNALS_PER_NOTEBOOK} jurnal per notebook. Upload dihentikan.`);
+        break;
+      }
+
+      if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
+        alert(`Ukuran file ${file.name} terlalu besar (maks ${MAX_FILE_SIZE_MB}MB). Dilewati.`);
+        continue;
+      }
+
+      if (credits < indexingCost) {
+        alert(`Kredit tidak cukup untuk memproses ${file.name}. Butuh ${indexingCost} kredit.`);
+        break;
+      }
+
+      setIsUploading(true);
+      setUploadProgress(`Membaca dokumen ${file.name}...`);
+
+      try {
+        console.log(`Starting PDF text extraction for ${file.name}...`);
+        const text = await extractTextFromPDF(file);
+
+        setUploadProgress(`Menyiapkan ruang penyimpanan...`);
+        const sigRes = await fetch(`${WORKER_URL}/api/cloudinary-sign`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-skripzy-secret": WORKER_SECRET },
+          body: JSON.stringify({ folder: "Referensi" })
+        });
+
+        if (!sigRes.ok) throw new Error(`Cloudinary signature failed: ${sigRes.status}`);
+
+        const { signature, timestamp, apiKey, cloudName } = await sigRes.json();
+
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("signature", signature);
+        formData.append("timestamp", timestamp);
+        formData.append("api_key", apiKey);
+        formData.append("folder", "Referensi");
+
+        setUploadProgress(`Menyiapkan unggahan...`);
+        const uploadRes = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`, {
+          method: "POST",
+          body: formData
+        });
+
+        if (!uploadRes.ok) throw new Error(`Cloudinary upload failed: ${uploadRes.status}`);
+
+        const uploadData = await uploadRes.json();
+
+        setUploadProgress(`Menyusun pemahaman AI untuk dokumen...`);
+        const docId = `doc_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+        await indexDocument(user.uid, notebookId, docId, file.name, text, uploadData.secure_url);
+
+        await deductCredits(user.uid, indexingCost);
+        processedCount++;
+
+        await fetchDocuments();
+      } catch (err) {
+        console.error(`Error processing ${file.name}:`, err);
+        alert(`Gagal memproses ${file.name}: ${err.message}`);
+      }
     }
 
-    // Validasi: maks 10 jurnal per notebook
-    if (documents.length >= MAX_JOURNALS_PER_NOTEBOOK) {
-      alert(`Maksimal ${MAX_JOURNALS_PER_NOTEBOOK} jurnal per notebook.`);
-      return;
-    }
+    setIsUploading(false);
+    setUploadProgress("");
+  };
 
-    if (credits < COST_INDEXING) {
-      alert(`Kredit tidak cukup. Butuh ${COST_INDEXING} kredit.`);
-      return;
+  const handleUpload = (e) => {
+    if (e.target.files && e.target.files.length > 0) {
+      processFiles(e.target.files);
     }
+    e.target.value = null;
+  };
 
-    setIsUploading(true);
-    setUploadProgress("Membaca file...");
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isDragging) setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      processFiles(e.dataTransfer.files);
+    }
+  };
+
+  const getCloudinaryPublicId = (url) => {
+    try {
+      if (!url) return null;
+      const parts = url.split('/');
+      const folderIndex = parts.findIndex(p => p === 'Referensi');
+      if (folderIndex !== -1) {
+        const fileWithExt = parts.slice(folderIndex).join('/');
+        return fileWithExt.split('.')[0];
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const handleDeleteDoc = async (e, docToDelete) => {
+    e.stopPropagation();
+    if (!confirm(`Apakah Anda yakin ingin menghapus jurnal "${docToDelete.title}"?`)) return;
 
     try {
-      console.log("Starting PDF text extraction...");
-      // 1. Ekstrak teks di client
-      const text = await extractTextFromPDF(file);
-      console.log(`Extracted text length: ${text.length} characters`);
+      // 1. Hapus dari Firestore
+      const q = query(
+        collection(db, "reference_chunks"),
+        where("document_id", "==", docToDelete.id)
+      );
+      const snapshot = await getDocs(q);
+      const batch = writeBatch(db);
+      snapshot.docs.forEach(docSnap => batch.delete(docSnap.ref));
+      await batch.commit();
 
-      setUploadProgress("Mengunggah file ke Cloudinary...");
-      console.log("Requesting Cloudinary signature...");
-      // 2. Upload ke Cloudinary (via worker sign)
-      const sigRes = await fetch(`${process.env.NEXT_PUBLIC_WORKER_URL}/api/cloudinary-sign`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-skripzy-secret": "skripzy1234" },
-        body: JSON.stringify({ folder: "Referensi" })
-      });
-
-      if (!sigRes.ok) {
-        throw new Error(`Cloudinary signature failed: ${sigRes.status}`);
+      // 2. Hapus dari Cloudinary
+      const publicId = getCloudinaryPublicId(docToDelete.url);
+      if (publicId) {
+        await fetch(`${WORKER_URL}/api/cloudinary-delete`, {
+          method: "POST",
+          headers: { 
+            "Content-Type": "application/json",
+            "x-skripzy-secret": WORKER_SECRET 
+          },
+          body: JSON.stringify({ publicId })
+        });
       }
 
-      const { signature, timestamp, apiKey, cloudName } = await sigRes.json();
-      console.log("Cloudinary signature obtained successfully");
-
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("signature", signature);
-      formData.append("timestamp", timestamp);
-      formData.append("api_key", apiKey);
-      formData.append("folder", "Referensi");
-
-      console.log("Uploading to Cloudinary...");
-      const uploadRes = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`, {
-        method: "POST",
-        body: formData
-      });
-
-      if (!uploadRes.ok) {
-        throw new Error(`Cloudinary upload failed: ${uploadRes.status}`);
-      }
-
-      const uploadData = await uploadRes.json();
-      console.log("Cloudinary upload successful:", uploadData.secure_url);
-
-      setUploadProgress("Membuat index vektor (AI)...");
-      console.log("Starting document indexing...");
-      // 3. Index ke Firestore (Vektorisasi)
-      const docId = `doc_${Date.now()}`;
-      const indexedChunks = await indexDocument(user.uid, notebookId, docId, file.name, text, uploadData.secure_url);
-      console.log(`Document indexed with ${indexedChunks} chunks`);
-
-      // 4. Potong kredit
-      console.log("Deducting credits...");
-      await deductCredits(user.uid, COST_INDEXING);
-
-      setUploadProgress("Selesai!");
-      console.log("Upload process completed successfully");
-      fetchDocuments();
+      // 3. Update UI
+      setDocuments(prev => prev.filter(d => d.id !== docToDelete.id));
+      setSelectedDocs(prev => prev.filter(id => id !== docToDelete.id));
+      alert("Jurnal berhasil dihapus.");
     } catch (err) {
-      console.error("Upload error:", err);
-      alert("Gagal mengupload: " + err.message);
-    } finally {
-      setIsUploading(false);
-      setUploadProgress("");
+      console.error("Gagal menghapus dokumen:", err);
+      alert("Terjadi kesalahan saat menghapus dokumen.");
     }
   };
 
@@ -236,8 +310,8 @@ export default function NotebookDetailPage({ params }) {
       return;
     }
 
-    if (credits < COST_QUERY) {
-      alert(`Kredit tidak cukup. Butuh ${COST_QUERY} kredit.`);
+    if (credits < queryCost) {
+      alert(`Kredit tidak cukup. Butuh ${queryCost} kredit.`);
       return;
     }
 
@@ -259,8 +333,8 @@ export default function NotebookDetailPage({ params }) {
 
     try {
       console.log(`Searching for chunks with ${selectedDocs.length} selected documents...`);
-      // 1. Cari chunk relevan
-      const chunks = await searchSimilarChunks(user.uid, input, selectedDocs, 5);
+      // 1. Cari chunk relevan (tingkatkan limit dari 5 ke 12 agar konteks lebih kaya)
+      const chunks = await searchSimilarChunks(user.uid, input, selectedDocs, 12);
       console.log(`Found ${chunks.length} relevant chunks`);
 
       // 2. Rakit context
@@ -307,7 +381,7 @@ ATURAN:
       setQueryCache(prev => ({ ...prev, [cacheKey]: fullAiResponse }));
 
       // Potong kredit query
-      await deductCredits(user.uid, COST_QUERY);
+      await deductCredits(user.uid, queryCost);
       console.log("Query process completed successfully");
 
     } catch (err) {
@@ -344,8 +418,8 @@ ATURAN:
       alert(`Maksimal ${MAX_JOURNALS_PER_NOTEBOOK} jurnal per notebook.`);
       return;
     }
-    if (credits < COST_INDEXING) {
-      alert(`Kredit tidak cukup. Butuh ${COST_INDEXING} kredit.`);
+    if (credits < indexingCost) {
+      alert(`Kredit tidak cukup. Butuh ${indexingCost} kredit.`);
       return;
     }
 
@@ -379,7 +453,7 @@ ATURAN:
       await indexDocument(user.uid, notebookId, docId, paper.title, text, paper.pdfUrl);
 
       // 4. Potong kredit
-      await deductCredits(user.uid, COST_INDEXING);
+      await deductCredits(user.uid, indexingCost);
       
       setUploadProgress("Selesai!");
       fetchDocuments();
@@ -453,7 +527,18 @@ ATURAN:
           display: "flex", flexDirection: "column", transition: "all 0.3s ease-in-out", height: "100%", overflow: "hidden",
           width: isSidebarOpen ? "320px" : "0px", opacity: isSidebarOpen ? 1 : 0, margin: 0
         }}>
-          <div className="glass-panel" style={{ padding: "1rem", display: "flex", flexDirection: "column", gap: "1rem", flex: 1, minHeight: 0, width: "320px", boxShadow: "var(--shadow-md)" }}>
+          <div 
+            className="glass-panel" 
+            style={{ 
+              padding: "1rem", display: "flex", flexDirection: "column", gap: "1rem", flex: 1, minHeight: 0, width: "320px", boxShadow: "var(--shadow-md)",
+              border: isDragging ? "2px dashed var(--primary)" : "1px solid var(--border)",
+              backgroundColor: isDragging ? "rgba(79, 70, 229, 0.05)" : "var(--background)",
+              transition: "all 0.2s ease"
+            }}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
             <div style={{ display: "flex", alignItems: "center", justifyItems: "space-between", justifyContent: "space-between" }}>
               <h3 style={{ fontWeight: 600, fontSize: "0.875rem", margin: 0 }}>Referensi Saya</h3>
               <div style={{ display: "flex", gap: "0.5rem" }}>
@@ -467,7 +552,7 @@ ATURAN:
                   </div>
                 </button>
                 <label style={{ cursor: "pointer", display: "flex", margin: 0 }}>
-                  <input type="file" accept=".pdf" style={{ display: "none" }} onChange={handleUpload} disabled={isUploading} />
+                  <input type="file" accept=".pdf" multiple style={{ display: "none" }} onChange={handleUpload} disabled={isUploading} />
                   <div style={{ padding: "0.4rem", backgroundColor: "rgba(79, 70, 229, 0.1)", color: "var(--primary)", borderRadius: "var(--radius-sm)", transition: "background-color 0.2s" }} onMouseOver={(e) => e.currentTarget.style.backgroundColor = "rgba(79, 70, 229, 0.2)"} onMouseOut={(e) => e.currentTarget.style.backgroundColor = "rgba(79, 70, 229, 0.1)"}>
                     <PremiumIcon name="plus" size={16} />
                   </div>
@@ -486,9 +571,9 @@ ATURAN:
 
             <div className="custom-scrollbar" style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.5rem", paddingRight: "0.25rem" }}>
               {documents.length === 0 && !isUploading && (
-                <div style={{ textAlign: "center", padding: "2.5rem 0", opacity: 0.5 }}>
+                <div style={{ textAlign: "center", padding: "2.5rem 0", opacity: 0.5, pointerEvents: "none" }}>
                   <div style={{ display: "flex", justifyContent: "center", marginBottom: "0.5rem" }}><PremiumIcon name="fileText" size={32} /></div>
-                  <p style={{ fontSize: "0.75rem", margin: 0 }}>Belum ada jurnal.<br />Klik + untuk mengunggah.</p>
+                  <p style={{ fontSize: "0.75rem", margin: 0 }}>Belum ada jurnal.<br />Klik + atau tarik (drag & drop) file PDF ke sini.</p>
                 </div>
               )}
               {documents.map(doc => (
@@ -514,15 +599,26 @@ ATURAN:
                       {doc.createdAt?.toLocaleDateString()}
                     </p>
                   </div>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); openPdfViewer(doc); }}
-                    style={{ padding: "0.25rem", color: "var(--text-muted)", background: "transparent", border: "none", cursor: "pointer", transition: "color 0.2s" }}
-                    onMouseOver={(e) => e.currentTarget.style.color = "var(--primary)"}
-                    onMouseOut={(e) => e.currentTarget.style.color = "var(--text-muted)"}
-                    title="Lihat PDF"
-                  >
-                    <PremiumIcon name="eye" size={14} />
-                  </button>
+                  <div style={{ display: "flex", gap: "0.25rem" }}>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); openPdfViewer(doc); }}
+                      style={{ padding: "0.25rem", color: "var(--text-muted)", background: "transparent", border: "none", cursor: "pointer", transition: "color 0.2s" }}
+                      onMouseOver={(e) => e.currentTarget.style.color = "var(--primary)"}
+                      onMouseOut={(e) => e.currentTarget.style.color = "var(--text-muted)"}
+                      title="Lihat PDF"
+                    >
+                      <PremiumIcon name="eye" size={14} />
+                    </button>
+                    <button
+                      onClick={(e) => handleDeleteDoc(e, doc)}
+                      style={{ padding: "0.25rem", color: "var(--text-muted)", background: "transparent", border: "none", cursor: "pointer", transition: "color 0.2s" }}
+                      onMouseOver={(e) => e.currentTarget.style.color = "var(--danger)"}
+                      onMouseOut={(e) => e.currentTarget.style.color = "var(--text-muted)"}
+                      title="Hapus PDF"
+                    >
+                      <PremiumIcon name="trash" size={14} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -647,7 +743,7 @@ ATURAN:
             </form>
             <div style={{ marginTop: "0.5rem", display: "flex", alignItems: "center", justifyItems: "center", justifyContent: "center", gap: "1rem", fontSize: "0.65rem", color: "var(--text-muted)" }}>
               <span style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
-                <PremiumIcon name="zap" size={10} /> 1 kredit / tanya
+                <PremiumIcon name="zap" size={10} /> {queryCost} kredit / tanya
               </span>
               <span style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
                 <PremiumIcon name="check" size={10} /> Konteks: {selectedDocs.length} Jurnal
@@ -836,7 +932,7 @@ ATURAN:
                               onMouseOut={(e) => e.currentTarget.style.backgroundColor = "rgba(79, 70, 229, 0.1)"}
                             >
                               <PremiumIcon name="plus" size={14} />
-                              Tambahkan ke Notebook (-{COST_INDEXING} Kredit)
+                                  Tambahkan ke Notebook (-{indexingCost} Kredit)
                             </button>
                             <a
                               href={paper.displayUrl}

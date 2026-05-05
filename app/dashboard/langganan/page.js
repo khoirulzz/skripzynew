@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
@@ -15,6 +15,9 @@ import {
   getTotalCreditsFromTopup,
   MANUAL_PAYMENT_CHANNELS,
   PAYMENT_METHODS,
+  BILLING_PERIODS,
+  calculatePeriodPrice,
+  createDokuPayment,
 } from "@/lib/billing";
 import {
   useActivePromos,
@@ -37,6 +40,11 @@ const STATUS_STYLES = {
     bg: "rgba(239,68,68,0.12)",
     color: "#DC2626",
     label: "Ditolak",
+  },
+  waiting_payment: {
+    bg: "rgba(59,130,246,0.12)",
+    color: "#2563EB",
+    label: "Menunggu Pembayaran",
   },
 };
 
@@ -92,52 +100,113 @@ function ChoiceCard({
   onClick,
   children,
 }) {
+  const [expanded, setExpanded] = useState(false);
+  
+  // Auto-expand if selected, or allow toggle
+  const isExpanded = selected || expanded;
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
+    <div
+      onClick={disabled ? undefined : onClick}
       style={{
         width: "100%",
         textAlign: "left",
         background: selected
-          ? `linear-gradient(180deg, ${accent}18, transparent 70%), var(--surface)`
+          ? `linear-gradient(180deg, ${accent}12, transparent 90%), var(--surface)`
           : "var(--surface)",
         border: `1.5px solid ${selected ? accent : "var(--border)"}`,
-        borderRadius: 18,
-        padding: "1rem",
+        borderRadius: 20,
         cursor: disabled ? "not-allowed" : "pointer",
         opacity: disabled ? 0.6 : 1,
-        transition: "all 0.2s ease",
-        boxShadow: selected ? `0 16px 32px ${accent}18` : "var(--shadow-sm)",
+        transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+        boxShadow: selected ? `0 12px 24px ${accent}20` : "var(--shadow-sm)",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+        position: "relative",
       }}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem", alignItems: "flex-start" }}>
-        <div>
-          <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 800 }}>{title}</h3>
+      {selected && (
+        <div style={{
+          position: "absolute",
+          top: 0, left: "50%", transform: "translateX(-50%)",
+          width: "80%", height: "40%",
+          background: `radial-gradient(ellipse at top, ${accent}30, transparent 70%)`,
+          filter: "blur(20px)",
+          pointerEvents: "none",
+        }} />
+      )}
+      <div style={{ padding: "1.2rem", display: "flex", justifyContent: "space-between", gap: "0.75rem", alignItems: "flex-start", position: "relative", zIndex: 1 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
+            <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 800 }}>{title}</h3>
+            {badge && (
+              <span
+                style={{
+                  padding: "0.25rem 0.65rem",
+                  borderRadius: 999,
+                  backgroundColor: selected ? accent : `${accent}20`,
+                  color: selected ? "#fff" : accent,
+                  fontSize: "0.65rem",
+                  fontWeight: 800,
+                  whiteSpace: "nowrap",
+                  transition: "all 0.3s ease",
+                }}
+              >
+                {badge}
+              </span>
+            )}
+          </div>
           {subtitle && (
-            <p style={{ margin: "0.35rem 0 0", fontSize: "0.8rem", color: "var(--text-muted)" }}>{subtitle}</p>
+            <p style={{ margin: "0.4rem 0 0", fontSize: "0.82rem", color: "var(--text-muted)", lineHeight: 1.4 }}>{subtitle}</p>
           )}
         </div>
-        {badge && (
-          <span
-            style={{
-              alignSelf: "flex-start",
-              padding: "0.28rem 0.7rem",
-              borderRadius: 999,
-              backgroundColor: accent,
-              color: "#fff",
-              fontSize: "0.68rem",
-              fontWeight: 800,
-              whiteSpace: "nowrap",
-            }}
-          >
-            {badge}
-          </span>
-        )}
+        
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setExpanded(!expanded);
+          }}
+          style={{
+            background: isExpanded ? `${accent}15` : "var(--surface-hover)",
+            border: "none",
+            color: isExpanded ? accent : "var(--text-muted)",
+            cursor: "pointer",
+            width: 32,
+            height: 32,
+            borderRadius: "50%",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            transition: "all 0.3s ease",
+            transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
+            flexShrink: 0
+          }}
+          aria-label="Toggle details"
+        >
+           <PremiumIcon name="chevronDown" size={18} />
+        </button>
       </div>
-      <div style={{ marginTop: "0.95rem" }}>{children}</div>
-    </button>
+      
+      <div 
+        style={{ 
+          maxHeight: isExpanded ? "800px" : "0", 
+          opacity: isExpanded ? 1 : 0, 
+          transition: "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
+          padding: isExpanded ? "0 1.2rem 1.2rem 1.2rem" : "0 1.2rem",
+          position: "relative",
+          zIndex: 1
+        }}
+      >
+        <div style={{ 
+          paddingTop: "0.8rem", 
+          borderTop: isExpanded ? "1px dashed var(--border)" : "none",
+          transition: "border-color 0.3s ease" 
+        }}>
+          {children}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -149,35 +218,38 @@ function OrderHistoryCard({ item }) {
       style={{
         backgroundColor: "var(--surface)",
         border: "1px solid var(--border)",
-        borderRadius: 18,
-        padding: "1rem",
+        borderRadius: 20,
+        padding: "1.2rem",
         display: "flex",
         flexDirection: "column",
-        gap: "0.85rem",
+        gap: "1rem",
+        boxShadow: "var(--shadow-sm)",
+        transition: "all 0.2s ease",
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", alignItems: "flex-start", flexWrap: "wrap" }}>
         <div>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.35rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
             <span
               style={{
-                padding: "0.25rem 0.55rem",
+                padding: "0.25rem 0.65rem",
                 borderRadius: 999,
                 backgroundColor: isPlan ? "rgba(79,70,229,0.12)" : "rgba(16,185,129,0.12)",
                 color: isPlan ? "var(--primary)" : "#059669",
                 fontSize: "0.68rem",
                 fontWeight: 800,
                 textTransform: "uppercase",
+                letterSpacing: "0.05em",
               }}
             >
               {isPlan ? "Plan" : "Kredit"}
             </span>
             <StatusBadge status={item.status} />
           </div>
-          <h3 style={{ margin: 0, fontSize: "0.98rem", fontWeight: 800 }}>
+          <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 800 }}>
             {getBillingRequestSummary(item)}
           </h3>
-          <p style={{ margin: "0.3rem 0 0", fontSize: "0.78rem", color: "var(--text-muted)" }}>
+          <p style={{ margin: "0.35rem 0 0", fontSize: "0.8rem", color: "var(--text-muted)" }}>
             {item.paymentChannelLabel || item.paymentMethodLabel} • {formatDate(item.timestamp)}
           </p>
         </div>
@@ -185,7 +257,7 @@ function OrderHistoryCard({ item }) {
           <p style={{ margin: 0, fontSize: "0.72rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700 }}>
             Nilai
           </p>
-          <p style={{ margin: "0.3rem 0 0", fontSize: "1rem", fontWeight: 900 }}>
+          <p style={{ margin: "0.3rem 0 0", fontSize: "1.15rem", fontWeight: 900 }}>
             {formatRupiah(item.finalPrice || item.basePrice || 0)}
           </p>
         </div>
@@ -196,23 +268,23 @@ function OrderHistoryCard({ item }) {
           style={{
             display: "grid",
             gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-            gap: "0.75rem",
+            gap: "0.85rem",
           }}
         >
-          <div style={{ padding: "0.8rem", borderRadius: 14, backgroundColor: "var(--surface-hover)" }}>
+          <div style={{ padding: "0.85rem", borderRadius: 16, backgroundColor: "var(--surface-hover)", border: "1px solid var(--border)" }}>
             <p style={{ margin: 0, fontSize: "0.7rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 700 }}>
               Kredit Masuk
             </p>
-            <p style={{ margin: "0.25rem 0 0", fontSize: "1rem", fontWeight: 800 }}>
+            <p style={{ margin: "0.25rem 0 0", fontSize: "1.05rem", fontWeight: 800 }}>
               +{Number(item.amount || 0).toLocaleString("id-ID")}
             </p>
           </div>
           {item.promoCode && (
-            <div style={{ padding: "0.8rem", borderRadius: 14, backgroundColor: "var(--surface-hover)" }}>
-              <p style={{ margin: 0, fontSize: "0.7rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 700 }}>
+            <div style={{ padding: "0.85rem", borderRadius: 16, backgroundColor: "rgba(16,185,129,0.05)", border: "1px solid rgba(16,185,129,0.15)" }}>
+              <p style={{ margin: 0, fontSize: "0.7rem", color: "#059669", textTransform: "uppercase", fontWeight: 700 }}>
                 Promo
               </p>
-              <p style={{ margin: "0.25rem 0 0", fontSize: "1rem", fontWeight: 800 }}>{item.promoCode}</p>
+              <p style={{ margin: "0.25rem 0 0", fontSize: "1.05rem", fontWeight: 800, color: "#047857" }}>{item.promoCode}</p>
             </div>
           )}
         </div>
@@ -221,11 +293,12 @@ function OrderHistoryCard({ item }) {
       {item.rejectedReason && (
         <div
           style={{
-            padding: "0.9rem 1rem",
-            borderRadius: 14,
+            padding: "1rem",
+            borderRadius: 16,
             backgroundColor: "rgba(239,68,68,0.08)",
+            border: "1px solid rgba(239,68,68,0.15)",
             color: "#B91C1C",
-            fontSize: "0.82rem",
+            fontSize: "0.85rem",
           }}
         >
           <strong>Catatan admin:</strong> {item.rejectedReason}
@@ -255,6 +328,25 @@ export default function LanggananPage() {
   const [submitting, setSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+  const [billingPeriodId, setBillingPeriodId] = useState("monthly");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const searchParams = new URLSearchParams(window.location.search);
+      const paymentStatus = searchParams.get("payment");
+      if (paymentStatus === "success") {
+        setSuccessMsg("Pembayaran berhasil diproses! Saldo atau paket Anda akan segera diperbarui.");
+      } else if (paymentStatus === "failed") {
+        setErrorMsg("Pembayaran gagal diproses. Silakan coba lagi.");
+      } else if (paymentStatus === "cancelled") {
+        setErrorMsg("Pembayaran dibatalkan.");
+      }
+
+      if (paymentStatus) {
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    }
+  }, []);
 
   const defaultTarget = useMemo(() => {
     const recommendedPlan =
@@ -289,9 +381,17 @@ export default function LanggananPage() {
 
   const selectedPaymentMethod = getPaymentMethodById(paymentMethodId);
   const selectedPaymentChannel = getPaymentChannelById(paymentChannelId);
+
+  const basePriceForPeriod = useMemo(() => {
+    if (selectedOrder?.type === "plan") {
+      return calculatePeriodPrice(selectedOrder.item.price || 0, billingPeriodId).totalPrice;
+    }
+    return selectedOrder?.item?.price || 0;
+  }, [selectedOrder, billingPeriodId]);
+
   const priceBreakdown = useMemo(
-    () => calculatePromoBreakdown(selectedOrder?.item?.price || 0, selectedPromo),
-    [selectedOrder, selectedPromo]
+    () => calculatePromoBreakdown(basePriceForPeriod, selectedPromo),
+    [basePriceForPeriod, selectedPromo]
   );
 
   const groupedChannels = useMemo(() => {
@@ -336,11 +436,6 @@ export default function LanggananPage() {
 
     clearMessages();
 
-    if (!selectedPaymentMethod?.enabled) {
-      setErrorMsg("Pembayaran otomatis masih coming soon. Silakan gunakan pembayaran manual dulu.");
-      return;
-    }
-
     if (selectedOrder.type === "plan") {
       if (selectedOrder.item.planId === currentPlan) {
         setErrorMsg("Plan ini sudah aktif di akun Anda.");
@@ -353,34 +448,50 @@ export default function LanggananPage() {
       }
     }
 
-    if (!selectedPaymentChannel) {
+    if (paymentMethodId === "manual" && !selectedPaymentChannel) {
       setErrorMsg("Pilih channel pembayaran manual terlebih dahulu.");
       return;
     }
 
     setSubmitting(true);
     try {
-      await createBillingRequest({
-        user,
-        userData,
-        requestType: selectedOrder.type,
-        selectedItem: selectedOrder.item,
-        paymentMethodId,
-        paymentChannelId,
-        promo: selectedPromo,
-        priceBreakdown,
-        customerNotes,
-      });
+      if (paymentMethodId === "automatic") {
+        const dokuRes = await createDokuPayment({
+          user,
+          userData,
+          requestType: selectedOrder.type,
+          selectedItem: selectedOrder.item,
+          promo: selectedPromo,
+          priceBreakdown,
+          billingPeriod: billingPeriodId,
+        });
 
-      setSuccessMsg(
-        selectedOrder.type === "plan"
-          ? "Permintaan upgrade plan berhasil dikirim. Admin akan memverifikasi pembayaran manual Anda."
-          : "Permintaan top-up kredit berhasil dikirim. Kredit akan masuk setelah admin menyetujui pembayaran."
-      );
-      setCustomerNotes("");
+        if (dokuRes.paymentUrl) {
+          window.location.href = dokuRes.paymentUrl;
+          return; // Jangan set submitting ke false agar loading tetap tampil saat redirect
+        }
+      } else {
+        await createBillingRequest({
+          user,
+          userData,
+          requestType: selectedOrder.type,
+          selectedItem: selectedOrder.item,
+          paymentMethodId,
+          paymentChannelId,
+          promo: selectedPromo,
+          priceBreakdown,
+          customerNotes,
+        });
+
+        setSuccessMsg(
+          selectedOrder.type === "plan"
+            ? "Permintaan upgrade plan berhasil dikirim. Admin akan memverifikasi pembayaran manual Anda."
+            : "Permintaan top-up kredit berhasil dikirim. Kredit akan masuk setelah admin menyetujui pembayaran."
+        );
+        setCustomerNotes("");
+      }
     } catch (error) {
       setErrorMsg(error.message || "Gagal membuat permintaan pembayaran.");
-    } finally {
       setSubmitting(false);
     }
   };
@@ -393,11 +504,11 @@ export default function LanggananPage() {
           overflow: "hidden",
           borderRadius: 24,
           border: "1px solid rgba(79,70,229,0.14)",
-          padding: "1.5rem",
+          padding: "2rem 1.5rem",
           background:
             "radial-gradient(circle at top left, rgba(79,70,229,0.14), transparent 35%), radial-gradient(circle at top right, rgba(16,185,129,0.12), transparent 30%), var(--surface)",
           boxShadow: "0 24px 60px rgba(15,23,42,0.08)",
-          marginBottom: "1.5rem",
+          marginBottom: "2rem",
         }}
       >
         <div style={{ display: "flex", alignItems: "flex-start", gap: "1rem", flexWrap: "wrap" }}>
@@ -465,11 +576,49 @@ export default function LanggananPage() {
       )}
 
       <section style={{ marginBottom: "2rem" }}>
-        <div style={{ marginBottom: "1rem" }}>
-          <h2 style={{ margin: 0, fontSize: "1.22rem", fontWeight: 900 }}>Pilih Plan Langganan</h2>
-          <p style={{ margin: "0.35rem 0 0", fontSize: "0.88rem", color: "var(--text-muted)" }}>
-            Tiga plan selalu tetap, dan harganya otomatis mengikuti konfigurasi terbaru dari admin.
-          </p>
+        <div style={{ marginBottom: "1rem", display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: "1rem" }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: "1.22rem", fontWeight: 900 }}>Pilih Plan Langganan</h2>
+            <p style={{ margin: "0.35rem 0 0", fontSize: "0.88rem", color: "var(--text-muted)" }}>
+              Pilih periode langganan yang sesuai dengan kebutuhan Anda. Hemat lebih banyak dengan paket tahunan.
+            </p>
+          </div>
+
+          <div style={{ display: "flex", gap: "0.5rem", background: "var(--surface)", padding: "0.35rem", borderRadius: "999px", border: "1px solid var(--border)" }}>
+            {BILLING_PERIODS.map((period) => (
+              <button
+                key={period.id}
+                onClick={() => setBillingPeriodId(period.id)}
+                style={{
+                  padding: "0.5rem 1rem",
+                  borderRadius: "999px",
+                  fontSize: "0.82rem",
+                  fontWeight: billingPeriodId === period.id ? 800 : 600,
+                  background: billingPeriodId === period.id ? "var(--primary)" : "transparent",
+                  color: billingPeriodId === period.id ? "#fff" : "var(--text-muted)",
+                  border: "none",
+                  cursor: "pointer",
+                  transition: "all 0.2s ease",
+                  whiteSpace: "nowrap"
+                }}
+              >
+                {period.label}
+                {period.discount > 0 && (
+                  <span style={{
+                    marginLeft: "0.4rem",
+                    padding: "0.15rem 0.4rem",
+                    borderRadius: "999px",
+                    background: billingPeriodId === period.id ? "rgba(255,255,255,0.2)" : "rgba(16,185,129,0.15)",
+                    color: billingPeriodId === period.id ? "#fff" : "#059669",
+                    fontSize: "0.65rem",
+                    fontWeight: 800
+                  }}>
+                    -{period.discount}%
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: "1rem" }}>
@@ -492,12 +641,28 @@ export default function LanggananPage() {
                   setSelectedTarget({ type: "plan", id: plan.planId });
                 }}
               >
-                <div style={{ display: "flex", alignItems: "baseline", gap: "0.3rem", marginBottom: "0.8rem" }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: "0.3rem", marginBottom: "0.8rem", flexWrap: "wrap" }}>
                   <span style={{ fontSize: "0.95rem", color: "var(--text-muted)" }}>Rp</span>
-                  <span style={{ fontSize: "2rem", fontWeight: 900 }}>{Number(plan.price).toLocaleString("id-ID")}</span>
-                  <span style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>/bulan</span>
+                  <span style={{ fontSize: "2rem", fontWeight: 900 }}>
+                    {Number(calculatePeriodPrice(plan.price || 0, billingPeriodId).finalPrice).toLocaleString("id-ID")}
+                  </span>
+                  <span style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>/{BILLING_PERIODS.find(p => p.id === billingPeriodId)?.label}</span>
+
+                  {billingPeriodId !== "monthly" && calculatePeriodPrice(plan.price || 0, billingPeriodId).discountAmount > 0 && (
+                    <span style={{ fontSize: "0.82rem", color: "var(--text-muted)", textDecoration: "line-through", marginLeft: "0.3rem" }}>
+                      Rp {Number(calculatePeriodPrice(plan.price || 0, billingPeriodId).totalPrice).toLocaleString("id-ID")}
+                    </span>
+                  )}
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.55rem" }}>
+                  {plan.creditsPerMonth && (
+                    <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-start", marginBottom: "0.2rem" }}>
+                      <PremiumIcon name="coins" size={15} style={{ color: "#F59E0B", marginTop: "2px", flexShrink: 0 }} />
+                      <span style={{ fontSize: "0.82rem", lineHeight: 1.45, fontWeight: 800 }}>
+                        {plan.creditsPerMonth} Kredit / bulan
+                      </span>
+                    </div>
+                  )}
                   {plan.features.map((feature) => (
                     <div key={feature} style={{ display: "flex", gap: "0.5rem", alignItems: "flex-start" }}>
                       <PremiumIcon name="checkCircle" size={15} style={{ color: plan.accent, marginTop: "2px", flexShrink: 0 }} />
@@ -573,20 +738,21 @@ export default function LanggananPage() {
 
       <section
         style={{
-          display: "grid",
-          gridTemplateColumns: "1.15fr 0.95fr",
-          gap: "1rem",
-          alignItems: "start",
-          marginBottom: "2rem",
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "1.5rem",
+          alignItems: "flex-start",
+          marginBottom: "2.5rem",
         }}
       >
         <div
           style={{
+            flex: "1 1 500px",
             backgroundColor: "var(--surface)",
             border: "1px solid var(--border)",
-            borderRadius: 22,
-            padding: "1.2rem",
-            boxShadow: "var(--shadow-sm)",
+            borderRadius: 24,
+            padding: "1.5rem",
+            boxShadow: "0 12px 32px rgba(0,0,0,0.03)",
           }}
         >
           <div style={{ marginBottom: "1.1rem" }}>
@@ -620,14 +786,14 @@ export default function LanggananPage() {
                       gap: "0.6rem",
                       padding: "0.8rem 0.9rem",
                       borderRadius: 14,
-                      backgroundColor: item.enabled ? "rgba(16,185,129,0.08)" : "rgba(59,130,246,0.08)",
-                      color: item.enabled ? "#047857" : "#1D4ED8",
+                      backgroundColor: item.id === "automatic" ? "rgba(59,130,246,0.08)" : "rgba(16,185,129,0.08)",
+                      color: item.id === "automatic" ? "#2563EB" : "#047857",
                       fontSize: "0.8rem",
                       fontWeight: 700,
                     }}
                   >
                     <PremiumIcon name={item.id === "automatic" ? "sparkles" : "checkCircle"} size={16} />
-                    {item.enabled ? "Siap dipakai sekarang" : "Disiapkan untuk versi berikutnya"}
+                    {item.id === "automatic" ? "Checkout otomatis via DOKU" : "Verifikasi manual oleh admin"}
                   </div>
                 </ChoiceCard>
               );
@@ -777,29 +943,59 @@ export default function LanggananPage() {
             )}
           </div>
 
-          <div style={{ marginTop: "1.2rem" }}>
-            <label style={{ display: "block", fontSize: "0.82rem", color: "var(--text-muted)", fontWeight: 700, marginBottom: "0.45rem" }}>
-              Catatan Pembayaran
-            </label>
-            <textarea
-              value={customerNotes}
-              onChange={(event) => setCustomerNotes(event.target.value)}
-              className="form-textarea"
-              rows={4}
-              placeholder="Contoh: transfer dari rekening a.n. Budi, jam 14.30 WIB."
-            />
-          </div>
+          {/* DOKU info panel for automatic mode */}
+          {paymentMethodId === "automatic" && (
+            <div
+              style={{
+                marginTop: "1rem",
+                padding: "1rem 1.1rem",
+                borderRadius: 18,
+                background: "linear-gradient(135deg, rgba(59,130,246,0.1), rgba(99,102,241,0.08))",
+                border: "1px solid rgba(59,130,246,0.2)",
+                display: "flex",
+                gap: "0.85rem",
+                alignItems: "flex-start",
+              }}
+            >
+              <PremiumIcon name="sparkles" size={18} style={{ color: "#3B82F6", flexShrink: 0, marginTop: "2px" }} />
+              <div>
+                <p style={{ margin: 0, fontSize: "0.88rem", fontWeight: 800, color: "#1D4ED8" }}>
+                  Checkout Otomatis via DOKU
+                </p>
+                <p style={{ margin: "0.3rem 0 0", fontSize: "0.8rem", color: "var(--text-muted)", lineHeight: 1.55 }}>
+                  Anda akan diarahkan ke halaman pembayaran DOKU yang aman. Tersedia QRIS, Virtual Account, GoPay, OVO, Dana, dan Kartu Kredit. Kredit atau plan akan otomatis masuk setelah pembayaran berhasil.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Customer notes - only for manual */}
+          {paymentMethodId === "manual" && (
+            <div style={{ marginTop: "1.2rem" }}>
+              <label style={{ display: "block", fontSize: "0.82rem", color: "var(--text-muted)", fontWeight: 700, marginBottom: "0.45rem" }}>
+                Catatan Pembayaran
+              </label>
+              <textarea
+                value={customerNotes}
+                onChange={(event) => setCustomerNotes(event.target.value)}
+                className="form-textarea"
+                rows={4}
+                placeholder="Contoh: transfer dari rekening a.n. Budi, jam 14.30 WIB."
+              />
+            </div>
+          )}
         </div>
 
         <div
           style={{
+            flex: "1 1 350px",
             position: "sticky",
             top: "5.5rem",
             backgroundColor: "var(--surface)",
             border: "1px solid var(--border)",
-            borderRadius: 22,
-            padding: "1.2rem",
-            boxShadow: "var(--shadow-sm)",
+            borderRadius: 24,
+            padding: "1.5rem",
+            boxShadow: "0 12px 32px rgba(0,0,0,0.03)",
           }}
         >
           <div style={{ marginBottom: "1rem" }}>
@@ -870,24 +1066,38 @@ export default function LanggananPage() {
                   <span className="text-muted">Harga Dasar</span>
                   <strong>{formatRupiah(priceBreakdown.basePrice)}</strong>
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem", fontSize: "0.86rem" }}>
-                  <span className="text-muted">Diskon Promo</span>
-                  <strong style={{ color: selectedPromo ? "#059669" : "var(--text-muted)" }}>
-                    -{formatRupiah(priceBreakdown.discountAmount)}
-                  </strong>
-                </div>
+                {priceBreakdown.discountAmount > 0 && (
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem", fontSize: "0.86rem" }}>
+                    <span className="text-muted">Diskon Promo</span>
+                    <strong style={{ color: "#059669" }}>-{formatRupiah(priceBreakdown.discountAmount)}</strong>
+                  </div>
+                )}
+                {selectedOrder.type === "plan" && billingPeriodId !== "monthly" && (
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem", fontSize: "0.86rem" }}>
+                    <span className="text-muted">Periode</span>
+                    <strong style={{ color: "#059669" }}>{BILLING_PERIODS.find(p => p.id === billingPeriodId)?.label}</strong>
+                  </div>
+                )}
                 <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem", fontSize: "0.86rem" }}>
                   <span className="text-muted">Metode</span>
                   <strong>{selectedPaymentMethod?.label || "-"}</strong>
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem", fontSize: "0.86rem" }}>
-                  <span className="text-muted">Channel</span>
-                  <strong>{selectedPaymentChannel?.label || "-"}</strong>
-                </div>
+                {paymentMethodId === "manual" && (
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem", fontSize: "0.86rem" }}>
+                    <span className="text-muted">Channel</span>
+                    <strong>{selectedPaymentChannel?.label || "-"}</strong>
+                  </div>
+                )}
                 {selectedOrder.type === "topup" && (
                   <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem", fontSize: "0.86rem" }}>
                     <span className="text-muted">Kredit Diterima</span>
                     <strong>+{getTotalCreditsFromTopup(selectedOrder.item).toLocaleString("id-ID")}</strong>
+                  </div>
+                )}
+                {selectedOrder.type === "plan" && selectedOrder.item.creditsPerMonth && (
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem", fontSize: "0.86rem" }}>
+                    <span className="text-muted">Kredit/bulan</span>
+                    <strong style={{ color: "#F59E0B" }}>+{selectedOrder.item.creditsPerMonth.toLocaleString("id-ID")}</strong>
                   </div>
                 )}
               </div>
@@ -920,13 +1130,19 @@ export default function LanggananPage() {
                   style={{
                     padding: "1rem",
                     borderRadius: 18,
-                    backgroundColor: "rgba(59,130,246,0.08)",
+                    background: "linear-gradient(135deg, rgba(82, 93, 110, 0.1), rgba(99,102,241,0.08))",
+                    border: "1px solid rgba(59,130,246,0.2)",
                     color: "#1D4ED8",
-                    fontSize: "0.84rem",
+                    fontSize: "0.82rem",
                     fontWeight: 700,
+                    display: "flex",
+                    gap: "0.6rem",
+                    alignItems: "center",
+                    marginBottom: "1rem",
                   }}
                 >
-                  Pembayaran otomatis masih coming soon. Silakan pilih pembayaran manual untuk saat ini.
+                  <PremiumIcon name="sparkles" size={16} />
+                  Anda akan diarahkan ke halaman pembayaran DOKU yang aman.
                 </div>
               ) : (
                 <div
@@ -965,8 +1181,10 @@ export default function LanggananPage() {
                       : "linear-gradient(135deg, #10B981, #059669)",
                 }}
               >
-                <PremiumIcon name={paymentMethodId === "automatic" ? "sparkles" : "checkCircle"} size={16} />
-                {submitting ? "Mengirim Permintaan..." : paymentMethodId === "automatic" ? "Pembayaran Otomatis (Coming Soon)" : "Kirim Permintaan Manual"}
+                <PremiumIcon name={submitting ? "loader" : paymentMethodId === "automatic" ? "sparkles" : "checkCircle"} size={16} />
+                {submitting
+                  ? paymentMethodId === "automatic" ? "Mengarahkan ke DOKU..." : "Mengirim Permintaan..."
+                  : paymentMethodId === "automatic" ? "Bayar Sekarang via DOKU" : "Kirim Permintaan Manual"}
               </button>
             </>
           )}

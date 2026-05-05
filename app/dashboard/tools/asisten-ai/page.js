@@ -10,15 +10,13 @@ import { PremiumIcon } from "@/components/ui/PremiumIcon";
 import { useBillingCatalog } from "@/lib/useBillingCatalog";
 import Link from "next/link";
 
-const COST_JUDUL = 2;
-const COST_BG = 3;
 const API_GROUP = "group_2"; // Group untuk Asisten AI
 
 export default function AsistenAIPage() {
   const { user, userData } = useAuth();
   const { toolMap } = useBillingCatalog();
-  const titleCost = toolMap["asisten-ai-judul"]?.creditCost ?? COST_JUDUL;
-  const backgroundCost = toolMap["asisten-ai-latar-belakang"]?.creditCost ?? COST_BG;
+  const titleCost = toolMap["asisten-ai-judul"]?.creditCost ?? 2;
+  const backgroundCost = toolMap["asisten-ai-latar-belakang"]?.creditCost ?? 3;
   const [activeTab, setActiveTab] = useState("judul"); // "judul" | "latar_belakang"
 
   // States untuk Generator Judul

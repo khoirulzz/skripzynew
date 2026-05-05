@@ -1,18 +1,32 @@
-# Sidebar Hamburger & Mobile Background Fixes
+# Mobile Workspace Responsive Fixes - Skripzy2
 
-## Completed! ✅
+## Status: [IN PROGRESS] 
 
-All steps finished:
-- [x] Step 1: Update app/dashboard/layout.js - Pass toggleCollapse prop to Sidebar instances, add solid background to mobile sidebar overlay
-- [x] Step 2: Update components/layout/Header.js - Remove hamburger button
-- [x] Step 3: Update components/layout/Sidebar.js - Add hamburger button at top with toggle functionality
-- [x] Step 4: Test mobile behavior and attempt_completion
+### Plan Summary
+Improve mobile layout for jurnal/skripsi workspace edit pages ONLY:
+- ✅ Granular mobile states (isSm, isXs)
+- Left sidebar: Stack forms/buttons, reduce density
+- Headers: Column layout on very small screens
+- Right panel: Stack grids, improve modal sizing
+- Reduce paddings/gaps on mobile
+- Desktop 100% unchanged
 
-Files changed:
-- `app/dashboard/layout.js`
-- `components/layout/Header.js` 
-- `components/layout/Sidebar.js`
+### Implementation Steps
+- ✅ 1. Add responsive states (isSm <768px, isXs <480px) to both client files
+- ✅ 2. Update left sidebar: Stack status/methodology grid to column on isSm
+- ✅ 3. Improve sidebar button sizing/padding on mobile
+- ✅ 4. Fix main header: flex-col on isXs, smaller fonts
+- ✅ 5. Main editor header: responsive flex-direction
+- ✅ 6. Right panel: Stack internal grids on isSm
+- ✅ 7. Adjust all paddings/gaps for mobile (0.5-0.75rem)
+- [ ] 8. Test mobile viewports (Chrome DevTools: iPhone, Galaxy)
+- [ ] 9. Verify desktop unchanged
+- [ ] 10. attempt_completion
 
-**Test:** Navigate to `/dashboard` and resize to mobile (<768px). Hamburger now only in sidebar, stays on expand, mobile sidebar has solid background (non-transparent).**
+**Current Step: 1/10 - Add responsive states**
 
-**Next: Step 1**
+**Notes**: 
+- Edit ONLY `WorkspaceEditorClient.js` & `JurnalWorkspaceClient.js`
+- NO changes to logic, components, or globals.css
+- Inline styles only (preserve existing pattern)
+

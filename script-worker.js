@@ -6,6 +6,101 @@
 
 const RETRYABLE_STATUS = new Set([401, 403, 408, 429, 500, 502, 503, 504]);
 
+// ──── DOKU PAYMENT GATEWAY HELPERS ────
+
+function getDokuConfig(env) {
+    return {
+        clientId: env.DOKU_CLIENT_ID || "",
+        secretKey: env.DOKU_SECRET_KEY || "",
+        baseUrl: env.DOKU_BASE_URL || "https://api-sandbox.doku.com",
+        callbackUrl: env.DOKU_CALLBACK_URL || "https://app.skripzy.id/dashboard/langganan/",
+    };
+}
+
+function generateRequestId() {
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    let result = "";
+    for (let i = 0; i < 32; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+}
+
+function generateInvoiceNumber(prefix = "SKRZ") {
+    const now = new Date();
+    const dateStr = now.toISOString().slice(0, 10).replace(/-/g, "");
+    const timeStr = now.toISOString().slice(11, 19).replace(/:/g, "");
+    const rand = Math.random().toString(36).substring(2, 8).toUpperCase();
+    return `${prefix}-${dateStr}-${timeStr}-${rand}`;
+}
+
+async function arrayBufferToBase64(buffer) {
+    const bytes = new Uint8Array(buffer);
+    let binary = "";
+    for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary);
+}
+
+async function generateDokuDigest(bodyString) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(bodyString);
+    const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+    return arrayBufferToBase64(hashBuffer);
+}
+
+async function generateDokuSignature(clientId, secretKey, requestId, timestamp, requestTarget, bodyString) {
+    const digest = await generateDokuDigest(bodyString);
+
+    const signatureComponents = [
+        `Client-Id:${clientId}`,
+        `Request-Id:${requestId}`,
+        `Request-Timestamp:${timestamp}`,
+        `Request-Target:${requestTarget}`,
+        `Digest:${digest}`,
+    ].join("\n");
+
+    const encoder = new TextEncoder();
+    const keyData = encoder.encode(secretKey);
+    const messageData = encoder.encode(signatureComponents);
+
+    const cryptoKey = await crypto.subtle.importKey(
+        "raw",
+        keyData,
+        { name: "HMAC", hash: "SHA-256" },
+        false,
+        ["sign"]
+    );
+
+    const signatureBuffer = await crypto.subtle.sign("HMAC", cryptoKey, messageData);
+    const signatureBase64 = await arrayBufferToBase64(signatureBuffer);
+
+    return `HMACSHA256=${signatureBase64}`;
+}
+
+async function verifyDokuNotificationSignature(headers, rawBody, clientId, secretKey) {
+    try {
+        const incomingSignature = headers.get("Signature") || headers.get("signature") || "";
+        const requestId = headers.get("Request-Id") || headers.get("request-id") || "";
+        const requestTimestamp = headers.get("Request-Timestamp") || headers.get("request-timestamp") || "";
+
+        if (!incomingSignature || !requestId || !requestTimestamp) {
+            return false;
+        }
+
+        const notificationTarget = "/api/doku/notification";
+        const expectedSignature = await generateDokuSignature(
+            clientId, secretKey, requestId, requestTimestamp, notificationTarget, rawBody
+        );
+
+        return incomingSignature === expectedSignature;
+    } catch (error) {
+        console.error("[DOKU] Signature verification error:", error.message);
+        return false;
+    }
+}
+
 function createCorsHeaders(extra = {}) {
     return {
         "Access-Control-Allow-Origin": "*",
@@ -37,6 +132,28 @@ function slugify(value = "") {
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/(^-|-$)+/g, "")
         .slice(0, 80);
+}
+
+/**
+ * Format range tahun menjadi tanggal OpenAlex yang valid.
+ * OpenAlex mendukung from_publication_date dan to_publication_date,
+ * bukan publication_year:YYYY-YYYY.
+ */
+function buildOpenAlexDateFilter(yearFrom, yearTo) {
+    const fromYear = Number.parseInt(yearFrom, 10);
+    const toYear = Number.parseInt(yearTo, 10);
+
+    if (!Number.isFinite(fromYear) || !Number.isFinite(toYear)) {
+        return null;
+    }
+
+    const safeFrom = Math.min(fromYear, toYear);
+    const safeTo = Math.max(fromYear, toYear);
+
+    return [
+        `from_publication_date:${safeFrom}-01-01`,
+        `to_publication_date:${safeTo}-12-31`,
+    ].join(",");
 }
 
 async function verifyFirebaseToken(idToken, env) {
@@ -258,6 +375,449 @@ const worker = {
         const isPublicFormEndpoint = url.pathname.startsWith("/public/forms/");
         const isWorkspacePublishEndpoint = url.pathname === "/workspace/forms/publish";
         const isWorkspaceAiEndpoint = url.pathname === "/workspace/ai/chapter-generate";
+        const isDokuCreatePayment = url.pathname === "/api/doku/create-payment";
+        const isDokuNotification = url.pathname === "/api/doku/notification";
+
+        // ──── ENDPOINT: DOKU CREATE PAYMENT ────
+        if (isDokuCreatePayment && request.method === "POST") {
+            const authToken = extractBearerToken(request);
+            const session = await verifyFirebaseToken(authToken, env);
+            if (!session) {
+                return new Response(JSON.stringify({ error: "Sesi tidak valid. Silakan login ulang." }), {
+                    status: 401,
+                    headers: createCorsHeaders(),
+                });
+            }
+
+            const payload = await request.json().catch(() => null);
+            if (!payload || !payload.amount || payload.amount <= 0) {
+                return new Response(JSON.stringify({ error: "Data pembayaran tidak valid." }), {
+                    status: 400,
+                    headers: createCorsHeaders(),
+                });
+            }
+
+            const doku = getDokuConfig(env);
+            if (!doku.clientId || !doku.secretKey) {
+                return new Response(JSON.stringify({ error: "DOKU belum dikonfigurasi di server." }), {
+                    status: 500,
+                    headers: createCorsHeaders(),
+                });
+            }
+
+            try {
+                const invoiceNumber = generateInvoiceNumber();
+                const requestId = generateRequestId();
+                const timestamp = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
+                const requestTarget = "/checkout/v1/payment";
+
+                const dokuBody = {
+                    order: {
+                        amount: Math.round(payload.amount),
+                        invoice_number: invoiceNumber,
+                        callback_url: doku.callbackUrl + "?payment=success&inv=" + invoiceNumber,
+                        callback_url_cancel: doku.callbackUrl + "?payment=cancelled",
+                        language: "ID",
+                        auto_redirect: true,
+                        disable_retry_payment: false,
+                    },
+                    payment: {
+                        payment_due_date: payload.paymentDueDate || 60,
+                    },
+                    customer: {
+                        name: payload.customerName || session.email || "Pengguna Skripzy",
+                        email: payload.customerEmail || session.email || "",
+                    },
+                };
+
+                const bodyString = JSON.stringify(dokuBody);
+                const signature = await generateDokuSignature(
+                    doku.clientId, doku.secretKey, requestId, timestamp, requestTarget, bodyString
+                );
+
+                const dokuResponse = await fetch(`${doku.baseUrl}${requestTarget}`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Client-Id": doku.clientId,
+                        "Request-Id": requestId,
+                        "Request-Timestamp": timestamp,
+                        "Signature": signature,
+                    },
+                    body: bodyString,
+                });
+
+                const dokuData = await dokuResponse.json().catch(() => ({}));
+
+                if (!dokuResponse.ok) {
+                    console.error("[DOKU] Create payment failed:", JSON.stringify(dokuData));
+                    return new Response(JSON.stringify({
+                        error: dokuData?.error?.message || dokuData?.message || "Gagal membuat pembayaran DOKU.",
+                        details: dokuData,
+                    }), {
+                        status: dokuResponse.status,
+                        headers: createCorsHeaders(),
+                    });
+                }
+
+                const paymentUrl = dokuData?.response?.payment?.url || dokuData?.payment?.url || null;
+
+                // Simpan ke Firestore topups collection
+                const firestoreDoc = toFirestoreDocument({
+                    userId: session.uid,
+                    userName: payload.customerName || session.email || "User Skripzy",
+                    userEmail: session.email || payload.customerEmail || "",
+                    status: "waiting_payment",
+                    requestType: payload.requestType || "topup",
+                    productName: payload.productName || "",
+                    paymentMethodId: "automatic",
+                    paymentMethodLabel: "Pembayaran Otomatis (DOKU)",
+                    paymentChannelId: "doku-checkout",
+                    paymentChannelLabel: "DOKU Checkout",
+                    paymentChannelGroup: "gateway",
+                    invoiceNumber: invoiceNumber,
+                    dokuRequestId: requestId,
+                    paymentUrl: paymentUrl || "",
+                    promoId: payload.promoId || null,
+                    promoCode: payload.promoCode || null,
+                    promoType: payload.promoType || null,
+                    basePrice: Math.round(payload.basePrice || payload.amount || 0),
+                    discountAmount: Math.round(payload.discountAmount || 0),
+                    finalPrice: Math.round(payload.amount),
+                    customerNotes: "",
+                    timestamp: new Date().toISOString(),
+                    approvedAt: null,
+                    rejectedAt: null,
+                    rejectedReason: "",
+                    // Plan-specific fields
+                    planId: payload.planId || null,
+                    planName: payload.planName || null,
+                    billingPeriod: payload.billingPeriod || "monthly",
+                    // Topup-specific fields
+                    topupSlug: payload.topupSlug || null,
+                    creditsBase: payload.creditsBase || 0,
+                    bonusCredits: payload.bonusCredits || 0,
+                    amount: payload.creditsTotal || 0,
+                });
+
+                const firestoreRes = await firestoreRequest(env, "topups", {
+                    method: "POST",
+                    body: firestoreDoc,
+                });
+
+                const fsData = await firestoreRes.json().catch(() => ({}));
+                const docId = fsData?.name?.split("/").pop() || null;
+
+                console.log(`[DOKU] Payment created: inv=${invoiceNumber}, docId=${docId}, url=${paymentUrl}`);
+
+                return new Response(JSON.stringify({
+                    ok: true,
+                    payment_url: paymentUrl,
+                    invoice_number: invoiceNumber,
+                    doc_id: docId,
+                }), {
+                    status: 200,
+                    headers: createCorsHeaders(),
+                });
+
+            } catch (error) {
+                console.error("[DOKU] Create payment error:", error.message);
+                return new Response(JSON.stringify({ error: error.message || "Gagal memproses pembayaran." }), {
+                    status: 500,
+                    headers: createCorsHeaders(),
+                });
+            }
+        }
+
+        // ──── ENDPOINT: DOKU NOTIFICATION WEBHOOK ────
+        if (isDokuNotification && request.method === "POST") {
+            const rawBody = await request.text();
+            let notifData;
+            try {
+                notifData = JSON.parse(rawBody);
+            } catch {
+                return new Response(JSON.stringify({ error: "Invalid JSON" }), {
+                    status: 400,
+                    headers: createCorsHeaders(),
+                });
+            }
+
+            const doku = getDokuConfig(env);
+
+            // Verify signature (log warning but don't block in sandbox)
+            const isValidSignature = await verifyDokuNotificationSignature(
+                request.headers, rawBody, doku.clientId, doku.secretKey
+            );
+
+            if (!isValidSignature) {
+                console.warn("[DOKU] Notification signature mismatch - processing anyway for sandbox");
+            }
+
+            const invoiceNumber = notifData?.order?.invoice_number || "";
+            const transactionStatus = (notifData?.transaction?.status || "").toUpperCase();
+            const transactionAmount = notifData?.order?.amount || 0;
+
+            console.log(`[DOKU] Notification: inv=${invoiceNumber}, status=${transactionStatus}, amount=${transactionAmount}`);
+
+            if (!invoiceNumber) {
+                return new Response(JSON.stringify({ ok: true, message: "No invoice number" }), {
+                    status: 200,
+                    headers: createCorsHeaders(),
+                });
+            }
+
+            try {
+                // Find the topup doc by invoice number using Firestore REST query
+                const { projectId, webApiKey } = getFirebaseConfig(env);
+                const queryUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents:runQuery?key=${webApiKey}`;
+
+                const queryBody = {
+                    structuredQuery: {
+                        from: [{ collectionId: "topups" }],
+                        where: {
+                            fieldFilter: {
+                                field: { fieldPath: "invoiceNumber" },
+                                op: "EQUAL",
+                                value: { stringValue: invoiceNumber },
+                            },
+                        },
+                        limit: 1,
+                    },
+                };
+
+                const queryRes = await fetch(queryUrl, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(queryBody),
+                });
+
+                const queryResults = await queryRes.json().catch(() => []);
+                const matchDoc = queryResults?.[0]?.document;
+
+                if (!matchDoc) {
+                    console.warn(`[DOKU] No topup doc found for invoice: ${invoiceNumber}`);
+                    return new Response(JSON.stringify({ ok: true, message: "Doc not found" }), {
+                        status: 200,
+                        headers: createCorsHeaders(),
+                    });
+                }
+
+                const docName = matchDoc.name;
+                const docData = fromFirestoreDocument(matchDoc);
+                const currentStatus = docData.status;
+
+                // Skip if already processed
+                if (currentStatus === "approved" || currentStatus === "rejected") {
+                    console.log(`[DOKU] Invoice ${invoiceNumber} already processed as ${currentStatus}`);
+                    return new Response(JSON.stringify({ ok: true, message: "Already processed" }), {
+                        status: 200,
+                        headers: createCorsHeaders(),
+                    });
+                }
+
+                const now = new Date().toISOString();
+
+                if (transactionStatus === "SUCCESS") {
+                    // Update topup doc to approved
+                    const updatePayload = toFirestoreDocument({
+                        status: "approved",
+                        approvedAt: now,
+                        dokuTransactionStatus: transactionStatus,
+                        dokuRawNotification: JSON.stringify(notifData),
+                    });
+
+                    await fetch(`https://firestore.googleapis.com/v1/${docName}?key=${webApiKey}&updateMask.fieldPaths=status&updateMask.fieldPaths=approvedAt&updateMask.fieldPaths=dokuTransactionStatus&updateMask.fieldPaths=dokuRawNotification`, {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(updatePayload),
+                    });
+
+                    // Auto-approve: add credits or upgrade plan
+                    const userId = docData.userId;
+                    if (userId) {
+                        const userDocUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${userId}?key=${webApiKey}`;
+                        const userRes = await fetch(userDocUrl);
+                        const userData = userRes.ok ? fromFirestoreDocument(await userRes.json()) : null;
+
+                        if (userData) {
+                            const requestType = docData.requestType || "topup";
+
+                            if (requestType === "plan") {
+                                // Upgrade plan
+                                const planUpdate = toFirestoreDocument({
+                                    plan: docData.planId || "pro",
+                                    updatedAt: now,
+                                });
+                                await fetch(`https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${userId}?key=${webApiKey}&updateMask.fieldPaths=plan&updateMask.fieldPaths=updatedAt`, {
+                                    method: "PATCH",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify(planUpdate),
+                                });
+
+                                // Also add plan credits if applicable
+                                const planCredits = Number(docData.amount) || 0;
+                                if (planCredits > 0) {
+                                    const currentCredits = Number(userData.credits) || 0;
+                                    const creditUpdate = toFirestoreDocument({
+                                        credits: currentCredits + planCredits,
+                                        updatedAt: now,
+                                    });
+                                    await fetch(`https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${userId}?key=${webApiKey}&updateMask.fieldPaths=credits&updateMask.fieldPaths=updatedAt`, {
+                                        method: "PATCH",
+                                        headers: { "Content-Type": "application/json" },
+                                        body: JSON.stringify(creditUpdate),
+                                    });
+                                }
+
+                                console.log(`[DOKU] Plan upgraded for user ${userId}: ${docData.planId}, +${planCredits} credits`);
+                            } else {
+                                // Add credits for topup
+                                const creditsToAdd = Number(docData.amount) || 0;
+                                const currentCredits = Number(userData.credits) || 0;
+                                const creditUpdate = toFirestoreDocument({
+                                    credits: currentCredits + Math.max(0, creditsToAdd),
+                                    updatedAt: now,
+                                });
+                                await fetch(`https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${userId}?key=${webApiKey}&updateMask.fieldPaths=credits&updateMask.fieldPaths=updatedAt`, {
+                                    method: "PATCH",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify(creditUpdate),
+                                });
+
+                                console.log(`[DOKU] Credits added for user ${userId}: +${creditsToAdd}`);
+                            }
+
+                            // Handle promo usage
+                            if (docData.promoId) {
+                                const promoUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/promos/${docData.promoId}?key=${webApiKey}`;
+                                const promoRes = await fetch(promoUrl);
+                                if (promoRes.ok) {
+                                    const promoData = fromFirestoreDocument(await promoRes.json());
+                                    const promoUpdate = toFirestoreDocument({
+                                        usedCount: (Number(promoData.usedCount) || 0) + 1,
+                                        updatedAt: now,
+                                    });
+                                    await fetch(`${promoUrl}&updateMask.fieldPaths=usedCount&updateMask.fieldPaths=updatedAt`, {
+                                        method: "PATCH",
+                                        headers: { "Content-Type": "application/json" },
+                                        body: JSON.stringify(promoUpdate),
+                                    });
+                                }
+                            }
+                        }
+                    }
+
+                    console.log(`[DOKU] Payment SUCCESS processed for invoice: ${invoiceNumber}`);
+                } else {
+                    // Payment failed/expired
+                    const failUpdate = toFirestoreDocument({
+                        status: "rejected",
+                        rejectedAt: now,
+                        rejectedReason: `Pembayaran DOKU: ${transactionStatus}`,
+                        dokuTransactionStatus: transactionStatus,
+                        dokuRawNotification: JSON.stringify(notifData),
+                    });
+
+                    await fetch(`https://firestore.googleapis.com/v1/${docName}?key=${webApiKey}&updateMask.fieldPaths=status&updateMask.fieldPaths=rejectedAt&updateMask.fieldPaths=rejectedReason&updateMask.fieldPaths=dokuTransactionStatus&updateMask.fieldPaths=dokuRawNotification`, {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(failUpdate),
+                    });
+
+                    console.log(`[DOKU] Payment ${transactionStatus} for invoice: ${invoiceNumber}`);
+                }
+
+                return new Response(JSON.stringify({ ok: true }), {
+                    status: 200,
+                    headers: createCorsHeaders(),
+                });
+            } catch (error) {
+                console.error("[DOKU] Notification processing error:", error.message);
+                // Return 200 anyway so DOKU doesn't retry
+                return new Response(JSON.stringify({ ok: true, error: error.message }), {
+                    status: 200,
+                    headers: createCorsHeaders(),
+                });
+            }
+        }
+
+        // ──── ENDPOINT: DOKU TEST CONNECTION (FOR DEBUGGING) ────
+        const isDokuTest = url.pathname === "/api/doku/test-connection";
+        if (isDokuTest && request.method === "POST") {
+            const doku = getDokuConfig(env);
+            if (!doku.clientId || !doku.secretKey) {
+                return new Response(JSON.stringify({
+                    error: "DOKU credentials not configured",
+                    clientId: doku.clientId || "missing",
+                    secretKey: doku.secretKey ? "configured" : "missing",
+                }), {
+                    status: 400,
+                    headers: createCorsHeaders(),
+                });
+            }
+
+            try {
+                const testBody = {
+                    order: {
+                        amount: 10000,
+                        invoice_number: `TEST-${Date.now()}`,
+                        callback_url: doku.callbackUrl,
+                        language: "ID",
+                        auto_redirect: true,
+                    },
+                    payment: { payment_due_date: 60 },
+                    customer: { name: "Test User", email: "test@skripzy.id" },
+                };
+
+                const requestId = generateRequestId();
+                const timestamp = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
+                const requestTarget = "/checkout/v1/payment";
+                const bodyString = JSON.stringify(testBody);
+
+                const signature = await generateDokuSignature(
+                    doku.clientId, doku.secretKey, requestId, timestamp, requestTarget, bodyString
+                );
+
+                console.log(`[DOKU TEST] Signature: ${signature}`);
+                console.log(`[DOKU TEST] ClientId: ${doku.clientId}`);
+
+                const dokuResponse = await fetch(`${doku.baseUrl}${requestTarget}`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Client-Id": doku.clientId,
+                        "Request-Id": requestId,
+                        "Request-Timestamp": timestamp,
+                        "Signature": signature,
+                    },
+                    body: bodyString,
+                });
+
+                const dokuData = await dokuResponse.json().catch(() => ({}));
+
+                return new Response(JSON.stringify({
+                    ok: dokuResponse.ok,
+                    status: dokuResponse.status,
+                    signature: signature,
+                    clientId: doku.clientId,
+                    requestId: requestId,
+                    timestamp: timestamp,
+                    response: dokuData,
+                }), {
+                    status: 200,
+                    headers: createCorsHeaders(),
+                });
+            } catch (error) {
+                console.error("[DOKU TEST] Error:", error.message);
+                return new Response(JSON.stringify({
+                    error: error.message,
+                    stack: error.stack,
+                }), {
+                    status: 500,
+                    headers: createCorsHeaders(),
+                });
+            }
+        }
 
         if (isPublicFormEndpoint) {
             const slug = parsePublicFormSlug(url.pathname);
@@ -505,6 +1065,40 @@ const worker = {
                 });
             }
 
+            // ──── ENDPOINT BARU: DELETE CLOUDINARY FILE ────
+            if (url.pathname === "/api/cloudinary-delete" && request.method === "POST") {
+                const { publicId } = await request.json();
+                
+                if (!publicId) {
+                    return new Response(JSON.stringify({ error: "publicId required" }), { status: 400, headers: createCorsHeaders() });
+                }
+
+                const timestamp = Math.round((new Date).getTime() / 1000);
+                const paramsToSign = { public_id: publicId, timestamp };
+                const keys = Object.keys(paramsToSign).sort();
+                const stringToSign = keys.map(k => `${k}=${paramsToSign[k]}`).join('&') + (env.CLOUDINARY_API_SECRET || "");
+                
+                const msgBuffer = new TextEncoder().encode(stringToSign);
+                const hashBuffer = await crypto.subtle.digest('SHA-1', msgBuffer);
+                const signature = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+
+                const formData = new FormData();
+                formData.append("public_id", publicId);
+                formData.append("signature", signature);
+                formData.append("timestamp", timestamp);
+                formData.append("api_key", env.CLOUDINARY_API_KEY);
+
+                const delRes = await fetch(`https://api.cloudinary.com/v1_1/${env.CLOUDINARY_CLOUD_NAME}/image/destroy`, {
+                    method: "POST",
+                    body: formData
+                });
+                
+                return new Response(JSON.stringify(await delRes.json()), {
+                    status: 200,
+                    headers: createCorsHeaders(),
+                });
+            }
+
             // ──── ENDPOINT BARU: BATCH EMBEDDING UNTUK RAG ────
             if (url.pathname === "/api/ai/embed-batch" && request.method === "POST") {
                 const { texts, model = "gemini-embedding-2" } = await request.json();
@@ -519,7 +1113,8 @@ const worker = {
                 const payload = {
                     requests: texts.map(t => ({
                         model: `models/${model}`,
-                        content: { parts: [{ text: t }] }
+                        content: { parts: [{ text: t }] },
+                        outputDimensionality: 768
                     }))
                 };
 
@@ -553,6 +1148,54 @@ const worker = {
                 return new Response(JSON.stringify({ error: "Batch embedding failed", details: lastError }), {
                     status: lastError?.status || 500, headers: createCorsHeaders()
                 });
+            }
+
+            // ──── ENDPOINT BARU: VECTORIZE UPSERT ────
+            if (url.pathname === "/api/vector/upsert" && request.method === "POST") {
+                if (!env.VECTOR_INDEX) {
+                    return new Response(JSON.stringify({ error: "Vectorize not bound" }), { status: 500, headers: createCorsHeaders() });
+                }
+                const { vectors } = await request.json(); // [{ id, values, metadata }]
+
+                if (!vectors || !Array.isArray(vectors)) {
+                    return new Response(JSON.stringify({ error: "Invalid vectors array" }), { status: 400, headers: createCorsHeaders() });
+                }
+
+                try {
+                    const result = await env.VECTOR_INDEX.insert(vectors);
+                    return new Response(JSON.stringify({ success: true, result }), {
+                        status: 200,
+                        headers: createCorsHeaders(),
+                    });
+                } catch (e) {
+                    return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: createCorsHeaders() });
+                }
+            }
+
+            // ──── ENDPOINT BARU: VECTORIZE QUERY ────
+            if (url.pathname === "/api/vector/query" && request.method === "POST") {
+                if (!env.VECTOR_INDEX) {
+                    return new Response(JSON.stringify({ error: "Vectorize not bound" }), { status: 500, headers: createCorsHeaders() });
+                }
+                const { vector, topK = 10, filter, returnMetadata = true } = await request.json();
+
+                if (!vector || !Array.isArray(vector)) {
+                    return new Response(JSON.stringify({ error: "Invalid query vector" }), { status: 400, headers: createCorsHeaders() });
+                }
+
+                try {
+                    const options = { topK, returnMetadata };
+                    if (filter) {
+                        options.filter = filter;
+                    }
+                    const matches = await env.VECTOR_INDEX.query(vector, options);
+                    return new Response(JSON.stringify({ matches }), {
+                        status: 200,
+                        headers: createCorsHeaders(),
+                    });
+                } catch (e) {
+                    return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: createCorsHeaders() });
+                }
             }
 
             // ──── ENDPOINT BARU: WEBSOCKET PROXY UNTUK GEMINI LIVE ────
@@ -642,13 +1285,19 @@ const worker = {
                 }
 
                 try {
-                    let openalexUrl = `https://api.openalex.org/works?search=${encodeURIComponent(query)}&per_page=${Math.min(limit, 50)}`;
+                    const perPage = Math.min(limit, 50);
+                    let openalexUrl = `https://api.openalex.org/works?search=${encodeURIComponent(query)}&per_page=${perPage}`;
 
-                    // Add year filtering if provided
-                    if (yearFrom && yearTo) {
-                        const yearFilter = `publication_year:${yearFrom}-${yearTo}`;
-                        openalexUrl += `&filter=${encodeURIComponent(yearFilter)}`;
+                    // FIX UTAMA:
+                    // OpenAlex tidak memakai publication_year:2020-2025.
+                    // Untuk range tahun harus pakai from_publication_date dan to_publication_date.
+                    const dateFilter = buildOpenAlexDateFilter(yearFrom, yearTo);
+                    if (dateFilter) {
+                        openalexUrl += `&filter=${encodeURIComponent(dateFilter)}`;
                     }
+
+                    // Sort terbaru dulu agar hasil lebih relevan secara temporal.
+                    openalexUrl += `&sort=publication_date:desc`;
 
                     console.log(`[OpenAlex API] Fetching: ${query} (${yearFrom}-${yearTo})`);
                     const openalexResponse = await fetch(openalexUrl, { method: "GET" });

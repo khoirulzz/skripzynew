@@ -77,6 +77,42 @@ const QUICK_TOOLS = [
     pro: false,
     badge: null,
   },
+    {
+    href: "/dashboard/tools/notebook",
+    slug: "notebook-referensi",
+    icon: "bookMarked",
+    iconColor: "#4F46E5",
+    iconBg: "rgba(79, 70, 229, 0.1)",
+    title: "Notebook",
+    desc: "Buat ringkasan, kutipan dan insight dari referensimu",
+    credit: 5,
+    pro: true,
+    badge: "NEW",
+  },
+  {
+    href: "/dashboard/tools/simulasi-sidang",
+    slug: "simulasi-sidang",
+    icon: "barChart",
+    iconColor: "#EC4899",
+    iconBg: "rgba(236, 72, 153, 0.1)",
+    title: "Simulasi Sidang",
+    desc: "Uji mental dan materimu bersama Dosen Penguji AI",
+    credit: 5,
+    pro: true,
+    badge: "HOTS",
+  },
+  {
+    href: "/dashboard/tools/referensi",
+    slug: "referensi-ringkas",
+    icon: "bookOpen",
+    iconColor: "#8B5CF6",
+    iconBg: "rgba(139, 92, 246, 0.1)",
+    title: "Referensi Cerdas",
+    desc: "Cari jurnal & sitasi otomatis untuk artikelmu",
+    credit: 2,
+    pro: false,
+    badge: null,
+  },
   {
     href: "/dashboard/tools/humanizer",
     slug: "humanizer",
@@ -86,8 +122,8 @@ const QUICK_TOOLS = [
     title: "Humanizer",
     desc: "Buat teks AI terdengar seperti manusia",
     credit: 3,
-    pro: true,
-    badge: "PRO",
+    pro: false,
+    badge: null,
   },
   {
     href: "/dashboard/tools/ai-detector",
@@ -101,42 +137,7 @@ const QUICK_TOOLS = [
     pro: true,
     badge: "PRO",
   },
-  {
-    href: "/dashboard/tools/referensi",
-    slug: "referensi-ringkas",
-    icon: "bookOpen",
-    iconColor: "#8B5CF6",
-    iconBg: "rgba(139, 92, 246, 0.1)",
-    title: "Referensi Cerdas",
-    desc: "Cari jurnal & sitasi otomatis untuk artikelmu",
-    credit: 2,
-    pro: true,
-    badge: "PRO",
-  },
-  {
-    href: "/dashboard/tools/notebook",
-    slug: "notebook-referensi",
-    icon: "bookMarked",
-    iconColor: "#4F46E5",
-    iconBg: "rgba(79, 70, 229, 0.1)",
-    title: "Notebook",
-    desc: "Simpan & tanya jawab dengan referensi jurnalmu",
-    credit: 5,
-    pro: true,
-    badge: "NEW",
-  },
-  {
-    href: "/dashboard/tools/simulasi-sidang",
-    slug: "simulasi-sidang",
-    icon: "barChart",
-    iconColor: "#EC4899",
-    iconBg: "rgba(236, 72, 153, 0.1)",
-    title: "Simulasi Sidang",
-    desc: "Latih presentasi & tanya jawab sidang",
-    credit: 5,
-    pro: true,
-    badge: "HOTS",
-  },
+  
 ];
 
 // ============================================================
@@ -151,6 +152,19 @@ function ProBadge() {
       letterSpacing: "0.05em",
     }}>
       PRO
+    </span>
+  );
+}
+
+function FreeBadge() {
+  return (
+    <span style={{
+      fontSize: "0.6rem", padding: "2px 7px",
+      background: "rgba(16, 185, 129, 0.2)",
+      color: "#10B981", borderRadius: "10px", fontWeight: 700,
+      letterSpacing: "0.05em",
+    }}>
+      FREE
     </span>
   );
 }
@@ -268,7 +282,7 @@ function QuickToolCard({ tool, plan }) {
       <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
           <h4 style={{ fontSize: "1rem", margin: 0, color: "var(--text-main)", fontWeight: 700 }}>{tool.title}</h4>
-          {tool.badge && <ProBadge />}
+          {tool.pro ? <ProBadge /> : <FreeBadge />}
         </div>
         <p style={{ fontSize: "0.85rem", margin: 0, lineHeight: 1.5, color: "var(--text-muted)" }}>{tool.desc}</p>
       </div>

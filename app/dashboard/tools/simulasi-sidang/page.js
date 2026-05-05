@@ -10,7 +10,6 @@ import { useBillingCatalog } from "@/lib/useBillingCatalog";
 import Link from "next/link";
 import Script from "next/script";
 
-const COST_SESSION = 5;
 const SIDANG_MODEL = "gemini-flash-lite-latest";
 
 const DOSEN_PROFILES = [
@@ -58,7 +57,7 @@ export default function SimulasiSidangPage() {
   const { toolMap } = useBillingCatalog();
   const credits = userData?.credits ?? 0;
   const plan = userData?.plan || "free";
-  const sessionCost = toolMap["simulasi-sidang"]?.creditCost ?? COST_SESSION;
+  const sessionCost = toolMap["simulasi-sidang"]?.creditCost ?? 5;
   const initialSession = useMemo(() => readPersistedSidangState(), []);
 
   // Setup State

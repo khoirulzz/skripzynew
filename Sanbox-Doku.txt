@@ -1,0 +1,7 @@
+Api key Sandbox Doku
+1. secret key : SK-uY7Ec2HESumno4fBYxnO
+2. API key : doku_key_sandbox_37b1aaf95267478c87bc01b55485b178
+3. Public key: -----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtaswXyVXQWgzNUymjnZVttdSWGJ6oJf/imFNYJVxb+Kb4vC3LOGi9fKAPOjDZBVJOgye29qs8/Hi3buY4ujXFzxXZyY6+Tf3NUHSYFZQNsYyzOXCvOkRtV9ulUnGrNC2qcbc/qpm11QezNKpcqgNOes9UYi9wBKrkKeQcahqoA3T/pjN3l1A+Yp6j18Cokmjq330CxP3miviyR8FwxFjRpkF4bpOo5RJ9UwzTT4TAdBLzQpNXnnC7tYYnj5odzudlZaapYvB7d92DbT/nUqSWGds4waSR/wfr8OEiaGawMlBqc3LalV6kzbaxMD9ftkZOloES6Y7npAWINgNXQczWwIDAQAB
+-----END PUBLIC KEY-----
+4. client id : BRN-0298-1777951038478

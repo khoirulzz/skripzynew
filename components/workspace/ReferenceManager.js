@@ -9,6 +9,8 @@ import { searchPapersWithFallback, getErrorMessage } from "@/lib/referenceApis";
 import { indexDocument } from "@/lib/ragService";
 import { extractTextFromPDF } from "@/lib/pdfText";
 import { CHAPTERS } from "@/lib/workspaceDefaults";
+import { deductCredits, refundCredits } from "@/lib/credits";
+import { useBillingCatalog } from "@/lib/useBillingCatalog";
 
 const WORKER_URL = process.env.NEXT_PUBLIC_WORKER_URL || "https://apikey.skripzy-app.workers.dev";
 const WORKER_SECRET = process.env.NEXT_PUBLIC_WORKER_SECRET || "skripzy1234";
@@ -79,7 +81,8 @@ function createManualReferenceState() {
 }
 
 export function ReferenceManager({ workspaceId, currentChapterKey = null, onClose = null, compact = false }) {
-  const { user } = useAuth();
+  const { user, userData } = useAuth();
+  const { toolMap } = useBillingCatalog();
   const [references, setReferences] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [yearRange, setYearRange] = useState("5");
@@ -95,6 +98,10 @@ export function ReferenceManager({ workspaceId, currentChapterKey = null, onClos
   const [expandedNoteIds, setExpandedNoteIds] = useState([]);
   const [noteDrafts, setNoteDrafts] = useState({});
   const [previewReference, setPreviewReference] = useState(null);
+
+  // Credit cost configuration (default 1 credit per search)
+  const REFERENCE_SEARCH_COST = toolMap["referensi-ringkas"]?.creditCost ?? 1;
+  const creditBalance = userData?.credits ?? 0;
 
   useEffect(() => {
     if (!workspaceId) return undefined;
@@ -164,13 +171,31 @@ export function ReferenceManager({ workspaceId, currentChapterKey = null, onClos
   const handleSearch = async (event) => {
     event.preventDefault();
     if (!searchTerm.trim()) return;
+    
+    // Check credit balance before search
+    if (!user) {
+      setError("Silakan login untuk mencari referensi.");
+      return;
+    }
+    if (creditBalance < REFERENCE_SEARCH_COST) {
+      setError(`Kredit tidak cukup. Dibutuhkan ${REFERENCE_SEARCH_COST} kredit, tersisa ${creditBalance}.`);
+      return;
+    }
+
     setSearching(true);
     setError("");
 
     try {
+      // Deduct credits for search
+      await deductCredits(user.uid, REFERENCE_SEARCH_COST);
+
       const result = await searchPapersWithFallback(searchTerm, { limit: 8, yearRange });
       setSearchResults(result.papers || []);
     } catch (searchError) {
+      // Refund credits if search fails
+      if (user) {
+        await refundCredits(user.uid, REFERENCE_SEARCH_COST).catch(() => {});
+      }
       console.error(searchError);
       setError(getErrorMessage(searchError));
     } finally {

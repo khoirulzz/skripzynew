@@ -118,6 +118,7 @@ h1, h2, h3, h4, h5, h6 {
 p {
   color: var(--text-muted);
   margin-bottom: 1em;
+  text-align: justify;
 }
 
 a {

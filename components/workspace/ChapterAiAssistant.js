@@ -4,11 +4,12 @@ import { useMemo, useState } from "react";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { deductCredits, refundCredits } from "@/lib/credits";
+import { useBillingCatalog } from "@/lib/useBillingCatalog";
 import { CHAPTERS, summarizeTranscriptThemes } from "@/lib/workspaceDefaults";
 import { searchWorkspaceReferenceChunks } from "@/lib/ragService";
 import { generateWorkspaceChapter } from "@/lib/workspacePublicApi";
 
-const DEFAULT_COST = 2;
+// Credit cost is now dynamic from useBillingCatalog
 
 function buildActionConfig(activeChapter) {
   switch (activeChapter) {
@@ -64,6 +65,7 @@ export function ChapterAiAssistant({
   offsetRight = 16,
 }) {
   const { user, userData } = useAuth();
+  const { toolMap } = useBillingCatalog();
   const [isOpen, setIsOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [instruction, setInstruction] = useState("");
@@ -71,14 +73,15 @@ export function ChapterAiAssistant({
 
   const chapter = CHAPTERS[activeChapter];
   const config = useMemo(() => buildActionConfig(activeChapter), [activeChapter]);
+  const generationCost = toolMap["chapter-generation"]?.creditCost ?? 2;
 
   const canGenerate = !!workspaceContext?.id && !!user;
   const selectedReferenceIds = selectedReferences.map((item) => item.id);
   const creditBalance = userData?.credits ?? 0;
 
   const handleGenerate = async () => {
-    if (!canGenerate || creditBalance < DEFAULT_COST) {
-      setStatus(`Kredit tidak cukup. Butuh ${DEFAULT_COST} kredit.`);
+    if (!canGenerate || creditBalance < generationCost) {
+      setStatus(`Kredit tidak cukup. Butuh ${generationCost} kredit.`);
       return;
     }
 
@@ -86,7 +89,7 @@ export function ChapterAiAssistant({
     setIsGenerating(true);
 
     try {
-      await deductCredits(user.uid, DEFAULT_COST);
+      await deductCredits(user.uid, generationCost);
 
       let referenceContext = "";
       if (selectedReferenceIds.length) {
@@ -177,7 +180,7 @@ ${instruction || "Tidak ada arahan tambahan."}
       setStatus("Draft AI berhasil disisipkan ke editor.");
       setIsOpen(false);
     } catch (error) {
-      await refundCredits(user.uid, DEFAULT_COST).catch(() => {});
+      await refundCredits(user.uid, generationCost).catch(() => {});
       console.error("Gagal generate bab:", error);
       setStatus(error.message || "Gagal menghasilkan draft AI.");
     } finally {
@@ -244,7 +247,7 @@ ${instruction || "Tidak ada arahan tambahan."}
           <div style={{ padding: "0.75rem", borderRadius: "10px", backgroundColor: "var(--background)", border: "1px solid var(--border)", fontSize: "0.82rem" }}>
             <div><strong>Target:</strong> {chapter.longLabel}</div>
             <div style={{ marginTop: "0.35rem" }}><strong>Referensi aktif:</strong> {selectedReferences.length}</div>
-            <div style={{ marginTop: "0.35rem" }}><strong>Biaya:</strong> {DEFAULT_COST} kredit</div>
+            <div style={{ marginTop: "0.35rem" }}><strong>Biaya:</strong> {generationCost} kredit</div>
           </div>
 
           <textarea

@@ -327,9 +327,23 @@ function ToolModal({ item, onClose, onSave }) {
     setForm((current) => ({ ...current, [key]: value }));
   };
 
+  // Handle slug change - auto-populate tool name from DEFAULT_TOOL_PRICING
+  const handleSlugChange = (slug) => {
+    saveField("slug", slug);
+    const defaultTool = DEFAULT_TOOL_PRICING.find((t) => t.slug === slug);
+    if (defaultTool) {
+      saveField("toolName", defaultTool.title);
+      saveField("creditCost", defaultTool.creditCost);
+    }
+  };
+
+  const selectedDefault = DEFAULT_TOOL_PRICING.find((t) => t.slug === form.slug);
+  const currentDefaultCost = selectedDefault?.creditCost ?? 0;
+  const costChanged = currentDefaultCost !== numberValue(form.creditCost);
+
   const handleSave = async () => {
     if (!form.slug.trim()) {
-      alert("Slug tool wajib diisi.");
+      alert("Pilih tool terlebih dahulu.");
       return;
     }
     if (!form.toolName.trim()) {
@@ -351,45 +365,80 @@ function ToolModal({ item, onClose, onSave }) {
   return (
     <ModalShell
       title={item ? "Edit Biaya Tool" : "Tambah Tool Pricing"}
-      subtitle="Gunakan slug yang benar agar biaya tool langsung terhubung ke halaman user."
+      subtitle="Pilih tool dari daftar. Biaya akan langsung terhubung ke halaman user."
       onClose={onClose}
     >
       <div style={{ display: "grid", gap: "1rem" }}>
         <label style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--text-muted)" }}>
-          Slug Tool
-          <input
-            type="text"
+          Pilih Tool
+          <select
             value={form.slug}
-            onChange={(event) => saveField("slug", event.target.value)}
-            placeholder="contoh: parafrase"
-            style={inputStyle()}
-          />
+            onChange={(event) => handleSlugChange(event.target.value)}
+            style={{
+              ...inputStyle(),
+              marginTop: "0.35rem",
+              cursor: "pointer",
+              fontFamily: "inherit",
+            }}
+          >
+            <option value="">-- Pilih Tool --</option>
+            {DEFAULT_TOOL_PRICING.map((tool) => (
+              <option key={tool.slug} value={tool.slug}>
+                {tool.title} ({tool.creditCost} kredit default)
+              </option>
+            ))}
+          </select>
         </label>
 
+        {selectedDefault && (
+          <div
+            style={{
+              padding: "0.85rem",
+              borderRadius: 12,
+              backgroundColor: "var(--surface-hover)",
+              border: "1px solid var(--border)",
+              fontSize: "0.8rem",
+            }}
+          >
+            <p style={{ margin: 0, color: "var(--text-muted)", fontWeight: 700 }}>Informasi Tool</p>
+            <p style={{ margin: "0.35rem 0 0", fontSize: "0.85rem", fontWeight: 600 }}>
+              Slug: <code style={{ color: "var(--primary)", fontFamily: "monospace" }}>{form.slug}</code>
+            </p>
+            <p style={{ margin: "0.2rem 0 0", fontSize: "0.85rem" }}>
+              Biaya Default: <strong>{currentDefaultCost} kredit</strong>
+              {costChanged && (
+                <span style={{ marginLeft: "0.5rem", color: "var(--primary)", fontWeight: 700 }}>
+                  → Akan diubah menjadi {numberValue(form.creditCost)} kredit
+                </span>
+              )}
+            </p>
+          </div>
+        )}
+
         <label style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--text-muted)" }}>
-          Nama Tool
+          Nama Tool (Auto-diisi)
           <input
             type="text"
             value={form.toolName}
             onChange={(event) => saveField("toolName", event.target.value)}
-            placeholder="contoh: Parafrase"
+            placeholder="Otomatis dari pilihan tool"
             style={inputStyle()}
           />
         </label>
 
         <label style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--text-muted)" }}>
-          Deskripsi
+          Deskripsi (Opsional)
           <input
             type="text"
             value={form.description}
             onChange={(event) => saveField("description", event.target.value)}
-            placeholder="Opsional"
+            placeholder="Catatan atau deskripsi tambahan"
             style={inputStyle()}
           />
         </label>
 
         <label style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--text-muted)" }}>
-          Biaya Kredit
+          Biaya Kredit {costChanged && <span style={{ color: "var(--primary)" }}>📝 Diubah</span>}
           <input
             type="number"
             min={0}

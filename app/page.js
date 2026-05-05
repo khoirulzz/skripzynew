@@ -20,12 +20,12 @@ export default function Home() {
         </div>
         
         <h1 style={{ fontSize: "2.5rem", marginBottom: "1rem" }}>Skripzy 2.0</h1>
-        <p style={{ fontSize: "1.1rem", marginBottom: "2rem" }}>
+        <p style={{ fontSize: "1.1rem", marginBottom: "2rem", textAlign: "center" }}>
           AI Research Operating System. Workspace cerdas khusus untuk mahasiswa merampungkan skripsi & jurnal.
         </p>
 
         {loading ? (
-          <p>Memuat sesi...</p>
+          <p style={{ fontSize: "1.1rem", marginBottom: "2rem", textAlign: "center" }}>Memuat sesi...</p>
         ) : user ? (
           <div style={{ display: "flex", flexDirection: "column", gap: "1rem", alignItems: "center" }}>
             <p style={{ color: "var(--success)" }}>Selamat datang kembali, {user.email}</p>

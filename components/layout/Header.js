@@ -21,13 +21,13 @@ export function Header({ onMenuClick = null, isMobile = false }) {
 
   return (
     <header
+      className="glass-panel"
       style={{
         display: "flex",
         justifyContent: "space-between",
         alignItems: "center",
-        padding: "0.875rem 1.25rem",
-        borderBottom: "1px solid var(--border)",
-        backgroundColor: "var(--background)",
+        padding: "0.875rem 1.5rem",
+        borderBottom: "1px solid rgba(79,70,229,0.12)",
         gap: "0.75rem",
         flexShrink: 0,
         position: "sticky",
@@ -85,15 +85,17 @@ export function Header({ onMenuClick = null, isMobile = false }) {
             display: "flex",
             alignItems: "center",
             gap: "0.4rem",
-            padding: "0.45rem 0.7rem",
-            backgroundColor: "var(--surface-hover)",
-            borderRadius: "var(--radius-lg)",
-            fontSize: "0.75rem",
-            fontWeight: 600,
-            border: "1px solid var(--border)",
+            padding: "0.45rem 0.8rem",
+            background: "linear-gradient(135deg, rgba(79,70,229,0.1), rgba(59,130,246,0.1))",
+            borderRadius: 999,
+            fontSize: "0.8rem",
+            fontWeight: 800,
+            color: "var(--primary)",
+            border: "1px solid rgba(79,70,229,0.2)",
+            boxShadow: "0 4px 12px rgba(79,70,229,0.08)",
           }}
         >
-          <PremiumIcon name="coins" size={14} className="text-primary" />
+          <PremiumIcon name="coins" size={15} style={{ color: "var(--primary)" }} />
           <span>{userData?.credits || 0}{!isMobile && " Credits"}</span>
           <Link
             href="/dashboard/langganan"

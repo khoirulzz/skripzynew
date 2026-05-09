@@ -47,7 +47,7 @@ export function WorkspaceNotesPanel({ workspaceId, collapsible = false, defaultC
   }, [content, workspaceId]);
 
   return (
-    <div className="glass-panel" style={{ padding: "1rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+    <div className="glass-panel" style={{ padding: "1rem", display: "flex", flexDirection: "column", gap: "0.75rem", backgroundColor: "var(--surface)" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
           <PremiumIcon name="edit3" size={16} className="text-primary" />

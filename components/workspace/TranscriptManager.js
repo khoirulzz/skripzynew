@@ -92,7 +92,7 @@ export function TranscriptManager({ workspaceId }) {
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "minmax(240px, 300px) minmax(0, 1fr)", gap: "1rem", minHeight: "520px" }}>
-      <div className="glass-panel" style={{ padding: "1rem", display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+      <div className="glass-panel" style={{ padding: "1rem", display: "flex", flexDirection: "column", gap: "0.85rem", backgroundColor: "var(--surface)" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem" }}>
           <div>
             <h3 style={{ fontSize: "1rem", margin: 0 }}>Daftar Transkrip</h3>
@@ -144,7 +144,7 @@ export function TranscriptManager({ workspaceId }) {
         </div>
       </div>
 
-      <div className="glass-panel" style={{ padding: "1rem 1rem 1.25rem", display: "flex", flexDirection: "column", gap: "0.9rem" }}>
+      <div className="glass-panel" style={{ padding: "1rem 1rem 1.25rem", display: "flex", flexDirection: "column", gap: "0.9rem", backgroundColor: "var(--surface)" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem" }}>
           <div>
             <h3 style={{ fontSize: "1rem", margin: 0 }}>Editor Transkrip</h3>

@@ -115,7 +115,7 @@ export function DataHub({ workspaceId }) {
 
       {activeTab === "kuesioner" ? (
         <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "1rem" }}>
-          <div className="glass-panel" style={{ padding: "1rem" }}>
+          <div className="glass-panel" style={{ padding: "1rem", backgroundColor: "var(--surface)" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem", marginBottom: "1rem", flexWrap: "wrap" }}>
               <div>
                 <h3 style={{ fontSize: "1rem", margin: 0 }}>Daftar Form Penelitian</h3>
@@ -132,7 +132,7 @@ export function DataHub({ workspaceId }) {
             ) : (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "0.9rem" }}>
                 {forms.map((item) => (
-                  <div key={item.id} className="glass-panel" style={{ padding: "1rem", border: item.id === activeFormId ? "1px solid var(--primary)" : "1px solid var(--border)" }}>
+                  <div key={item.id} className="glass-panel" style={{ padding: "1rem", border: item.id === activeFormId ? "1px solid var(--primary)" : "1px solid var(--border)", backgroundColor: "var(--surface)" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", alignItems: "flex-start" }}>
                       <div>
                         <h4 style={{ margin: 0, fontSize: "0.98rem" }}>{item.title}</h4>

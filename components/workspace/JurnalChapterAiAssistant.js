@@ -56,15 +56,17 @@ export function JurnalChapterAiAssistant({
       await deductCredits(user.uid, generationCost);
 
       let referenceContext = "";
-      if (selectedReferenceIds.length) {
-        const chunks = await searchWorkspaceReferenceChunks({
-          userId: user.uid,
-          workspaceId: workspaceContext.id,
-          queryText: `${workspaceContext.title || ""} ${workspaceContext.topic || ""} ${instruction}`.trim(),
-          referenceIds: selectedReferenceIds.slice(0, 10),
-          limitCount: 8,
-        });
+      
+      // Auto-RAG: Akan mencari di referensi terpilih, ATAU di SEMUA referensi workspace jika kosong
+      const chunks = await searchWorkspaceReferenceChunks({
+        userId: user.uid,
+        workspaceId: workspaceContext.id,
+        queryText: `${chapter.label} ${workspaceContext.title || ""} ${workspaceContext.topic || ""} ${instruction}`.trim(),
+        referenceIds: selectedReferenceIds.slice(0, 10),
+        limitCount: 12,
+      });
 
+      if (chunks.length > 0) {
         referenceContext = chunks
           .map((item, index) => `[Sumber ${index + 1}] ${item.document_title} - Hal ${item.page_number}\n${item.text_content}`)
           .join("\n\n");
@@ -175,6 +177,7 @@ ${instruction || "Tidak ada arahan tambahan."}
     display: "flex",
     flexDirection: "column",
     gap: "0.85rem",
+    backgroundColor: "var(--surface)",
     boxShadow: "var(--shadow-lg)",
   };
 
@@ -211,8 +214,23 @@ ${instruction || "Tidak ada arahan tambahan."}
           <div style={{ padding: "0.75rem", borderRadius: "10px", backgroundColor: "var(--background)", border: "1px solid var(--border)", fontSize: "0.82rem" }}>
             <div><strong>Target:</strong> {chapter.label}</div>
             <div style={{ marginTop: "0.35rem" }}><strong>Pedoman:</strong> {chapter.promptContext || "Tidak ada pedoman spesifik."}</div>
-            <div style={{ marginTop: "0.35rem" }}><strong>Referensi aktif:</strong> {selectedReferences.length}</div>
-            <div style={{ marginTop: "0.35rem" }}><strong>Biaya:</strong> {generationCost} kredit</div>
+            
+            <div style={{ marginTop: "0.5rem", padding: "0.4rem 0.6rem", backgroundColor: "rgba(16, 185, 129, 0.1)", borderRadius: "6px", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <PremiumIcon name="database" size={14} className="text-success" />
+              <span>
+                <strong>Sumber Data: </strong> 
+                {selectedReferences.length > 0 
+                  ? `${selectedReferences.length} referensi dipilih` 
+                  : "Auto-RAG (Semua referensi workspace)"}
+              </span>
+            </div>
+            
+            <div style={{ marginTop: "0.5rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span><strong>Biaya:</strong> {generationCost} kredit</span>
+              <span style={{ fontSize: "0.7rem", backgroundColor: "var(--primary-light)", color: "var(--primary)", padding: "0.2rem 0.5rem", borderRadius: "4px", fontWeight: "bold" }}>
+                🧠 Context Ready
+              </span>
+            </div>
           </div>
 
           <textarea

@@ -12,7 +12,15 @@
     "@next/swc-win32-x64-msvc": "16.2.4"
   },
   "dependencies": {
+    "@tiptap/extension-bubble-menu": "^3.22.3",
+    "@tiptap/extension-color": "^3.22.5",
+    "@tiptap/extension-highlight": "^3.22.5",
     "@tiptap/extension-placeholder": "^3.22.3",
+    "@tiptap/extension-subscript": "^3.22.5",
+    "@tiptap/extension-superscript": "^3.22.5",
+    "@tiptap/extension-text-align": "^3.22.3",
+    "@tiptap/extension-text-style": "^3.22.5",
+    "@tiptap/extension-underline": "^3.22.3",
     "@tiptap/react": "^3.22.3",
     "@tiptap/starter-kit": "^3.22.3",
     "firebase": "^12.12.0",

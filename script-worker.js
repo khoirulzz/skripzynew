@@ -106,6 +106,7 @@ function createCorsHeaders(extra = {}) {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Headers": "Content-Type, x-skripzy-secret, x-api-group, Authorization",
         "Access-Control-Allow-Methods": "POST, GET, PATCH, DELETE, OPTIONS",
+        "Access-Control-Expose-Headers": "x-cf-edge-info",
         "Content-Type": "application/json",
         ...extra,
     };
@@ -342,6 +343,25 @@ async function proxyGeminiGeneration({ env, body, groupHeader, model, systemInst
 
             const errorText = await response.text();
             lastError = { status: response.status, body: errorText };
+
+            // Trigger Groq fallback for any location/quota restriction from Gemini
+            const isLocationError = (
+                (response.status === 400 || response.status === 403) &&
+                (errorText.includes("User location is not supported") ||
+                 errorText.includes("location") ||
+                 errorText.includes("region") ||
+                 errorText.includes("PERMISSION_DENIED"))
+            );
+
+            if (isLocationError) {
+                console.warn(`[proxyGeminiGeneration] Gemini location/permission error (${response.status}). Falling back to Groq...`);
+                try {
+                    return await internalGroqFallback(env, body.prompt, null, systemInstruction, temperature);
+                } catch (err) {
+                    throw new Error("Gemini kena User Location restriction, dan Groq fallback juga gagal: " + err.message);
+                }
+            }
+
             if (!RETRYABLE_STATUS.has(response.status)) break;
         }
     }
@@ -349,8 +369,71 @@ async function proxyGeminiGeneration({ env, body, groupHeader, model, systemInst
     throw new Error(lastError?.body || "Gagal menghasilkan konten AI workspace.");
 }
 
+async function internalGroqFallback(env, prompt, history, systemInstruction, temperature) {
+    // Support both GRO_API_KEY (user's env name) and GROQ_API_KEY as aliases
+    const groqApiKey = env.GRO_API_KEY || env.GROQ_API_KEY;
+    if (!groqApiKey) throw new Error("GRO_API_KEY not configured in Cloudflare Worker environment");
+
+    const messages = [];
+    if (systemInstruction) {
+        messages.push({ role: "system", content: systemInstruction });
+    }
+    if (history && Array.isArray(history)) {
+        for (const msg of history) {
+            messages.push({ role: msg.role === "model" ? "assistant" : "user", content: msg.text });
+        }
+    }
+    messages.push({ role: "user", content: prompt });
+
+    // Production models first, preview as last resort
+    const GROQ_MODELS = [
+        "llama-3.3-70b-versatile",   // Production — high quality, setara Gemini 1.5 Pro
+        "llama-4-scout-17b-16e-instruct", // Preview — cepat, setara Gemini 2.0 Flash
+        "llama-3.1-8b-instant",      // Emergency fallback — paling ringan, pasti available
+    ];
+    let lastGroqError = "Unknown error";
+
+    for (const groqModel of GROQ_MODELS) {
+        try {
+            console.log(`[Groq Fallback] Trying model: ${groqModel}`);
+            const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+                method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${groqApiKey}`,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    model: groqModel,
+                    messages: messages,
+                    temperature: Math.min(Math.max(temperature || 0.7, 0.0), 2.0),
+                    max_tokens: 8192,
+                })
+            });
+
+            const groqData = await groqRes.json();
+            if (groqRes.ok && groqData.choices?.[0]?.message?.content) {
+                console.log(`[Groq Fallback] Success with model: ${groqModel}`);
+                return { text: groqData.choices[0].message.content.trim(), model: `groq/${groqModel}` };
+            } else {
+                lastGroqError = groqData.error?.message || JSON.stringify(groqData);
+                console.warn(`[Groq Fallback] Model ${groqModel} failed: ${lastGroqError}`);
+            }
+        } catch (e) {
+            lastGroqError = e.message;
+            console.warn(`[Groq Fallback] Model ${groqModel} threw: ${e.message}`);
+        }
+    }
+    throw new Error(`Semua model Groq gagal: ${lastGroqError}`);
+}
+
 const worker = {
     async fetch(request, env, ctx) {
+        // Log lokasi edge server sesuai request CF
+        const clientCountry = request.cf?.country || "UNKNOWN";
+        const clientColo = request.cf?.colo || "UNKNOWN";
+        const urlForLog = new URL(request.url);
+        console.log(`[REQUEST] Path: ${urlForLog.pathname}, Edge Colo: ${clientColo}, Client Country: ${clientCountry}`);
+
         // Definisi Grup API Key
         const API_GROUPS = {
             group_1: [env.GEMINI_API_KEY_1, env.GEMINI_API_KEY_2],
@@ -1035,6 +1118,20 @@ const worker = {
         }
 
         try {
+            // ──── ENDPOINT BARU: GROQ FALLBACK ────
+            if (url.pathname === "/api/ai/groq" && request.method === "POST") {
+                const payload = await request.json().catch(() => null);
+                if (!payload || !payload.prompt) {
+                    return new Response(JSON.stringify({ error: "Prompt required" }), { status: 400, headers: createCorsHeaders() });
+                }
+                try {
+                    const result = await internalGroqFallback(env, payload.prompt, payload.history, payload.systemInstruction, payload.temperature);
+                    return new Response(JSON.stringify(result), { status: 200, headers: createCorsHeaders() });
+                } catch (error) {
+                    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: createCorsHeaders() });
+                }
+            }
+
             // ──── ENDPOINT BARU: GENERATE CLOUDINARY SIGNATURE ────
             if (url.pathname === "/api/cloudinary-sign" && request.method === "POST") {
                 const timestamp = Math.round((new Date).getTime() / 1000);
@@ -1068,7 +1165,7 @@ const worker = {
             // ──── ENDPOINT BARU: DELETE CLOUDINARY FILE ────
             if (url.pathname === "/api/cloudinary-delete" && request.method === "POST") {
                 const { publicId } = await request.json();
-                
+
                 if (!publicId) {
                     return new Response(JSON.stringify({ error: "publicId required" }), { status: 400, headers: createCorsHeaders() });
                 }
@@ -1077,7 +1174,7 @@ const worker = {
                 const paramsToSign = { public_id: publicId, timestamp };
                 const keys = Object.keys(paramsToSign).sort();
                 const stringToSign = keys.map(k => `${k}=${paramsToSign[k]}`).join('&') + (env.CLOUDINARY_API_SECRET || "");
-                
+
                 const msgBuffer = new TextEncoder().encode(stringToSign);
                 const hashBuffer = await crypto.subtle.digest('SHA-1', msgBuffer);
                 const signature = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
@@ -1092,7 +1189,7 @@ const worker = {
                     method: "POST",
                     body: formData
                 });
-                
+
                 return new Response(JSON.stringify(await delRes.json()), {
                     status: 200,
                     headers: createCorsHeaders(),
@@ -1400,6 +1497,8 @@ const worker = {
                             status: apiResponse.status,
                             headers: {
                                 "Access-Control-Allow-Origin": "*",
+                                "Access-Control-Expose-Headers": "x-cf-edge-info",
+                                "x-cf-edge-info": `${clientColo}-${clientCountry}`,
                                 "Content-Type": apiResponse.headers.get("Content-Type") || "application/json",
                             },
                         });
@@ -1409,14 +1508,78 @@ const worker = {
                     lastError = { status: apiResponse.status, body: errorText };
                     console.error(`Rotasi [${requestedGroup}]: API Key ke-${i + 1} gagal. Status: ${apiResponse.status}`);
 
+                    // ──── FALLBACK GROQ JIKA KENA LIMIT LOKASI ────
+                    const isLocationOrPermissionError = (
+                        (apiResponse.status === 400 || apiResponse.status === 403) &&
+                        (errorText.includes("User location is not supported") ||
+                         errorText.includes("location") ||
+                         errorText.includes("region") ||
+                         errorText.includes("PERMISSION_DENIED"))
+                    );
+
+                    if (isLocationOrPermissionError) {
+                        console.warn(`[REST Proxy] Gemini location/permission error (${apiResponse.status}). Falling back to Groq...`);
+                        try {
+                            const reqBody = JSON.parse(payload);
+                            const systemInstruction = reqBody.systemInstruction?.parts?.[0]?.text;
+                            const prompt = reqBody.contents?.[reqBody.contents.length - 1]?.parts?.[0]?.text;
+                            const history = reqBody.contents?.slice(0, -1)?.map(c => ({
+                                role: c.role,
+                                text: c.parts?.[0]?.text
+                            }));
+                            const temperature = reqBody.generationConfig?.temperature;
+                            
+                            const groqResult = await internalGroqFallback(env, prompt, history, systemInstruction, temperature);
+                            
+                            if (isStream) {
+                                const fakeGeminiSSE = `data: ${JSON.stringify({
+                                    candidates: [{ content: { parts: [{ text: groqResult.text }] } }]
+                                })}\n\ndata: [DONE]\n\n`;
+                                
+                                return new Response(fakeGeminiSSE, {
+                                    status: 200,
+                                    headers: {
+                                        "Access-Control-Allow-Origin": "*",
+                                        "Access-Control-Expose-Headers": "x-cf-edge-info",
+                                        "x-cf-edge-info": `${clientColo}-${clientCountry}`,
+                                        "Content-Type": "text/event-stream",
+                                    }
+                                });
+                            } else {
+                                const fakeGeminiResponse = {
+                                    candidates: [{ content: { parts: [{ text: groqResult.text }] } }]
+                                };
+                                return new Response(JSON.stringify(fakeGeminiResponse), {
+                                    status: 200,
+                                    headers: {
+                                        "Access-Control-Allow-Origin": "*",
+                                        "Access-Control-Expose-Headers": "x-cf-edge-info",
+                                        "x-cf-edge-info": `${clientColo}-${clientCountry}`,
+                                        "Content-Type": "application/json",
+                                    }
+                                });
+                            }
+                        } catch (err) {
+                            console.error("[Groq Fallback] Error:", err.message);
+                        }
+                    }
+
                     if (!RETRYABLE_STATUS.has(apiResponse.status)) {
+                        const errorHeaders = createCorsHeaders();
+                        errorHeaders["Access-Control-Expose-Headers"] = "x-cf-edge-info";
+                        errorHeaders["x-cf-edge-info"] = `${clientColo}-${clientCountry}`;
+                        
                         return new Response(errorText, {
                             status: apiResponse.status,
-                            headers: createCorsHeaders(),
+                            headers: errorHeaders,
                         });
                     }
                 }
             }
+
+            const errorHeaders = createCorsHeaders();
+            errorHeaders["Access-Control-Expose-Headers"] = "x-cf-edge-info";
+            errorHeaders["x-cf-edge-info"] = `${clientColo}-${clientCountry}`;
 
             return new Response(JSON.stringify({
                 error: `Sistem sedang padat atau kena limit sementara. Silakan coba sesaat lagi.`,
@@ -1425,7 +1588,7 @@ const worker = {
                 details: lastError?.body ?? null,
             }), {
                 status: 503,
-                headers: createCorsHeaders(),
+                headers: errorHeaders,
             });
 
         } catch (e) {

@@ -344,7 +344,7 @@ function RequestCard({ item, onApprove, onReject, onEditCredits, actionLoading }
         </div>
       </div>
 
-      {(item.promoCode || item.customerNotes || item.rejectedReason) && (
+      {(item.promoCode || item.customerNotes || item.rejectedReason || item.referenceNumber || item.proofImageUrl) && (
         <div style={{ display: "grid", gap: "0.7rem" }}>
           {item.promoCode && (
             <div style={{ padding: "0.8rem 0.95rem", borderRadius: 14, backgroundColor: "rgba(79,70,229,0.08)", color: "var(--primary)", fontSize: "0.82rem" }}>
@@ -359,6 +359,21 @@ function RequestCard({ item, onApprove, onReject, onEditCredits, actionLoading }
           {item.rejectedReason && (
             <div style={{ padding: "0.8rem 0.95rem", borderRadius: 14, backgroundColor: "rgba(239,68,68,0.08)", color: "#B91C1C", fontSize: "0.82rem" }}>
               <strong>Alasan reject:</strong> {item.rejectedReason}
+            </div>
+          )}
+          {item.referenceNumber && (
+            <div style={{ padding: "0.8rem 0.95rem", borderRadius: 14, backgroundColor: "var(--surface-hover)", fontSize: "0.82rem" }}>
+              <strong>No Referensi:</strong> {item.referenceNumber}
+            </div>
+          )}
+          {item.proofImageUrl && (
+            <div style={{ padding: "0.8rem 0.95rem", borderRadius: 14, backgroundColor: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.15)", fontSize: "0.82rem" }}>
+              <strong>Bukti Transfer:</strong> 
+              <div style={{ marginTop: "0.5rem" }}>
+                <a href={item.proofImageUrl} target="_blank" rel="noreferrer" style={{ color: "#059669", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "0.4rem", textDecoration: "none" }}>
+                  <PremiumIcon name="externalLink" size={14} /> Buka Bukti Image di Tab Baru
+                </a>
+              </div>
             </div>
           )}
         </div>

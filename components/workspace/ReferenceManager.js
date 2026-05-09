@@ -415,7 +415,7 @@ export function ReferenceManager({ workspaceId, currentChapterKey = null, onClos
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1rem", height: "100%" }}>
-      <div className="glass-panel" style={{ padding: "1rem" }}>
+      <div className="glass-panel" style={{ padding: "1rem", backgroundColor: "var(--surface)" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", marginBottom: "0.85rem" }}>
           <div>
             <h3 style={{ fontSize: "1rem", margin: 0 }}>Reference Hub</h3>
@@ -538,7 +538,7 @@ export function ReferenceManager({ workspaceId, currentChapterKey = null, onClos
       </div>
 
       {!compact ? (
-        <div className="glass-panel" style={{ padding: "1rem" }}>
+        <div className="glass-panel" style={{ padding: "1rem", backgroundColor: "var(--surface)" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", marginBottom: "0.85rem" }}>
             <div>
               <h3 style={{ fontSize: "1rem", margin: 0 }}>Referensi Workspace</h3>
@@ -562,7 +562,7 @@ export function ReferenceManager({ workspaceId, currentChapterKey = null, onClos
 
       <div className="workspace-scroll" style={{ display: "flex", flexDirection: "column", gap: "0.85rem", overflowY: "auto", paddingRight: "0.15rem", flex: 1, minHeight: 0, maxHeight: compact ? "360px" : "calc(100vh - 300px)" }}>
         {displayedReferences.length === 0 ? (
-          <div className="glass-panel" style={{ padding: "1.2rem", textAlign: "center" }}>
+          <div className="glass-panel" style={{ padding: "1.2rem", textAlign: "center", backgroundColor: "var(--surface)" }}>
             <PremiumIcon name="bookMarked" size={30} className="text-muted" style={{ margin: "0 auto 0.65rem" }} />
             <h4 style={{ margin: 0 }}>Belum Ada Referensi</h4>
             <p style={{ margin: "0.4rem 0 0 0", fontSize: "0.82rem" }}>
@@ -575,7 +575,7 @@ export function ReferenceManager({ workspaceId, currentChapterKey = null, onClos
             const isNotesExpanded = expandedNoteIds.includes(reference.id);
 
             return (
-            <div key={reference.id} className="glass-panel" style={{ padding: "1rem" }}>
+            <div key={reference.id} className="glass-panel" style={{ padding: "1rem", backgroundColor: "var(--surface)" }}>
               <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-start" }}>
                 {!compact ? (
                   <input type="checkbox" checked={selectedIds.includes(reference.id)} onChange={() => toggleSelected(reference.id)} style={{ marginTop: "0.25rem" }} />
@@ -716,7 +716,7 @@ export function ReferenceManager({ workspaceId, currentChapterKey = null, onClos
             padding: "4.75rem 1rem 1rem",
           }}
         >
-          <div className="glass-panel" style={{ width: "min(1080px, 100%)", height: "calc(100vh - 5.75rem)", maxHeight: "860px", margin: "0 auto", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          <div className="glass-panel" style={{ width: "min(1080px, 100%)", height: "calc(100vh - 5.75rem)", maxHeight: "860px", margin: "0 auto", display: "flex", flexDirection: "column", overflow: "hidden", backgroundColor: "var(--surface)" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", padding: "0.9rem 1rem", borderBottom: "1px solid var(--border)", background: "linear-gradient(180deg, rgba(79,70,229,0.08), transparent)" }}>
               <div style={{ minWidth: 0 }}>
                 <h3 style={{ fontSize: "1rem", margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{previewReference.title}</h3>

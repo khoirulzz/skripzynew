@@ -55,13 +55,15 @@ export function Sidebar({ isCollapsed = false, toggleCollapse, isMobile = false 
           justifyContent: isCollapsed ? "center" : "flex-start",
           padding: isCollapsed ? "0.75rem 0" : "0.75rem 1rem",
           width: "100%",
-          borderRadius: "var(--radius-sm)",
-          backgroundColor: isActive ? "var(--surface-hover)" : "transparent",
+          borderRadius: 16,
+          background: isActive ? "linear-gradient(135deg, rgba(79,70,229,0.12), rgba(59,130,246,0.08))" : "transparent",
+          border: isActive ? "1px solid rgba(79,70,229,0.18)" : "1px solid transparent",
+          boxShadow: isActive ? "0 4px 12px rgba(79,70,229,0.06)" : "none",
           color: isActive ? "var(--primary)" : "var(--text-muted)",
-          fontWeight: isActive ? 600 : 500,
+          fontWeight: isActive ? 700 : 600,
           fontSize: "0.9rem",
           gap: "0.75rem",
-          transition: "all 0.18s ease",
+          transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
         }}
       >
         <span style={{ flexShrink: 0 }}>
@@ -78,13 +80,13 @@ export function Sidebar({ isCollapsed = false, toggleCollapse, isMobile = false 
 
   return (
     <aside
+      className="glass-panel"
       style={{
         width: "100%",
         height: "100%",
         display: "flex",
         flexDirection: "column",
-        backgroundColor: "var(--background)",
-        borderRight: "1px solid var(--border)",
+        borderRight: "1px solid rgba(79,70,229,0.12)",
         overflow: "hidden",
         padding: "0 0.5rem 1.5rem",
       }}
@@ -96,8 +98,8 @@ export function Sidebar({ isCollapsed = false, toggleCollapse, isMobile = false 
           alignItems: "center",
           justifyContent: isCollapsed ? "center" : "space-between",
           padding: "0.875rem 0.5rem",
-          borderBottom: "1px solid var(--border)",
-          minHeight: "56px",
+          borderBottom: "1px solid rgba(79,70,229,0.12)",
+          minHeight: "68px",
           gap: "0.5rem",
         }}
       >
@@ -151,7 +153,7 @@ export function Sidebar({ isCollapsed = false, toggleCollapse, isMobile = false 
           display: "flex",
           flexDirection: "column",
           gap: "0.25rem",
-          borderTop: "1px solid var(--border)",
+          borderTop: "1px solid rgba(79,70,229,0.12)",
           paddingTop: "0.75rem",
         }}
       >
@@ -177,7 +179,7 @@ export function Sidebar({ isCollapsed = false, toggleCollapse, isMobile = false 
 
         {/* Mobile Profile & Logout */}
         {isMobile && (
-          <div style={{ marginTop: "0.5rem", borderTop: "1px solid var(--border)", paddingTop: "1rem", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem" }}>
+          <div style={{ marginTop: "0.5rem", borderTop: "1px solid rgba(79,70,229,0.12)", paddingTop: "1rem", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", overflow: "hidden" }}>
               <div style={{ width: "32px", height: "32px", borderRadius: "50%", backgroundColor: "var(--primary-light)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--primary)", fontWeight: 700, fontSize: "0.85rem", flexShrink: 0 }}>
                 {userData?.namaLengkap?.charAt(0) || "U"}

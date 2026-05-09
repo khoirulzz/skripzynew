@@ -7,15 +7,6 @@ const ThemeContext = createContext({
   toggleTheme: () => {},
 });
 
-function resolveInitialTheme() {
-  if (typeof window === "undefined") return "light";
-  const savedTheme = localStorage.getItem("skripzy-theme");
-  if (savedTheme === "light" || savedTheme === "dark") {
-    return savedTheme;
-  }
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-}
-
 function applyTheme(theme) {
   document.documentElement.classList.remove("dark", "light");
   document.documentElement.classList.add(theme);
@@ -28,12 +19,29 @@ function applyTheme(theme) {
 }
 
 export function ThemeProvider({ children }) {
-  const [theme, setTheme] = useState(resolveInitialTheme);
+  // Always start with "light" on server to avoid hydration mismatch.
+  // The real theme is resolved client-side in useEffect.
+  const [theme, setTheme] = useState("light");
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    // Resolve real theme from localStorage or system preference
+    const savedTheme = localStorage.getItem("skripzy-theme");
+    let resolvedTheme = "light";
+    if (savedTheme === "light" || savedTheme === "dark") {
+      resolvedTheme = savedTheme;
+    } else if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
+      resolvedTheme = "dark";
+    }
+    setTheme(resolvedTheme);
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
     applyTheme(theme);
     localStorage.setItem("skripzy-theme", theme);
-  }, [theme]);
+  }, [theme, mounted]);
 
   const toggleTheme = () => {
     const newTheme = theme === "dark" ? "light" : "dark";
@@ -41,7 +49,7 @@ export function ThemeProvider({ children }) {
   };
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme, toggleTheme, mounted }}>
       {children}
     </ThemeContext.Provider>
   );

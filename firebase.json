@@ -1,24 +1,82 @@
 {
-  "hosting": {
-    "public": "out",
-    "ignore": [
-      "firebase.json",
-      "**/.*",
-      "**/node_modules/**"
-    ],
-    "cleanUrls": true,
-    "trailingSlash": true,
-    "rewrites": [
-      {
-        "source": "/form/**",
-        "destination": "/form/index.html"
-      },
-      {
-        "source": "/dashboard/tools/notebook/**",
-        "destination": "/dashboard/tools/notebook/index/index.html"
-      }
-    ]
-  },
+  "hosting": [
+    {
+      "target": "landing",
+      "public": "out",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**",
+        "dashboard/**",
+        "admin/**",
+        "login/**",
+        "register/**",
+        "form/**"
+      ],
+      "cleanUrls": true,
+      "trailingSlash": true,
+      "redirects": [
+        {
+          "source": "/dashboard/**",
+          "destination": "https://app.skripzy.id/dashboard/:splat",
+          "type": 301
+        },
+        {
+          "source": "/login",
+          "destination": "https://app.skripzy.id/login",
+          "type": 301
+        },
+        {
+          "source": "/register",
+          "destination": "https://app.skripzy.id/register",
+          "type": 301
+        },
+        {
+          "source": "/admin/**",
+          "destination": "https://app.skripzy.id/admin/:splat",
+          "type": 301
+        }
+      ]
+    },
+    {
+      "target": "app",
+      "public": "out",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**",
+        "pricing/**",
+        "faq/**",
+        "features/**",
+        "academic-integrity/**",
+        "ai-usage-disclaimer/**",
+        "privacy-policy/**",
+        "refund-policy/**",
+        "subscription-terms/**",
+        "promo/**",
+        "apps/**"
+      ],
+      "cleanUrls": true,
+      "trailingSlash": true,
+      "rewrites": [
+        {
+          "source": "/form/**",
+          "destination": "/form/index.html"
+        },
+        {
+          "source": "/dashboard/tools/notebook/**",
+          "destination": "/dashboard/tools/notebook/index/index.html"
+        }
+      ],
+      "redirects": [
+        {
+          "source": "/",
+          "destination": "https://skripzy.id/",
+          "type": 301
+        }
+      ]
+    }
+  ],
   "firestore": {
     "rules": "firestore.rules"
   }

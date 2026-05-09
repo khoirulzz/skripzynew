@@ -1,5 +1,17 @@
 {
   "projects": {
     "default": "skripzyv2"
+  },
+  "targets": {
+    "skripzyv2": {
+      "hosting": {
+        "app": [
+          "skripzyv2"
+        ],
+        "landing": [
+          "skripzylandingv2"
+        ]
+      }
+    }
   }
 }

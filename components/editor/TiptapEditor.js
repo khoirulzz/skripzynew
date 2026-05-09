@@ -1,10 +1,21 @@
 "use client";
 
 import { useEditor, EditorContent } from "@tiptap/react";
+import { BubbleMenu } from "@tiptap/react/menus";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
-import { useEffect, useState } from "react";
+import Underline from "@tiptap/extension-underline";
+import TextAlign from "@tiptap/extension-text-align";
+import { Highlight } from "@tiptap/extension-highlight";
+import { Subscript } from "@tiptap/extension-subscript";
+import { Superscript } from "@tiptap/extension-superscript";
+import { TextStyle } from "@tiptap/extension-text-style";
+import { Color } from "@tiptap/extension-color";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
+import { useAuth } from "@/components/providers/AuthProvider";
+import { generateWorkspaceChapter } from "@/lib/workspacePublicApi";
+import { deductCredits } from "@/lib/credits";
 
 // ==== Toolbar Button ====
 function ToolbarBtn({ onClick, active, disabled, children, title }) {
@@ -35,15 +46,184 @@ function ToolbarBtn({ onClick, active, disabled, children, title }) {
   );
 }
 
-// ==== AI Floating Menu (Dummy / Local) ====
-function AiFloatingMenu({ onClose }) {
-  const aiOptions = [
-    { icon: "wand",        label: "Perbaiki kalimat ini",    desc: "Grammar & style" },
-    { icon: "sparkles",    label: "Perluas paragraf",        desc: "Tambah detail & argumen" },
-    { icon: "check",       label: "Ringkas menjadi 1 kalimat", desc: "Simpel & padat" },
-    { icon: "bookMarked",  label: "Tambahkan kutipan teori", desc: "Landasan pustaka relevan" },
-  ];
+// ==== Custom Instruction Popup ====
+// Defined at module-level so it never gets re-created on parent re-render
+function CustomInstructionPopup({ onSubmit, onClose }) {
+  const [value, setValue] = useState("");
+  const inputRef = useRef(null);
 
+  useEffect(() => {
+    // Small delay so the button click doesn't immediately steal focus
+    const t = setTimeout(() => inputRef.current?.focus(), 50);
+    return () => clearTimeout(t);
+  }, []);
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        top: "110%",
+        left: "50%",
+        transform: "translateX(-50%)",
+        zIndex: 200,
+        width: "min(320px, 90vw)",
+      }}
+      // Prevent clicks inside the popup from bubbling to editor (which would collapse selection)
+      onMouseDown={e => e.stopPropagation()}
+    >
+      <div
+        className="glass-panel"
+        style={{
+          padding: "0.75rem",
+          boxShadow: "var(--shadow-lg)",
+          display: "flex",
+          flexDirection: "column",
+          gap: "0.6rem",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--primary)", textTransform: "uppercase", letterSpacing: "0.07em" }}>
+            ✦ Instruksi Khusus
+          </span>
+          <button
+            onMouseDown={e => { e.preventDefault(); onClose(); }}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: "2px" }}
+          >
+            <PremiumIcon name="x" size={13} />
+          </button>
+        </div>
+        <textarea
+          ref={inputRef}
+          rows={3}
+          value={value}
+          onChange={e => setValue(e.target.value)}
+          placeholder="Contoh: Ubah menjadi lebih formal, tambahkan transisi, atau pertahankan kata kunci..."
+          className="form-textarea"
+          style={{ fontSize: "0.8rem", resize: "none" }}
+          onKeyDown={e => {
+            if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+              e.preventDefault();
+              if (value.trim()) onSubmit(value.trim());
+            }
+          }}
+        />
+        <div style={{ display: "flex", gap: "0.4rem", justifyContent: "flex-end" }}>
+          <button
+            className="btn btn-ghost"
+            style={{ fontSize: "0.75rem", padding: "0.3rem 0.6rem" }}
+            onMouseDown={e => { e.preventDefault(); onClose(); }}
+          >
+            Batal
+          </button>
+          <button
+            className="btn btn-primary"
+            style={{ fontSize: "0.75rem", padding: "0.3rem 0.7rem" }}
+            disabled={!value.trim()}
+            onMouseDown={e => { e.preventDefault(); if (value.trim()) onSubmit(value.trim()); }}
+          >
+            <PremiumIcon name="sparkles" size={13} />
+            Proses (1 Kredit)
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ==== AI Action Buttons ====
+// CRITICAL: Defined at module-level (outside TiptapEditor) so React does NOT
+// remount this subtree on every parent state change — prevents flickering.
+function AiActionButtons({ onAction, isProcessing, showCustomInstruction, onToggleCustomInstruction, compact = false }) {
+  const sep = <div style={{ width: "1px", height: "16px", backgroundColor: "var(--border)", margin: "0 2px", flexShrink: 0 }} />;
+  const btnStyle = (extraColor) => ({
+    padding: compact ? "0.25rem 0.45rem" : "0.3rem 0.6rem",
+    fontSize: compact ? "0.7rem" : "0.75rem",
+    borderRadius: "6px",
+    gap: "0.3rem",
+    whiteSpace: "nowrap",
+    flexShrink: 0,
+    ...(extraColor ? { color: extraColor } : {}),
+  });
+  const iconSz = compact ? 12 : 14;
+
+  if (isProcessing) {
+    return (
+      <div style={{ padding: "0.3rem 0.6rem", fontSize: "0.75rem", color: "var(--primary)", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+        <PremiumIcon name="loader" size={iconSz} className="animate-spin" />
+        AI memproses...
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <button
+        onMouseDown={e => { e.preventDefault(); onAction("grammar"); }}
+        className="btn btn-ghost"
+        style={btnStyle()}
+        title="Perbaiki Ejaan & Tata Bahasa (1 Kredit)"
+      >
+        <PremiumIcon name="wand" size={iconSz} />
+        Perbaiki
+      </button>
+      {sep}
+      <button
+        onMouseDown={e => { e.preventDefault(); onAction("paraphrase"); }}
+        className="btn btn-ghost"
+        style={btnStyle()}
+        title="Parafrase Teks (1 Kredit)"
+      >
+        <PremiumIcon name="refreshCw" size={iconSz} />
+        Parafrase
+      </button>
+      {sep}
+      <button
+        onMouseDown={e => { e.preventDefault(); onAction("summarize"); }}
+        className="btn btn-ghost"
+        style={btnStyle()}
+        title="Buat Ringkasan (1 Kredit)"
+      >
+        <PremiumIcon name="minimize2" size={iconSz} />
+        Ringkas
+      </button>
+      {sep}
+      <button
+        onMouseDown={e => { e.preventDefault(); onAction("humanize"); }}
+        className="btn btn-ghost"
+        style={btnStyle("var(--success)")}
+        title="Humanize — buat teks lebih alami (1 Kredit)"
+      >
+        <PremiumIcon name="heart" size={iconSz} />
+        Humanize
+      </button>
+      {sep}
+      {/* Custom Instruction with its popup */}
+      <div style={{ position: "relative", flexShrink: 0 }}>
+        <button
+          onMouseDown={e => { e.preventDefault(); onToggleCustomInstruction(); }}
+          className="btn btn-ghost"
+          style={{
+            ...btnStyle(),
+            ...(showCustomInstruction ? { color: "var(--primary)", background: "var(--primary-light)" } : {}),
+          }}
+          title="Instruksi Khusus — beri arahan sendiri (1 Kredit)"
+        >
+          <PremiumIcon name="messageCircleMore" size={iconSz} />
+          {compact ? "Instruksi" : "Instruksi Khusus"}
+        </button>
+        {showCustomInstruction && (
+          <CustomInstructionPopup
+            onClose={onToggleCustomInstruction}
+            onSubmit={(instruction) => onAction("custom", instruction)}
+          />
+        )}
+      </div>
+    </>
+  );
+}
+
+// ==== Old toolbar AI dropdown (kept as placeholder) ====
+function AiFloatingMenu({ onClose }) {
   return (
     <div className="glass-panel animate-fade-in" style={{
       minWidth: "260px",
@@ -57,23 +237,12 @@ function AiFloatingMenu({ onClose }) {
     }}>
       <div style={{ padding: "0.5rem 0.75rem", borderBottom: "1px solid var(--border)", marginBottom: "0.25rem" }}>
         <span style={{ fontSize: "0.7rem", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-          ✦ Asisten AI (Segera hadir)
+          ✦ Asisten AI — pilih teks dulu
         </span>
       </div>
-      {aiOptions.map((opt, i) => (
-        <button key={i}
-          className="btn btn-ghost"
-          style={{ width: "100%", justifyContent: "flex-start", padding: "0.5rem 0.75rem", gap: "0.75rem", borderRadius: "6px", opacity: 0.6, cursor: "not-allowed" }}
-          disabled
-          title="Fitur AI akan hadir setelah integrasi Cloudflare Workers"
-        >
-          <PremiumIcon name={opt.icon} size={16} />
-          <div style={{ textAlign: "left" }}>
-            <div style={{ fontSize: "0.875rem", color: "var(--text-main)", fontWeight: 500 }}>{opt.label}</div>
-            <div style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>{opt.desc}</div>
-          </div>
-        </button>
-      ))}
+      <p style={{ margin: "0.5rem 0.75rem", fontSize: "0.8rem", color: "var(--text-muted)" }}>
+        Blok/seleksi teks di editor, lalu pilih aksi AI yang muncul di pop-up.
+      </p>
       <button onClick={onClose} style={{ position: "absolute", top: "0.5rem", right: "0.5rem", background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)" }}>
         <PremiumIcon name="x" size={14} />
       </button>
@@ -83,31 +252,108 @@ function AiFloatingMenu({ onClose }) {
 
 // ==== Main Tiptap Editor ====
 export function TiptapEditor({ content, onChange, placeholder = "Mulai menulis atau tekan '/' untuk menu AI..." }) {
+  const { user } = useAuth();
   const [showAiMenu, setShowAiMenu] = useState(false);
+  const [isAiProcessing, setIsAiProcessing] = useState(false);
+  const [showCustomInstruction, setShowCustomInstruction] = useState(false);
+  const [isTouchDevice, setIsTouchDevice] = useState(false);
+  const [mobileAiBarVisible, setMobileAiBarVisible] = useState(false);
+
+  // Capture editor ref for use inside callbacks without causing re-renders
+  const editorRef = useRef(null);
+
+  useEffect(() => {
+    setIsTouchDevice("ontouchstart" in window || navigator.maxTouchPoints > 0);
+  }, []);
+
+  // Stable AI executor — defined with useCallback so reference doesn't change on re-render
+  const handleAiAction = useCallback(async (actionType, text, customInstruction = "") => {
+    if (!user) { alert("Anda harus login untuk menggunakan fitur AI."); return null; }
+    const cost = 1;
+    try {
+      await deductCredits(user.uid, cost);
+      let prompt = "";
+      if (actionType === "grammar") {
+        prompt = `Perbaiki ejaan, tanda baca, dan tata bahasa dari teks berikut agar sesuai dengan gaya penulisan akademik yang baku. Jangan menambah argumen baru. HANYA KEMBALIKAN TEKS HASIL PERBAIKAN, tanpa tanda kutip atau markdown tambahan:\n\n${text}`;
+      } else if (actionType === "paraphrase") {
+        prompt = `Parafrase teks berikut agar menggunakan gaya bahasa akademik yang berbeda namun tetap mempertahankan esensi dan makna aslinya. HANYA KEMBALIKAN TEKS HASIL PARAFRASE, tanpa tanda kutip atau markdown tambahan:\n\n${text}`;
+      } else if (actionType === "summarize") {
+        prompt = `Buatlah ringkasan yang sangat padat dan jelas dari teks berikut (maksimal 1-2 kalimat). HANYA KEMBALIKAN TEKS HASIL RINGKASAN, tanpa tanda kutip atau markdown tambahan:\n\n${text}`;
+      } else if (actionType === "humanize") {
+        prompt = `Tulis ulang teks berikut agar terasa lebih alami dan manusiawi — kurangi nuansa robot/AI, buat kalimatnya mengalir lebih organik dan hidup, namun tetap formal dan akademik jika diperlukan. HANYA KEMBALIKAN TEKS HASIL PENULISAN ULANG, tanpa tanda kutip atau markdown tambahan:\n\n${text}`;
+      } else if (actionType === "custom") {
+        prompt = `Berikut adalah instruksi dari penulis: "${customInstruction}".\n\nTerapkan instruksi tersebut pada teks di bawah ini. HANYA KEMBALIKAN HASILNYA, tanpa pengantar atau tanda kutip tambahan:\n\n${text}`;
+      }
+      const result = await generateWorkspaceChapter({ prompt, group: "group_3", model: "gemini-2.5-flash", temperature: 0.6 });
+      return result.text;
+    } catch (err) {
+      console.error("AI Refactor error:", err);
+      alert(err.message || "Gagal memproses teks dengan AI.");
+      return null;
+    }
+  }, [user]);
+
+  // Stable action dispatcher passed to AiActionButtons
+  const onAiAction = useCallback(async (actionType, customInstruction = "") => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const { from, to } = editor.state.selection;
+    const text = editor.state.doc.textBetween(from, to, " ");
+    if (!text || text.trim() === "") return;
+
+    setShowCustomInstruction(false);
+    setIsAiProcessing(true);
+    setMobileAiBarVisible(false);
+    try {
+      const newText = await handleAiAction(actionType, text, customInstruction);
+      if (newText) {
+        editor.chain().focus().deleteRange({ from, to }).insertContent(newText).run();
+      }
+    } finally {
+      setIsAiProcessing(false);
+    }
+  }, [handleAiAction]);
+
+  const toggleCustomInstruction = useCallback(() => {
+    setShowCustomInstruction(prev => !prev);
+  }, []);
 
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({
-        bulletList:    { keepMarks: true },
-        orderedList:   { keepMarks: true },
-      }),
-      Placeholder.configure({
-        placeholder,
-        emptyNodeClass: "tiptap-placeholder",
-      }),
+      StarterKit.configure({ bulletList: { keepMarks: true }, orderedList: { keepMarks: true } }),
+      Placeholder.configure({ placeholder, emptyNodeClass: "tiptap-placeholder" }),
+      Underline,
+      TextAlign.configure({ types: ["heading", "paragraph"] }),
+      Highlight.configure({ multicolor: true }),
+      Subscript,
+      Superscript,
+      TextStyle,
+      Color,
     ],
     content: content || "",
     onUpdate: ({ editor }) => {
       onChange?.(editor.getHTML());
     },
+    onSelectionUpdate: ({ editor }) => {
+      if ("ontouchstart" in window || navigator.maxTouchPoints > 0) {
+        const { from, to } = editor.state.selection;
+        if (from !== to) {
+          setTimeout(() => setMobileAiBarVisible(true), 350);
+        } else {
+          setMobileAiBarVisible(false);
+        }
+      }
+    },
     editorProps: {
-      attributes: {
-        class: "tiptap-canvas",
-        spellcheck: "false",
-      },
+      attributes: { class: "tiptap-canvas", spellcheck: "false" },
     },
     immediatelyRender: false,
   });
+
+  // Keep editor ref in sync
+  useEffect(() => {
+    editorRef.current = editor;
+  }, [editor]);
 
   // Sync content from parent (e.g. tab switch)
   useEffect(() => {
@@ -131,24 +377,70 @@ export function TiptapEditor({ content, onChange, placeholder = "Mulai menulis a
         flexWrap: "wrap",
         position: "relative",
       }}>
+        <ToolbarBtn title="Undo" disabled={!editor.can().undo()} onClick={() => editor.chain().focus().undo().run()}>
+          <PremiumIcon name="undo" size={15} />
+        </ToolbarBtn>
+        <ToolbarBtn title="Redo" disabled={!editor.can().redo()} onClick={() => editor.chain().focus().redo().run()}>
+          <PremiumIcon name="redo" size={15} />
+        </ToolbarBtn>
+        <div style={{ width: "1px", height: "20px", backgroundColor: "var(--border)", margin: "0 4px" }} />
         <ToolbarBtn title="Bold" active={editor.isActive("bold")} onClick={() => editor.chain().focus().toggleBold().run()}>
           <PremiumIcon name="bold" size={15} />
         </ToolbarBtn>
         <ToolbarBtn title="Italic" active={editor.isActive("italic")} onClick={() => editor.chain().focus().toggleItalic().run()}>
           <PremiumIcon name="italic" size={15} />
         </ToolbarBtn>
-        
+        <ToolbarBtn title="Underline" active={editor.isActive("underline")} onClick={() => editor.chain().focus().toggleUnderline().run()}>
+          <PremiumIcon name="underline" size={15} />
+        </ToolbarBtn>
+        <ToolbarBtn title="Strikethrough" active={editor.isActive("strike")} onClick={() => editor.chain().focus().toggleStrike().run()}>
+          <PremiumIcon name="strikethrough" size={15} />
+        </ToolbarBtn>
+        <ToolbarBtn title="Subscript" active={editor.isActive("subscript")} onClick={() => editor.chain().focus().toggleSubscript().run()}>
+          <PremiumIcon name="subscript" size={15} />
+        </ToolbarBtn>
+        <ToolbarBtn title="Superscript" active={editor.isActive("superscript")} onClick={() => editor.chain().focus().toggleSuperscript().run()}>
+          <PremiumIcon name="superscript" size={15} />
+        </ToolbarBtn>
+        <ToolbarBtn title="Highlight" active={editor.isActive("highlight")} onClick={() => editor.chain().focus().toggleHighlight().run()}>
+          <PremiumIcon name="highlight" size={15} />
+        </ToolbarBtn>
+        <label
+          style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", width: "32px", height: "32px", borderRadius: "6px", transition: "all 0.15s ease" }}
+          title="Teks Warna"
+        >
+          <input
+            type="color"
+            onInput={(e) => editor.chain().focus().setColor(e.target.value).run()}
+            value={editor.getAttributes("textStyle").color || "#000000"}
+            style={{ position: "absolute", opacity: 0, width: 0, height: 0 }}
+          />
+          <PremiumIcon name="palette" size={15} color={editor.getAttributes("textStyle").color || "var(--text-muted)"} />
+        </label>
+        <ToolbarBtn title="Hapus Format" onClick={() => editor.chain().focus().clearNodes().unsetAllMarks().run()}>
+          <PremiumIcon name="clearFormat" size={15} />
+        </ToolbarBtn>
         <div style={{ width: "1px", height: "20px", backgroundColor: "var(--border)", margin: "0 4px" }} />
-
         <ToolbarBtn title="Heading 2" active={editor.isActive("heading", { level: 2 })} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}>
           <PremiumIcon name="heading2" size={15} />
         </ToolbarBtn>
         <ToolbarBtn title="Heading 3" active={editor.isActive("heading", { level: 3 })} onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}>
           <PremiumIcon name="heading3" size={15} />
         </ToolbarBtn>
-
         <div style={{ width: "1px", height: "20px", backgroundColor: "var(--border)", margin: "0 4px" }} />
-
+        <ToolbarBtn title="Align Left" active={editor.isActive({ textAlign: "left" })} onClick={() => editor.chain().focus().setTextAlign("left").run()}>
+          <PremiumIcon name="alignLeft" size={15} />
+        </ToolbarBtn>
+        <ToolbarBtn title="Align Center" active={editor.isActive({ textAlign: "center" })} onClick={() => editor.chain().focus().setTextAlign("center").run()}>
+          <PremiumIcon name="alignCenter" size={15} />
+        </ToolbarBtn>
+        <ToolbarBtn title="Align Right" active={editor.isActive({ textAlign: "right" })} onClick={() => editor.chain().focus().setTextAlign("right").run()}>
+          <PremiumIcon name="alignRight" size={15} />
+        </ToolbarBtn>
+        <ToolbarBtn title="Justify" active={editor.isActive({ textAlign: "justify" })} onClick={() => editor.chain().focus().setTextAlign("justify").run()}>
+          <PremiumIcon name="alignJustify" size={15} />
+        </ToolbarBtn>
+        <div style={{ width: "1px", height: "20px", backgroundColor: "var(--border)", margin: "0 4px" }} />
         <ToolbarBtn title="Bullet list" active={editor.isActive("bulletList")} onClick={() => editor.chain().focus().toggleBulletList().run()}>
           <PremiumIcon name="list" size={15} />
         </ToolbarBtn>
@@ -158,10 +450,8 @@ export function TiptapEditor({ content, onChange, placeholder = "Mulai menulis a
         <ToolbarBtn title="Blockquote" active={editor.isActive("blockquote")} onClick={() => editor.chain().focus().toggleBlockquote().run()}>
           <PremiumIcon name="quote" size={15} />
         </ToolbarBtn>
-
         <div style={{ width: "1px", height: "20px", backgroundColor: "var(--border)", margin: "0 4px" }} />
-
-        {/* AI Menu trigger (Dummy) */}
+        {/* AI Menu trigger */}
         <div style={{ position: "relative" }}>
           <button
             onClick={() => setShowAiMenu(!showAiMenu)}
@@ -171,7 +461,7 @@ export function TiptapEditor({ content, onChange, placeholder = "Mulai menulis a
               backgroundColor: showAiMenu ? "var(--primary-light)" : "var(--surface-hover)",
               color: showAiMenu ? "var(--primary)" : "var(--text-muted)",
               fontSize: "0.75rem", fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
-              transition: "all 0.2s"
+              transition: "all 0.2s",
             }}
           >
             <PremiumIcon name="sparkles" size={14} />
@@ -181,8 +471,77 @@ export function TiptapEditor({ content, onChange, placeholder = "Mulai menulis a
         </div>
       </div>
 
+      {/* Mobile AI Bar — appears BELOW toolbar when text is selected on touch devices */}
+      {isTouchDevice && mobileAiBarVisible && (
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          flexWrap: "nowrap",
+          overflowX: "auto",
+          gap: "0",
+          padding: "0.35rem 0.75rem",
+          borderBottom: "1px solid var(--border)",
+          backgroundColor: "color-mix(in srgb, var(--primary) 6%, var(--surface))",
+          WebkitOverflowScrolling: "touch",
+          position: "relative",
+        }}>
+          <span style={{
+            fontSize: "0.65rem",
+            fontWeight: 700,
+            color: "var(--primary)",
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
+            flexShrink: 0,
+            marginRight: "0.5rem",
+            whiteSpace: "nowrap",
+          }}>
+            ✦ AI
+          </span>
+          <AiActionButtons
+            onAction={onAiAction}
+            isProcessing={isAiProcessing}
+            showCustomInstruction={showCustomInstruction}
+            onToggleCustomInstruction={toggleCustomInstruction}
+            compact
+          />
+          <div style={{ width: "1px", height: "16px", backgroundColor: "var(--border)", margin: "0 4px", flexShrink: 0 }} />
+          <button
+            onClick={() => setMobileAiBarVisible(false)}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: "0.25rem", flexShrink: 0 }}
+          >
+            <PremiumIcon name="x" size={14} />
+          </button>
+        </div>
+      )}
+
       {/* Editor Content */}
       <div style={{ flex: 1, overflowY: "auto", padding: "2rem" }}>
+        {/* BubbleMenu — only on non-touch (desktop) */}
+        {!isTouchDevice && (
+          <BubbleMenu
+            editor={editor}
+            tippyOptions={{ duration: 150, interactive: true }}
+            className="glass-panel"
+            style={{
+              display: "flex",
+              gap: "0.2rem",
+              padding: "0.4rem",
+              borderRadius: "8px",
+              boxShadow: "var(--shadow-lg)",
+              border: "1px solid var(--border)",
+              backgroundColor: "var(--surface)",
+              alignItems: "center",
+              position: "relative",
+            }}
+          >
+            <AiActionButtons
+              onAction={onAiAction}
+              isProcessing={isAiProcessing}
+              showCustomInstruction={showCustomInstruction}
+              onToggleCustomInstruction={toggleCustomInstruction}
+            />
+          </BubbleMenu>
+        )}
         <EditorContent editor={editor} />
       </div>
     </div>

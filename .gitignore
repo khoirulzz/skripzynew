@@ -42,3 +42,7 @@ next-env.d.ts
 
 # firebase
 .firebase/
+
+# docs and sandboxes
+/blueprint-rencana/
+Sanbox-Doku.txt

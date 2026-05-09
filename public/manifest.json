@@ -2,7 +2,7 @@
   "name": "Skripzy - AI Research OS",
   "short_name": "Skripzy",
   "description": "Platform all-in-one berbasis AI untuk membantu mahasiswa dari tahap ide penelitian hingga skripsi selesai.",
-  "start_url": "/",
+  "start_url": "/dashboard/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",

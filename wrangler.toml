@@ -1,6 +1,10 @@
-name = "apikey"
+name = "apikey "
 main = "script-worker.js"
 compatibility_date = "2024-01-01"
+
+[placement]
+mode = "smart"
+
 
 [vars]
 WORKER_SECRET = "skripzy1234"

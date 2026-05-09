@@ -1,48 +1,32 @@
-"use client";
+import LandingClient from "./LandingClient";
 
-import { useAuth } from "@/components/providers/AuthProvider";
-import { ThemeToggle } from "@/components/layout/ThemeToggle";
-import { PremiumIcon } from "@/components/ui/PremiumIcon";
+export const metadata = {
+  title: "Skripzy | AI Research OS untuk Mahasiswa",
+  description: "Platform all-in-one berbasis AI untuk membantu mahasiswa dari tahap ide penelitian hingga skripsi selesai. Mulai penelitian lebih mudah dan cerdas.",
+  keywords: ["skripsi", "AI", "mahasiswa", "penelitian", "tugas akhir", "tools skripsi", "generator bab 1", "proposal penelitian"],
+  openGraph: {
+    title: "Skripzy | AI Research OS",
+    description: "Platform all-in-one berbasis AI untuk membantu mahasiswa dari tahap ide penelitian hingga skripsi selesai.",
+    url: "https://skripzy.id",
+    siteName: "Skripzy",
+    images: [
+      {
+        url: "https://skripzy.id/og-image.png", // Fallback to an og-image if it exists
+        width: 1200,
+        height: 630,
+        alt: "Skripzy AI Research OS",
+      },
+    ],
+    locale: "id_ID",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Skripzy | AI Research OS",
+    description: "Platform all-in-one berbasis AI untuk membantu mahasiswa dari tahap ide penelitian hingga skripsi selesai.",
+  },
+};
 
 export default function Home() {
-  const { user, loading } = useAuth();
-
-  return (
-    <div className="container flex-col items-center justify-center animate-fade-in" style={{ minHeight: "100vh", display: "flex" }}>
-      
-      <div style={{ position: "absolute", top: "1rem", right: "1rem" }}>
-        <ThemeToggle />
-      </div>
-
-      <div className="glass-panel" style={{ padding: "3rem", textAlign: "center", maxWidth: "600px", width: "100%" }}>
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: "1.5rem" }}>
-          <PremiumIcon name="zap" size={48} className="text-primary" style={{ color: "var(--primary)" }} />
-        </div>
-        
-        <h1 style={{ fontSize: "2.5rem", marginBottom: "1rem" }}>Skripzy 2.0</h1>
-        <p style={{ fontSize: "1.1rem", marginBottom: "2rem", textAlign: "center" }}>
-          AI Research Operating System. Workspace cerdas khusus untuk mahasiswa merampungkan skripsi & jurnal.
-        </p>
-
-        {loading ? (
-          <p style={{ fontSize: "1.1rem", marginBottom: "2rem", textAlign: "center" }}>Memuat sesi...</p>
-        ) : user ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: "1rem", alignItems: "center" }}>
-            <p style={{ color: "var(--success)" }}>Selamat datang kembali, {user.email}</p>
-            <button className="btn btn-primary" onClick={() => window.location.href = '/dashboard'}>
-              Masuk ke Workspace <PremiumIcon name="chevronRight" size={16} />
-            </button>
-          </div>
-        ) : (
-          <div style={{ display: "flex", gap: "1rem", justifyContent: "center" }}>
-            <button className="btn btn-outline" onClick={() => window.location.href = '/login'}>Login</button>
-            <button className="btn btn-primary" onClick={() => window.location.href = '/register'}>
-              Mulai Sekarang <PremiumIcon name="chevronRight" size={16} />
-            </button>
-          </div>
-        )}
-      </div>
-
-    </div>
-  );
+  return <LandingClient />;
 }

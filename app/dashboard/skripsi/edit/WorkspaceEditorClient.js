@@ -345,8 +345,15 @@ const [isMobile, setIsMobile] = useState(false);
     }));
   };
 
-  const handleAiInsertContent = (generatedHtml) => {
-    const chapterKey = CHAPTERS[activeChapter].key;
+  const handleAiInsertContent = (generatedHtml, targetChapterIndex = null) => {
+    let chapterKey = CHAPTERS[activeChapter].key;
+    
+    if (targetChapterIndex !== null && CHAPTERS[targetChapterIndex]) {
+      chapterKey = CHAPTERS[targetChapterIndex].key;
+      setActiveChapter(targetChapterIndex);
+      setActiveTab("penulisan");
+    }
+
     setContentBuffer((current) => {
       const existing = current[chapterKey] || "";
       return {
@@ -405,7 +412,7 @@ const [isMobile, setIsMobile] = useState(false);
 
   const rightPanel = (
     <div style={{ display: "flex", flexDirection: "column", gap: "1rem", minHeight: 0, height: "100%", flex: 1 }}>
-      <div className="glass-panel" style={{ padding: "1rem" }}>
+      <div className="glass-panel" style={{ padding: "1rem", backgroundColor: "var(--surface)" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", marginBottom: "0.7rem" }}>
           <h3 style={{ fontSize: "0.95rem", margin: 0 }}>Konteks Cepat</h3>
           <span style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}>{currentChapter.label}</span>
@@ -423,7 +430,7 @@ const [isMobile, setIsMobile] = useState(false);
       </div>
 
       {activeTab === "penulisan" ? (
-        <div className="glass-panel" style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1, overflow: "hidden" }}>
+        <div className="glass-panel" style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1, overflow: "hidden", backgroundColor: "var(--surface)" }}>
           <div style={{ padding: "1rem", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", borderBottom: isContextReferenceCardOpen ? "1px solid var(--border)" : "none" }}>
             <button
               className="btn btn-ghost"
@@ -542,7 +549,7 @@ const [isMobile, setIsMobile] = useState(false);
       ) : null}
 
       {activeTab === "analisis" && latestAnalysis ? (
-        <div className="glass-panel" style={{ padding: "1rem" }}>
+        <div className="glass-panel" style={{ padding: "1rem", backgroundColor: "var(--surface)" }}>
           <h3 style={{ fontSize: "0.95rem", margin: 0 }}>Snapshot Analisis Terakhir</h3>
           <p style={{ margin: "0.55rem 0 0 0", fontSize: "0.82rem", lineHeight: 1.6, color: "var(--text-main)" }}>
             {latestAnalysis.narrative || "Snapshot sudah tersimpan namun narasi belum tersedia."}
@@ -564,8 +571,9 @@ const [isMobile, setIsMobile] = useState(false);
           borderBottom: "1px solid var(--border)",
           backgroundColor: "color-mix(in srgb, var(--surface) 92%, transparent)",
           backdropFilter: "blur(10px)",
-          position: "static",
-          zIndex: 20,
+          position: "sticky",
+          top: "-1.5rem",
+          zIndex: 40,
         }}
       >
         <div style={{ display: "flex", flexDirection: isXs ? "column" : "row", flexWrap: "wrap", justifyContent: "space-between", gap: isXs ? "0.6rem" : "0.9rem", alignItems: isXs ? "stretch" : "center" }}>
@@ -786,12 +794,26 @@ const [isMobile, setIsMobile] = useState(false);
         )}
 
         <main style={{ display: "flex", flexDirection: "column", gap: isMobile ? "0.5rem" : "1rem", minWidth: 0, flex: 1 }}>
-          <div className="glass-panel" style={{ padding: isSm ? "0.6rem 0.75rem" : "0.75rem 0.9rem", display: "flex", flexDirection: isSm ? "column" : "row", alignItems: isSm ? "stretch" : "center", justifyContent: "space-between", gap: isSm ? "0.5rem" : "0.75rem", flexWrap: "wrap" }}>
+          <div className="glass-panel" style={{ 
+            padding: isSm ? "0.6rem 0.75rem" : "0.75rem 0.9rem", 
+            display: "flex", 
+            flexDirection: "row", 
+            alignItems: "center", 
+            justifyContent: "space-between", 
+            gap: isSm ? "0.5rem" : "0.75rem", 
+            flexWrap: "nowrap",
+            ...(activeTab === "penulisan" ? {
+              borderBottomLeftRadius: 0,
+              borderBottomRightRadius: 0,
+              borderBottom: "none",
+              zIndex: 5,
+            } : {})
+          }}>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: isSm ? "0.7rem" : "0.75rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
                 {WORKSPACE_TABS.find((tab) => tab.key === activeTab)?.label || "Workspace"}
               </div>
-              <div style={{ fontSize: "0.86rem", color: "var(--text-main)", fontWeight: 600 }}>
+              <div style={{ fontSize: "0.86rem", color: "var(--text-main)", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                 {activeTab === "penulisan"
                   ? currentChapter.longLabel
                   : activeTab === "referensi"
@@ -802,44 +824,41 @@ const [isMobile, setIsMobile] = useState(false);
               </div>
             </div>
 
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-              {!isMobile ? (
-                <button className={`btn ${isRightPanelOpen ? "btn-primary" : "btn-outline"}`} onClick={toggleRightPanel}>
-                  <PremiumIcon name={isRightPanelOpen ? "x" : "layers"} size={14} />
-                  {isRightPanelOpen ? "Tutup Konteks" : "Buka Konteks"}
-                </button>
-              ) : null}
+            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "nowrap", flexShrink: 0 }}>
+              <button 
+                className={`btn ${isRightPanelOpen ? "btn-primary" : "btn-ghost"}`} 
+                onClick={toggleRightPanel}
+                style={{ padding: "0.35rem 0.6rem", fontSize: "0.75rem", height: "auto" }}
+                title={isRightPanelOpen ? "Tutup Konteks" : "Buka Konteks"}
+              >
+                <PremiumIcon name={isRightPanelOpen ? "x" : "layers"} size={14} />
+                <span style={{ display: isSm ? "none" : "inline" }}>Konteks</span>
+              </button>
               {activeTab === "penulisan" ? (
-                <button className="btn btn-outline" onClick={() => void persistWorkspace(contentBuffer)} disabled={isSaving}>
+                <button 
+                  className="btn btn-ghost" 
+                  onClick={() => void persistWorkspace(contentBuffer)} 
+                  disabled={isSaving}
+                  style={{ padding: "0.35rem 0.6rem", fontSize: "0.75rem", height: "auto" }}
+                  title="Simpan Sekarang (Ctrl+S)"
+                >
                   <PremiumIcon name="save" size={14} />
-                  Simpan Sekarang
+                  <span style={{ display: isSm ? "none" : "inline" }}>Simpan</span>
                 </button>
               ) : null}
             </div>
           </div>
 
           {activeTab === "penulisan" ? (
-            <div style={{ position: "relative", display: "flex", flexDirection: "column", minHeight: "72vh", overflow: "hidden" }}>
-              <div style={{ 
-                position: isMobile ? "relative" : "sticky",
-                top: 0,
-                zIndex: 10,
-                backgroundColor: "var(--surface)",
-                borderBottom: "1px solid var(--border)",
-                padding: isMobile ? "0.65rem 0.5rem 0.45rem" : "1rem 1rem 0.65rem",
-                flexShrink: 0
-              }}>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", alignItems: "center", flexWrap: "wrap" }}>
-                  <div>
-                    <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                      {currentChapter.label}
-                    </div>
-                    <h2 style={{ fontSize: "1.2rem", margin: "0.2rem 0 0 0" }}>{currentChapter.longLabel}</h2>
-                  </div>
-                </div>
-              </div>
-
-              <div className="glass-panel" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden", margin: 0, borderRadius: 0 }}>
+            <div style={{ 
+              position: "relative", 
+              display: "flex", 
+              flexDirection: "column", 
+              minHeight: "72vh", 
+              overflow: "hidden",
+              marginTop: isMobile ? "-0.5rem" : "-1rem" 
+            }}>
+              <div className="glass-panel" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden", margin: 0, borderTopLeftRadius: 0, borderTopRightRadius: 0 }}>
                 <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
                   <TiptapEditor
                     key={currentChapter.key}
@@ -867,7 +886,11 @@ const [isMobile, setIsMobile] = useState(false);
 
           {activeTab === "analisis" ? (
             <div className="glass-panel" style={{ padding: "1rem" }}>
-              <DataAnalysisDashboard workspaceId={workspace.id} activeFormId={activeForm?.id || null} />
+              <DataAnalysisDashboard 
+                workspaceId={workspace.id} 
+                activeFormId={activeForm?.id || null} 
+                onInsertContent={handleAiInsertContent} 
+              />
             </div>
           ) : null}
         </main>
@@ -897,7 +920,7 @@ const [isMobile, setIsMobile] = useState(false);
               inset: 0,
               backgroundColor: isMobile ? "rgba(15, 23, 42, 0.18)" : "transparent",
               border: "none",
-              zIndex: 29,
+              zIndex: 45,
             }}
           />
           <aside
@@ -909,14 +932,14 @@ const [isMobile, setIsMobile] = useState(false);
               bottom: "0.75rem",
               width: contextPanelWidth,
               maxWidth: "calc(100vw - 1.5rem)",
-              zIndex: 30,
+              zIndex: 50,
               paddingRight: "0.2rem",
               display: "flex",
               flexDirection: "column",
               minHeight: 0,
             }}
           >
-            <div className="glass-panel" style={{ padding: "0.85rem", marginBottom: "0.75rem", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem" }}>
+            <div className="glass-panel" style={{ padding: "0.85rem", marginBottom: "0.75rem", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", backgroundColor: "var(--surface)" }}>
               <div style={{ minWidth: 0 }}>
                 <h3 style={{ fontSize: "0.94rem", margin: 0 }}>
                   {contextPreviewReference ? "PDF Viewer" : "Panel Konteks"}
@@ -932,7 +955,7 @@ const [isMobile, setIsMobile] = useState(false);
               </button>
             </div>
             {contextPreviewReference?.pdfUrl ? (
-              <div className="glass-panel" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+              <div className="glass-panel" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden", backgroundColor: "var(--surface)" }}>
                 <div
                   style={{
                     padding: "0.9rem 1rem",

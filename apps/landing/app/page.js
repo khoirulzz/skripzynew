@@ -25,6 +25,9 @@ export const metadata = {
     title: "Skripzy | AI Research OS",
     description: "Platform all-in-one berbasis AI untuk membantu mahasiswa dari tahap ide penelitian hingga skripsi selesai.",
   },
+  alternates: {
+    canonical: 'https://skripzy.id',
+  },
 };
 
 export default function Home() {

@@ -22,6 +22,9 @@ export const metadata = {
     apple: "/apple-touch-icon.png",
   },
   metadataBase: new URL('https://skripzy.id'),
+  alternates: {
+    canonical: '/',
+  },
 };
 
 export default function RootLayout({ children }) {

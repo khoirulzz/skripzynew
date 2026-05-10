@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "id.skripzy.app.twa",
+        "sha256_cert_fingerprints": ["D9:8E:78:0A:CB:45:6A:65:23:31:79:99:D3:1C:8E:AC:1E:83:E1:E5:71:73:A1:57:08:37:92:AB:9E:45:B3:FC"]
+      }
+    }]

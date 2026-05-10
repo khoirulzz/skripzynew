@@ -8,6 +8,8 @@
   "scripts": {
     "dev": "next dev --hostname 0.0.0.0",
     "build": "next build",
+    "build:landing": "npm run build -w skripzy-landing",
+    "build:app": "npm run build -w skripzy-dashboard",
     "start": "next start",
     "lint": "eslint"
   },

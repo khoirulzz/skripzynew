@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { d1Request } from "@/lib/d1Client";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
 
 export function WorkspaceNotesPanel({ workspaceId, collapsible = false, defaultCollapsed = false, rows = 10 }) {
@@ -11,15 +10,24 @@ export function WorkspaceNotesPanel({ workspaceId, collapsible = false, defaultC
   const [isExpanded, setIsExpanded] = useState(!defaultCollapsed);
 
   useEffect(() => {
-    if (!workspaceId) return undefined;
+    if (!workspaceId) return;
+    let isMounted = true;
 
-    const noteRef = doc(db, "workspaces", workspaceId, "notes", "general");
-    const unsubscribe = onSnapshot(noteRef, (snapshot) => {
-      const nextContent = snapshot.data()?.content || "";
-      setContent((current) => (status === "saving" ? current : nextContent));
-    });
+    async function fetchNote() {
+      try {
+        const resp = await d1Request("workspace_notes");
+        const note = (resp.data || []).find(n => n.workspace_id === workspaceId && n.id === "general");
+        if (isMounted && status !== "saving") {
+          setContent(note?.content || "");
+        }
+      } catch (e) {
+        console.error("Failed to fetch notes:", e);
+      }
+    }
 
-    return unsubscribe;
+    fetchNote();
+    const interval = setInterval(fetchNote, 10000);
+    return () => { isMounted = false; clearInterval(interval); };
   }, [workspaceId, status]);
 
   useEffect(() => {
@@ -28,14 +36,23 @@ export function WorkspaceNotesPanel({ workspaceId, collapsible = false, defaultC
     const timeoutId = window.setTimeout(async () => {
       try {
         setStatus("saving");
-        await setDoc(
-          doc(db, "workspaces", workspaceId, "notes", "general"),
-          {
-            content,
-            updatedAt: serverTimestamp(),
-          },
-          { merge: true }
-        );
+        // Upsert: try PATCH first, if fails, POST
+        try {
+          await d1Request("workspace_notes", {
+            method: "PATCH",
+            id: "general",
+            body: { content }
+          });
+        } catch {
+          await d1Request("workspace_notes", {
+            method: "POST",
+            body: {
+              id: "general",
+              workspace_id: workspaceId,
+              content
+            }
+          });
+        }
         setStatus("saved");
       } catch (error) {
         console.error("Gagal menyimpan catatan workspace:", error);

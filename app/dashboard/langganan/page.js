@@ -171,7 +171,7 @@ function StepperProgress({ currentStep, steps }) {
 }
 
 export default function LanggananPage() {
-  const { user, userData } = useAuth();
+  const { user, userData, refreshUserData } = useAuth();
   const { plans, topups, planMap, topupMap } = useBillingCatalog();
   const activePromos = useActivePromos();
   const userRequests = useUserBillingRequests(user?.uid);
@@ -210,6 +210,9 @@ export default function LanggananPage() {
       const paymentStatus = searchParams.get("payment");
       if (paymentStatus === "success") {
         setSuccessMsg("Pembayaran berhasil diproses! Saldo atau paket Anda akan segera diperbarui.");
+        if (typeof refreshUserData === "function") {
+          refreshUserData();
+        }
       } else if (paymentStatus === "failed") {
         setErrorMsg("Pembayaran gagal diproses. Silakan coba lagi.");
       } else if (paymentStatus === "cancelled") {

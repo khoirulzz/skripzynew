@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { d1Request } from "@/lib/d1Client";
+
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useRouter } from "next/navigation";
 import { createWorkspacePayload } from "@/lib/workspaceDefaults";
@@ -20,19 +20,35 @@ export function WorkspaceModal({ onClose, type = "skripsi" }) {
     setLoading(true);
 
     try {
-      const docRef = await addDoc(collection(db, "workspaces"), {
-        ...createWorkspacePayload({
+      const id = crypto.randomUUID();
+      const payload = createWorkspacePayload({
           userId: user.uid,
           type,
           title: formData.title,
           topic: formData.topic,
-        }),
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
       });
       
+      // Delete empty properties or arrays that D1 cannot store directly
+      // Specifically we only need to pass the columns that D1 has.
+      // D1 schema for workspaces: id, user_id, title, description, type, status, topic, progress
+      const body = {
+          id,
+          title: formData.title,
+          description: formData.topic,
+          type,
+          status: "Draft",
+          topic: formData.topic,
+          progress: 0
+      };
+
+      await d1Request("workspaces", {
+        method: "POST",
+        body
+      });
+      
+      
       onClose();
-      router.push(`/dashboard/${type}/edit?id=${docRef.id}`);
+      router.push(`/dashboard/${type}/edit?id=${id}`);
     } catch (err) {
       console.error("Gagal membuat workspace:", err);
       setError(err.message || "Gagal membuat workspace. Periksa koneksi.");

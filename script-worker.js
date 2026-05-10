@@ -717,58 +717,34 @@ const worker = {
 
                     // Auto-approve: add credits or upgrade plan
                     const userId = docData.userId;
-                    if (userId) {
-                        const userDocUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${userId}?key=${webApiKey}`;
-                        const userRes = await fetch(userDocUrl);
-                        const userData = userRes.ok ? fromFirestoreDocument(await userRes.json()) : null;
+                    if (userId && env.DB) {
+                        try {
+                            const stmt = env.DB.prepare(`SELECT * FROM users WHERE id = ?`).bind(userId);
+                            const { results } = await stmt.all();
+                            const userData = results[0];
 
-                        if (userData) {
-                            const requestType = docData.requestType || "topup";
+                            if (userData) {
+                                const requestType = docData.requestType || "topup";
 
-                            if (requestType === "plan") {
-                                // Upgrade plan
-                                const planUpdate = toFirestoreDocument({
-                                    plan: docData.planId || "pro",
-                                    updatedAt: now,
-                                });
-                                await fetch(`https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${userId}?key=${webApiKey}&updateMask.fieldPaths=plan&updateMask.fieldPaths=updatedAt`, {
-                                    method: "PATCH",
-                                    headers: { "Content-Type": "application/json" },
-                                    body: JSON.stringify(planUpdate),
-                                });
-
-                                // Also add plan credits if applicable
-                                const planCredits = Number(docData.amount) || 0;
-                                if (planCredits > 0) {
+                                if (requestType === "plan") {
+                                    const planCredits = Number(docData.amount) || 0;
                                     const currentCredits = Number(userData.credits) || 0;
-                                    const creditUpdate = toFirestoreDocument({
-                                        credits: currentCredits + planCredits,
-                                        updatedAt: now,
-                                    });
-                                    await fetch(`https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${userId}?key=${webApiKey}&updateMask.fieldPaths=credits&updateMask.fieldPaths=updatedAt`, {
-                                        method: "PATCH",
-                                        headers: { "Content-Type": "application/json" },
-                                        body: JSON.stringify(creditUpdate),
-                                    });
+
+                                    await env.DB.prepare(`UPDATE users SET plan = ?, credits = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+                                        .bind(docData.planId || "pro", currentCredits + planCredits, userId)
+                                        .run();
+
+                                    console.log(`[DOKU] Plan upgraded for user ${userId}: ${docData.planId}, +${planCredits} credits (D1)`);
+                                } else {
+                                    const creditsToAdd = Number(docData.amount) || 0;
+                                    const currentCredits = Number(userData.credits) || 0;
+
+                                    await env.DB.prepare(`UPDATE users SET credits = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+                                        .bind(currentCredits + Math.max(0, creditsToAdd), userId)
+                                        .run();
+
+                                    console.log(`[DOKU] Credits added for user ${userId}: +${creditsToAdd} (D1)`);
                                 }
-
-                                console.log(`[DOKU] Plan upgraded for user ${userId}: ${docData.planId}, +${planCredits} credits`);
-                            } else {
-                                // Add credits for topup
-                                const creditsToAdd = Number(docData.amount) || 0;
-                                const currentCredits = Number(userData.credits) || 0;
-                                const creditUpdate = toFirestoreDocument({
-                                    credits: currentCredits + Math.max(0, creditsToAdd),
-                                    updatedAt: now,
-                                });
-                                await fetch(`https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${userId}?key=${webApiKey}&updateMask.fieldPaths=credits&updateMask.fieldPaths=updatedAt`, {
-                                    method: "PATCH",
-                                    headers: { "Content-Type": "application/json" },
-                                    body: JSON.stringify(creditUpdate),
-                                });
-
-                                console.log(`[DOKU] Credits added for user ${userId}: +${creditsToAdd}`);
-                            }
 
                             // Handle promo usage
                             if (docData.promoId) {
@@ -787,6 +763,9 @@ const worker = {
                                     });
                                 }
                             }
+                        }
+                        } catch (e) {
+                            console.error("[DOKU] Failed to update user in D1:", e.message);
                         }
                     }
 
@@ -1101,6 +1080,98 @@ const worker = {
                     status: 500,
                     headers: createCorsHeaders(),
                 });
+            }
+        }
+
+        // ──── ENDPOINT BARU: CLOUDFLARE D1 CRUD API ────
+        if (url.pathname.startsWith("/api/d1/")) {
+            const table = url.pathname.replace("/api/d1/", "").split("/")[0];
+            const allowedTables = [
+                "users", "workspaces", "document_metadata",
+                "workspace_references", "workspace_forms", "workspace_transcripts",
+                "workspace_analysis", "workspace_notes"
+            ];
+
+            if (!allowedTables.includes(table)) {
+                return new Response(JSON.stringify({ error: "Table not allowed" }), { status: 403, headers: createCorsHeaders() });
+            }
+
+            const authToken = extractBearerToken(request);
+            const session = await verifyFirebaseToken(authToken, env);
+            if (!session) {
+                return new Response(JSON.stringify({ error: "Unauthorized: Invalid Firebase token" }), { status: 401, headers: createCorsHeaders() });
+            }
+
+            if (!env.DB) {
+                return new Response(JSON.stringify({ error: "D1 Database not bound" }), { status: 500, headers: createCorsHeaders() });
+            }
+
+            const uidColumn = table === "users" ? "id" : "user_id";
+
+            try {
+                if (request.method === "GET") {
+                    const id = url.searchParams.get("id");
+                    if (id) {
+                        const stmt = env.DB.prepare(`SELECT * FROM ${table} WHERE id = ? AND ${uidColumn} = ?`).bind(id, session.uid);
+                        const { results } = await stmt.all();
+                        return new Response(JSON.stringify({ data: results[0] || null }), { headers: createCorsHeaders() });
+                    } else {
+                        const stmt = env.DB.prepare(`SELECT * FROM ${table} WHERE ${uidColumn} = ?`).bind(session.uid);
+                        const { results } = await stmt.all();
+                        return new Response(JSON.stringify({ data: results }), { headers: createCorsHeaders() });
+                    }
+                }
+
+                if (request.method === "POST") {
+                    const body = await request.json();
+                    
+                    if (table === "users") {
+                        body.id = session.uid;
+                    } else {
+                        body.user_id = session.uid;
+                    }
+
+                    const keys = Object.keys(body);
+                    const placeholders = keys.map(() => "?").join(", ");
+                    const values = keys.map(k => body[k]);
+                    const stmt = env.DB.prepare(`INSERT INTO ${table} (${keys.join(", ")}) VALUES (${placeholders})`).bind(...values);
+                    const result = await stmt.run();
+                    return new Response(JSON.stringify({ success: true, result }), { headers: createCorsHeaders() });
+                }
+
+                if (request.method === "PATCH") {
+                    const id = url.searchParams.get("id");
+                    if (!id) return new Response(JSON.stringify({ error: "Missing id" }), { status: 400, headers: createCorsHeaders() });
+                    const body = await request.json();
+                    
+                    delete body.user_id;
+                    delete body.id;
+
+                    const keys = Object.keys(body);
+                    if (keys.length === 0) return new Response(JSON.stringify({ success: true }), { headers: createCorsHeaders() });
+
+                    const hasUpdatedAt = table === "users" || table === "workspaces";
+                    const setClause = keys.map(k => `${k} = ?`).join(", ") + (hasUpdatedAt ? ", updated_at = CURRENT_TIMESTAMP" : "");
+                    const values = keys.map(k => body[k]);
+
+                    const stmt = env.DB.prepare(`UPDATE ${table} SET ${setClause} WHERE id = ? AND ${uidColumn} = ?`)
+                        .bind(...values, id, session.uid);
+                    
+                    const result = await stmt.run();
+                    return new Response(JSON.stringify({ success: true, result }), { headers: createCorsHeaders() });
+                }
+
+                if (request.method === "DELETE") {
+                    const id = url.searchParams.get("id");
+                    if (!id) return new Response(JSON.stringify({ error: "Missing id" }), { status: 400, headers: createCorsHeaders() });
+                    const stmt = env.DB.prepare(`DELETE FROM ${table} WHERE id = ? AND ${uidColumn} = ?`).bind(id, session.uid);
+                    const result = await stmt.run();
+                    return new Response(JSON.stringify({ success: true, result }), { headers: createCorsHeaders() });
+                }
+
+                return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405, headers: createCorsHeaders() });
+            } catch (e) {
+                return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: createCorsHeaders() });
             }
         }
 

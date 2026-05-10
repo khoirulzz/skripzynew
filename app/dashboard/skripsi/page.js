@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { d1Request } from "@/lib/d1Client";
+
 import { useAuth } from "@/components/providers/AuthProvider";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
 import Link from "next/link";
@@ -19,19 +19,25 @@ export default function SkripsiListPage() {
     async function fetchWorkspaces() {
       if (!user) return;
       try {
-        const q = query(
-          collection(db, "workspaces"), 
-          where("userId", "==", user.uid),
-          where("type", "==", "skripsi")
-          // orderBy dihapus – membutuhkan composite index. Sort dilakukan di memori.
-        );
-        const querySnapshot = await getDocs(q);
-        const fetched = [];
-        querySnapshot.forEach((doc) => {
-          fetched.push({ id: doc.id, ...doc.data() });
-        });
+        const response = await d1Request("workspaces");
+        let fetched = response.data || [];
+        
+        // Filter by type "skripsi" (case insensitive logic or strict equality)
+        fetched = fetched.filter(ws => ws.type === "skripsi");
+
         // Sort by updatedAt descending in memory
-        fetched.sort((a,b) => (b.updatedAt?.toMillis() || 0) - (a.updatedAt?.toMillis() || 0));
+        fetched.sort((a,b) => {
+            const timeA = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+            const timeB = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+            return timeB - timeA;
+        });
+        
+        // Map updated_at to updatedAt for compatibility with UI components
+        fetched = fetched.map(ws => ({
+            ...ws,
+            updatedAt: { toMillis: () => new Date(ws.updated_at || ws.created_at || Date.now()).getTime() }
+        }));
+        
         setWorkspaces(fetched);
       } catch (err) {
         console.error("Failed to fetch workspaces", err);

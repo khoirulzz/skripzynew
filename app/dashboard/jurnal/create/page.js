@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { d1Request } from "@/lib/d1Client";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -152,15 +151,21 @@ ${pdfText.substring(0, 30000)} // Potong teks agar tidak melebihi token
         dynamicContent[sec.key] = "";
       });
 
-      const docRef = await addDoc(collection(db, "workspaces"), {
-        ...payload,
-        ...dynamicContent,
-        journalSections: sections,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
+      const id = crypto.randomUUID();
+      await d1Request("workspaces", {
+        method: "POST",
+        body: {
+          id,
+          title: formData.title,
+          description: formData.topic,
+          type: "jurnal",
+          status: "Draft",
+          topic: formData.topic,
+          journalSections: JSON.stringify(sections),
+        }
       });
       
-      router.push(`/dashboard/jurnal/edit?id=${docRef.id}`);
+      router.push(`/dashboard/jurnal/edit?id=${id}`);
     } catch (err) {
       console.error("Gagal membuat workspace jurnal:", err);
       setError(err.message || "Gagal membuat workspace.");

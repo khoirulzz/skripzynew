@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { collection, query, where, getDocs, deleteDoc, doc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { d1Request } from "@/lib/d1Client";
+
 import { useAuth } from "@/components/providers/AuthProvider";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
 import Link from "next/link";
@@ -17,18 +17,21 @@ export default function JurnalListPage() {
     async function fetchWorkspaces() {
       if (!user) return;
       try {
-        const q = query(
-          collection(db, "workspaces"), 
-          where("userId", "==", user.uid),
-          where("type", "==", "jurnal")
-        );
-        const querySnapshot = await getDocs(q);
-        const fetched = [];
-        querySnapshot.forEach((doc) => {
-          fetched.push({ id: doc.id, ...doc.data() });
-        });
+        const response = await d1Request("workspaces");
+        let fetched = response.data || [];
         
-        fetched.sort((a,b) => (b.updatedAt?.toMillis() || 0) - (a.updatedAt?.toMillis() || 0));
+        fetched = fetched.filter(ws => ws.type === "jurnal");
+
+        fetched.sort((a,b) => {
+            const timeA = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+            const timeB = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+            return timeB - timeA;
+        });
+
+        fetched = fetched.map(ws => ({
+            ...ws,
+            updatedAt: { toMillis: () => new Date(ws.updated_at || ws.created_at || Date.now()).getTime() }
+        }));
         setWorkspaces(fetched);
       } catch (err) {
         console.error("Failed to fetch workspaces", err);
@@ -47,7 +50,7 @@ export default function JurnalListPage() {
     if (!window.confirm("Apakah Anda yakin ingin menghapus proyek jurnal ini? Tindakan ini tidak dapat dibatalkan.")) return;
     
     try {
-      await deleteDoc(doc(db, "workspaces", id));
+      await d1Request("workspaces", { method: "DELETE", id });
       setWorkspaces(workspaces.filter(ws => ws.id !== id));
     } catch (err) {
       console.error("Failed to delete workspace", err);

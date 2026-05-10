@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { createUserWithEmailAndPassword, signInWithPopup } from "firebase/auth";
-import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
-import { auth, db, googleProvider } from "@/lib/firebase";
+import { d1Request } from "@/lib/d1Client";
+import { auth, googleProvider } from "@/lib/firebase";
 import { AuthGuard } from "@/components/auth/AuthGuard";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
 import Link from "next/link";
@@ -40,16 +40,18 @@ export default function RegisterPage() {
       const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
       const user = userCredential.user;
 
-      // Migrate to existing structure
-      await setDoc(doc(db, "users", user.uid), {
-        namaLengkap: formData.namaLengkap,
-        email: formData.email,
-        status: formData.status,
-        asalInstitusi: formData.asalInstitusi,
-        createdAt: serverTimestamp(),
-        plan: "free",
-        credits: 15,
-        role: "user"
+      // Create user profile in D1
+      await d1Request("users", {
+        method: "POST",
+        body: {
+          id: user.uid,
+          email: formData.email,
+          name: formData.namaLengkap,
+          plan: "free",
+          credits: 15,
+          status: formData.status,
+          asalInstitusi: formData.asalInstitusi
+        }
       });
 
       router.push("/dashboard");
@@ -73,20 +75,18 @@ export default function RegisterPage() {
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
 
-      const userRef = doc(db, "users", user.uid);
-      const userSnapshot = await getDoc(userRef);
+      const userResponse = await d1Request("users", { id: user.uid }).catch(() => null);
 
-      if (!userSnapshot.exists()) {
-        await setDoc(userRef, {
-          namaLengkap: user.displayName || "User Skripzy",
-          email: user.email,
-          status: "Mahasiswa",
-          asalInstitusi: "-",
-          createdAt: serverTimestamp(),
-          plan: "free",
-          credits: 15,
-          role: "user",
-          photoURL: user.photoURL
+      if (!userResponse?.data) {
+        await d1Request("users", {
+          method: "POST",
+          body: {
+            id: user.uid,
+            email: user.email,
+            name: user.displayName || "User Skripzy",
+            plan: "free",
+            credits: 15
+          }
         });
       }
 

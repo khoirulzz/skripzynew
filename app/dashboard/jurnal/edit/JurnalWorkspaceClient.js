@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { collection, doc, onSnapshot, query, serverTimestamp, updateDoc } from "firebase/firestore";
+import { d1Request } from "@/lib/d1Client";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { db } from "@/lib/firebase";
+
 import { useAuth } from "@/components/providers/AuthProvider";
 import { TiptapEditor } from "@/components/editor/TiptapEditor";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
@@ -83,16 +83,19 @@ async function persistWorkspaceDoc({
   activeFormId,
   overrides = {},
 }) {
-  await updateDoc(doc(db, "workspaces", workspaceId), {
-    ...nextContentBuffer,
-    activeChapter,
-    progress,
-    referenceCount,
-    responseCount,
-    methodologyType,
-    activeFormId,
-    updatedAt: serverTimestamp(),
-    ...overrides,
+  await d1Request("workspaces", {
+    method: "PATCH",
+    id: workspaceId,
+    body: {
+      content: JSON.stringify(nextContentBuffer),
+      activeChapter,
+      progress,
+      referenceCount,
+      responseCount,
+      methodologyType,
+      activeFormId,
+      ...overrides,
+    }
   });
 }
 
@@ -152,89 +155,77 @@ const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
     if (!user || !id) return undefined;
 
-    const workspaceRef = doc(db, "workspaces", id);
-    const unsubscribe = onSnapshot(
-      workspaceRef,
-      (snapshot) => {
-        if (!snapshot.exists() || snapshot.data().userId !== user.uid) {
-          setNotFound(true);
-          setLoading(false);
-          return;
+    let isMounted = true;
+    async function fetchWorkspace() {
+        try {
+            const response = await d1Request("workspaces", { id });
+            const data = response.data;
+            if (!data || data.user_id !== user.uid) {
+                if (isMounted) { setNotFound(true); setLoading(false); }
+                return;
+            }
+            if (isMounted) {
+                    let parsedSections = [];
+                    try {
+                        parsedSections = typeof data.journalSections === 'string' 
+                            ? JSON.parse(data.journalSections) 
+                            : (data.journalSections || []);
+                    } catch (e) {
+                        console.error("Gagal parse journalSections", e);
+                    }
+                    data.journalSections = parsedSections;
+
+                setWorkspace(data);
+                if (!hydratedRef.current) {
+                    const initialBuffer = {};
+                    let parsedContent = {};
+                    try {
+                        parsedContent = data.content ? JSON.parse(data.content) : {};
+                    } catch (e) {
+                        console.error("Gagal parse content", e);
+                    }
+                    parsedSections.forEach((section) => {
+                        initialBuffer[section.key] = parsedContent[section.key] || "";
+                    });
+                    setContentBuffer(initialBuffer);
+                    setActiveChapter(Number.isFinite(data.activeChapter) ? data.activeChapter : 0);
+                    hydratedRef.current = true;
+                }
+                setLoading(false);
+            }
+        } catch (error) {
+            console.error("Error fetching workspace:", error);
+            if (isMounted) setLoading(false);
         }
-
-        const data = { id: snapshot.id, ...snapshot.data() };
-        setWorkspace(data);
-
-        if (!hydratedRef.current) {
-          const initialBuffer = {};
-          (data.journalSections || []).forEach((section) => {
-            initialBuffer[section.key] = data[section.key] || "";
-          });
-          setContentBuffer(initialBuffer);
-          setActiveChapter(Number.isFinite(data.activeChapter) ? data.activeChapter : 0);
-          hydratedRef.current = true;
-        }
-
-        setLoading(false);
-      },
-      (error) => {
-        console.error("Error fetching workspace:", error);
-        setLoading(false);
-      }
-    );
-
-    return unsubscribe;
+    }
+    fetchWorkspace();
+    const interval = setInterval(fetchWorkspace, 10000);
+    return () => { isMounted = false; clearInterval(interval); };
   }, [id, user]);
 
+  // Fetch sub-collections via D1
   useEffect(() => {
-    if (!id) return undefined;
-    const refsQuery = query(collection(db, "workspaces", id, "references"));
-    const unsubscribe = onSnapshot(refsQuery, (snapshot) => {
-      setReferences(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
-    });
-    return unsubscribe;
-  }, [id]);
-
-  useEffect(() => {
-    if (!id) return undefined;
-    const formsQuery = query(collection(db, "workspaces", id, "forms"));
-    const unsubscribe = onSnapshot(formsQuery, (snapshot) => {
-      setForms(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
-    });
-    return unsubscribe;
-  }, [id]);
-
-  useEffect(() => {
-    if (!id) return undefined;
-    const transcriptsQuery = query(collection(db, "workspaces", id, "transcripts"));
-    const unsubscribe = onSnapshot(transcriptsQuery, (snapshot) => {
-      setTranscripts(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
-    });
-    return unsubscribe;
-  }, [id]);
-
-  useEffect(() => {
-    if (!id) return undefined;
-    const snapshotsQuery = query(collection(db, "workspaces", id, "analysisSnapshots"));
-    const unsubscribe = onSnapshot(snapshotsQuery, (snapshot) => {
-      const items = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
-      items.sort((left, right) => {
-        const leftTime = left.createdAt?.seconds || 0;
-        const rightTime = right.createdAt?.seconds || 0;
-        return rightTime - leftTime;
-      });
-      setAnalysisSnapshots(items);
-    });
-    return unsubscribe;
-  }, [id]);
-
-  useEffect(() => {
-    if (!id) return undefined;
-    const noteRef = doc(db, "workspaces", id, "notes", "general");
-    const unsubscribe = onSnapshot(noteRef, (snapshot) => {
-      setNoteText(snapshot.data()?.content || "");
-    });
-    return unsubscribe;
+    if (!id) return;
+    let isMounted = true;
+    async function fetchSubs() {
+        try {
+            const refs = await d1Request("workspace_references");
+            if (isMounted) setReferences((refs.data || []).filter(r => r.workspace_id === id));
+            const frms = await d1Request("workspace_forms");
+            if (isMounted) setForms((frms.data || []).filter(f => f.workspace_id === id));
+            const trans = await d1Request("workspace_transcripts");
+            if (isMounted) setTranscripts((trans.data || []).filter(t => t.workspace_id === id));
+            const anly = await d1Request("workspace_analysis");
+            const anlyData = (anly.data || []).filter(a => a.workspace_id === id);
+            anlyData.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+            if (isMounted) setAnalysisSnapshots(anlyData);
+            const nts = await d1Request("workspace_notes", { id: "general" });
+            if (isMounted && nts.data && nts.data.workspace_id === id) setNoteText(nts.data.content || "");
+        } catch (e) { console.error("Failed fetching subs", e); }
+    }
+    fetchSubs();
+    const interval = setInterval(fetchSubs, 10000);
+    return () => { isMounted = false; clearInterval(interval); };
   }, [id]);
 
   const activeForm = useMemo(
@@ -296,13 +287,16 @@ const [isMobile, setIsMobile] = useState(false);
     if (!workspace) return undefined;
 
     const timeoutId = window.setTimeout(() => {
-      void updateDoc(doc(db, "workspaces", workspace.id), {
-        progress,
-        referenceCount: references.length,
-        responseCount: latestAnalysis?.responseCount || 0,
-        activeFormId: activeForm?.id || null,
-        activeChapter,
-        updatedAt: serverTimestamp(),
+      void d1Request("workspaces", {
+        method: "PATCH",
+        id: workspace.id,
+        body: {
+            progress,
+            referenceCount: references.length,
+            responseCount: latestAnalysis?.responseCount || 0,
+            activeFormId: activeForm?.id || null,
+            activeChapter
+        }
       }).catch((error) => console.error("Gagal sinkron metadata workspace:", error));
     }, 900);
 
@@ -323,18 +317,20 @@ const [isMobile, setIsMobile] = useState(false);
   const handleStatusChange = async (status) => {
     if (!workspace) return;
     setWorkspace((current) => ({ ...current, status }));
-    await updateDoc(doc(db, "workspaces", workspace.id), {
-      status,
-      updatedAt: serverTimestamp(),
+    await d1Request("workspaces", {
+        method: "PATCH",
+        id: workspace.id,
+        body: { status }
     });
   };
 
   const handleMethodologyChange = async (methodologyType) => {
     if (!workspace) return;
     setWorkspace((current) => ({ ...current, methodologyType }));
-    await updateDoc(doc(db, "workspaces", workspace.id), {
-      methodologyType,
-      updatedAt: serverTimestamp(),
+    await d1Request("workspaces", {
+        method: "PATCH",
+        id: workspace.id,
+        body: { methodologyType }
     });
   };
 

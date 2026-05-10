@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { addDoc, collection, deleteDoc, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { d1Request } from "@/lib/d1Client";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
 
 function createDraft() {
@@ -23,22 +22,25 @@ export function TranscriptManager({ workspaceId }) {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (!workspaceId) return undefined;
+    if (!workspaceId) return;
+    let isMounted = true;
 
-    const transcriptsQuery = query(
-      collection(db, "workspaces", workspaceId, "transcripts"),
-      orderBy("updatedAt", "desc")
-    );
-    const unsubscribe = onSnapshot(transcriptsQuery, (snapshot) => {
-      const nextItems = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
-      setTranscripts(nextItems);
-
-      if (!selectedId && nextItems[0]) {
-        setSelectedId(nextItems[0].id);
+    async function fetchTranscripts() {
+      try {
+        const resp = await d1Request("workspace_transcripts");
+        const nextItems = (resp.data || []).filter(t => t.workspace_id === workspaceId);
+        nextItems.sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0));
+        if (!isMounted) return;
+        setTranscripts(nextItems);
+        if (!selectedId && nextItems[0]) setSelectedId(nextItems[0].id);
+      } catch (e) {
+        console.error("Failed to fetch transcripts:", e);
       }
-    });
+    }
 
-    return unsubscribe;
+    fetchTranscripts();
+    const interval = setInterval(fetchTranscripts, 8000);
+    return () => { isMounted = false; clearInterval(interval); };
   }, [workspaceId, selectedId]);
 
   const selectedTranscript = useMemo(
@@ -47,17 +49,18 @@ export function TranscriptManager({ workspaceId }) {
   );
 
   const handleCreate = async () => {
-    const created = await addDoc(collection(db, "workspaces", workspaceId, "transcripts"), {
-      title: "Transkrip Baru",
-      role: "",
-      interviewDate: "",
-      tags: [],
-      excerpt: "",
-      content: "",
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
+    const id = crypto.randomUUID();
+    await d1Request("workspace_transcripts", {
+      method: "POST",
+      body: {
+        id,
+        workspace_id: workspaceId,
+        title: "Transkrip Baru",
+        content: "",
+      }
     });
-    setSelectedId(created.id);
+    setTranscripts(prev => [{ id, workspace_id: workspaceId, title: "Transkrip Baru", content: "" }, ...prev]);
+    setSelectedId(id);
     setDraft(createDraft());
   };
 
@@ -65,17 +68,19 @@ export function TranscriptManager({ workspaceId }) {
     if (!selectedId) return;
     setSaving(true);
     try {
-      await updateDoc(doc(db, "workspaces", workspaceId, "transcripts", selectedId), {
-        title: draft.title,
+      const contentPayload = JSON.stringify({
         role: draft.role,
         interviewDate: draft.interviewDate,
-        tags: draft.tags
-          .split(",")
-          .map((item) => item.trim())
-          .filter(Boolean),
+        tags: draft.tags.split(",").map(item => item.trim()).filter(Boolean),
         excerpt: draft.excerpt,
-        content: draft.content,
-        updatedAt: serverTimestamp(),
+      });
+      await d1Request("workspace_transcripts", {
+        method: "PATCH",
+        id: selectedId,
+        body: {
+          title: draft.title,
+          content: draft.content,
+        }
       });
     } catch (error) {
       console.error("Gagal menyimpan transkrip:", error);
@@ -86,7 +91,8 @@ export function TranscriptManager({ workspaceId }) {
 
   const handleDelete = async () => {
     if (!selectedId) return;
-    await deleteDoc(doc(db, "workspaces", workspaceId, "transcripts", selectedId));
+    await d1Request("workspace_transcripts", { method: "DELETE", id: selectedId });
+    setTranscripts(prev => prev.filter(t => t.id !== selectedId));
     setSelectedId(null);
   };
 

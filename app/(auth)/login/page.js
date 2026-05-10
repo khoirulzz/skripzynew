@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { signInWithEmailAndPassword, signInWithPopup } from "firebase/auth";
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
-import { auth, db, googleProvider } from "@/lib/firebase";
+import { d1Request } from "@/lib/d1Client";
+import { auth, googleProvider } from "@/lib/firebase";
 import { AuthGuard } from "@/components/auth/AuthGuard";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
 import Link from "next/link";
@@ -29,9 +29,8 @@ export default function LoginPage() {
 
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const userRef = doc(db, "users", userCredential.user.uid);
-      const userSnapshot = await getDoc(userRef);
-      const role = userSnapshot.exists() ? userSnapshot.data().role : "user";
+      const userResponse = await d1Request("users", { id: userCredential.user.uid }).catch(() => null);
+      const role = userResponse?.data?.role || "user";
 
       router.push(role === "admin" ? "/admin" : "/dashboard");
     } catch (err) {
@@ -50,22 +49,19 @@ export default function LoginPage() {
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
 
-      // Check if user exists in Firestore
-      const userRef = doc(db, "users", user.uid);
-      const userSnapshot = await getDoc(userRef);
+      // Check if user exists in D1
+      const userResponse = await d1Request("users", { id: user.uid }).catch(() => null);
 
-      if (!userSnapshot.exists()) {
-        // Create new user profile if it doesn't exist
-        await setDoc(userRef, {
-          namaLengkap: user.displayName || "User Skripzy",
-          email: user.email,
-          status: "Mahasiswa", // Default
-          asalInstitusi: "-",
-          createdAt: serverTimestamp(),
-          plan: "free",
-          credits: 15,
-          role: "user",
-          photoURL: user.photoURL
+      if (!userResponse?.data) {
+        // Create new user profile in D1
+        await d1Request("users", {
+          method: "POST",
+          body: {
+            email: user.email,
+            name: user.displayName || "User Skripzy",
+            plan: "free",
+            credits: 15
+          }
         });
       }
 

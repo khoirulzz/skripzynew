@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { collection, doc, onSnapshot, query, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { d1Request } from "@/lib/d1Client";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
 import { FormBuilder } from "./FormBuilder";
 import { DataAnalysisDashboard } from "./DataAnalysisDashboard";
@@ -16,32 +15,34 @@ export function DataHub({ workspaceId }) {
   const [editingFormId, setEditingFormId] = useState(null);
 
   useEffect(() => {
-    if (!workspaceId) return undefined;
+    if (!workspaceId) return;
+    let isMounted = true;
 
-    const workspaceRef = doc(db, "workspaces", workspaceId);
-    const unsubscribe = onSnapshot(workspaceRef, (snapshot) => {
-      const workspace = snapshot.data() || {};
-      setActiveFormId(workspace.activeFormId || null);
-    });
+    async function fetchWorkspaceAndForms() {
+      try {
+        // Get workspace for activeFormId
+        const wsResp = await d1Request("workspaces", { id: workspaceId });
+        if (isMounted && wsResp.data) setActiveFormId(wsResp.data.activeFormId || null);
 
-    return unsubscribe;
-  }, [workspaceId]);
+        // Get forms for this workspace
+        const formsResp = await d1Request("workspace_forms");
+        let nextForms = (formsResp.data || []).filter(f => f.workspace_id === workspaceId);
+        // Parse JSON content if stored as string
+        nextForms = nextForms.map(f => {
+          let parsed = {};
+          try { parsed = typeof f.content === "string" ? JSON.parse(f.content) : (f.content || {}); } catch {}
+          return { ...f, ...parsed };
+        });
+        nextForms.sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0));
+        if (isMounted) setForms(nextForms);
+      } catch (e) {
+        console.error("DataHub fetch error:", e);
+      }
+    }
 
-  useEffect(() => {
-    if (!workspaceId) return undefined;
-
-    const formsQuery = query(collection(db, "workspaces", workspaceId, "forms"));
-    const unsubscribe = onSnapshot(formsQuery, (snapshot) => {
-      const nextForms = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
-      nextForms.sort((left, right) => {
-        const leftTime = left.updatedAt?.seconds || 0;
-        const rightTime = right.updatedAt?.seconds || 0;
-        return rightTime - leftTime;
-      });
-      setForms(nextForms);
-    });
-
-    return unsubscribe;
+    fetchWorkspaceAndForms();
+    const interval = setInterval(fetchWorkspaceAndForms, 8000);
+    return () => { isMounted = false; clearInterval(interval); };
   }, [workspaceId]);
 
   const activeForm = useMemo(
@@ -52,17 +53,30 @@ export function DataHub({ workspaceId }) {
   const handleCreateForm = async () => {
     const formId = createId("form");
     const nextForm = createEmptyForm({ id: formId, title: `Instrumen ${forms.length + 1}` });
-    await setDoc(doc(db, "workspaces", workspaceId, "forms", formId), {
-      ...nextForm,
-      updatedAt: serverTimestamp(),
+    await d1Request("workspace_forms", {
+      method: "POST",
+      body: {
+        id: formId,
+        workspace_id: workspaceId,
+        title: nextForm.title,
+        status: FORM_STATUSES.draft,
+        content: JSON.stringify({
+          description: nextForm.description || "",
+          publicSlug: "",
+          settings: nextForm.settings || {},
+          sections: nextForm.sections || [],
+        }),
+      }
     });
+    setForms(prev => [{ ...nextForm, workspace_id: workspaceId }, ...prev]);
     setEditingFormId(formId);
   };
 
   const handleActivateForm = async (formId) => {
-    await updateDoc(doc(db, "workspaces", workspaceId), {
-      activeFormId: formId,
-      updatedAt: serverTimestamp(),
+    await d1Request("workspaces", {
+      method: "PATCH",
+      id: workspaceId,
+      body: { activeFormId: formId }
     });
     setActiveFormId(formId);
   };

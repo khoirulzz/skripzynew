@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
-import { collection, query, where, getDocs, addDoc, serverTimestamp } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { d1Request } from "@/lib/d1Client";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -32,10 +31,8 @@ export default function ConvertPage() {
     async function fetchSkripsi() {
       if (!user) return;
       try {
-        const q = query(collection(db, "workspaces"), where("userId", "==", user.uid), where("type", "==", "skripsi"));
-        const snapshot = await getDocs(q);
-        const fetched = [];
-        snapshot.forEach(doc => fetched.push({ id: doc.id, ...doc.data() }));
+        const resp = await d1Request("workspaces");
+        const fetched = (resp.data || []).filter(w => w.user_id === user.uid && w.type === "skripsi");
         setSkripsiList(fetched);
       } catch (err) {
         console.error("Gagal load skripsi:", err);
@@ -61,23 +58,24 @@ export default function ConvertPage() {
         const sourceSkripsi = skripsiList.find(s => s.id === selectedSkripsi);
         const templateInfo = TEMPLATES.find(t => t.id === selectedTemplate);
         
-        const docRef = await addDoc(collection(db, "workspaces"), {
-          ...createWorkspacePayload({
-            userId: user.uid,
+        const id = crypto.randomUUID();
+        await d1Request("workspaces", {
+          method: "POST",
+          body: {
+            id,
+            user_id: user.uid,
             type: "jurnal",
             title: `[${templateInfo.name}] ${sourceSkripsi.title || "Jurnal Baru"}`,
             topic: `Hasil konversi AI dari Skripsi. Template: ${templateInfo.name}. Topik asli: ${sourceSkripsi.topic}`,
-          }),
-          contentBab1: "<h2>Abstract</h2><p>Penelitian ini bertujuan untuk...</p><h2>1. Introduction</h2><p>Latar belakang diubah secara otomatis...</p>",
-          contentBab2: "<h2>2. Methods</h2><p>Metodologi dirangkum menjadi satu paragraf teknis...</p>",
-          contentBab3: "<h2>3. Results and Discussion</h2><p>Penggabungan hasil dan pembahasan sesuai format IMRaD...</p>",
-          contentBab4: "<h2>4. Conclusion</h2><p>Kesimpulan padat dan jelas...</p>",
-          contentBab5: "",
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
+            status: "Draft",
+            bab1: "<h2>Abstract</h2><p>Penelitian ini bertujuan untuk...</p><h2>1. Introduction</h2><p>Latar belakang diubah secara otomatis...</p>",
+            bab2: "<h2>2. Methods</h2><p>Metodologi dirangkum menjadi satu paragraf teknis...</p>",
+            bab3: "<h2>3. Results and Discussion</h2><p>Penggabungan hasil dan pembahasan sesuai format IMRaD...</p>",
+            bab4: "<h2>4. Conclusion</h2><p>Kesimpulan padat dan jelas...</p>",
+          }
         });
         
-        router.push(`/dashboard/jurnal/${docRef.id}`);
+        router.push(`/dashboard/jurnal/${id}`);
       } catch (err) {
         console.error("Gagal convert:", err);
         setConverting(false);

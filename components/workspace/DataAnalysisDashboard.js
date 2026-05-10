@@ -1,17 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  addDoc,
-  collection,
-  doc,
-  onSnapshot,
-  orderBy,
-  query,
-  serverTimestamp,
-  updateDoc,
-} from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { d1Request } from "@/lib/d1Client";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
 import { computeFormAnalysis, buildAnalysisNarrative } from "@/lib/formAnalysis";
 import { useAuth } from "@/components/providers/AuthProvider";
@@ -52,69 +42,49 @@ export function DataAnalysisDashboard({ workspaceId, activeFormId = null, compac
   const generationCost = toolMap["chapter-generation"]?.creditCost ?? 2;
 
   useEffect(() => {
-    if (!workspaceId) return undefined;
+    if (!workspaceId) return;
+    let isMounted = true;
 
-    const workspaceRef = doc(db, "workspaces", workspaceId);
-    const unsubscribe = onSnapshot(workspaceRef, (snapshot) => {
-      const data = snapshot.data() || {};
-      setWorkspaceActiveFormId(activeFormId || data.activeFormId || null);
-    });
+    async function fetchAll() {
+      try {
+        // Get workspace for activeFormId
+        const wsResp = await d1Request("workspaces", { id: workspaceId });
+        if (isMounted && wsResp.data) setWorkspaceActiveFormId(activeFormId || wsResp.data.activeFormId || null);
 
-    return unsubscribe;
-  }, [activeFormId, workspaceId]);
+        // Get forms
+        const formsResp = await d1Request("workspace_forms");
+        let nextForms = (formsResp.data || []).filter(f => f.workspace_id === workspaceId);
+        nextForms = nextForms.map(f => {
+          let parsed = {};
+          try { parsed = typeof f.content === "string" ? JSON.parse(f.content) : (f.content || {}); } catch {}
+          return { ...f, ...parsed };
+        });
+        if (isMounted) setForms(nextForms);
 
-  useEffect(() => {
-    if (!workspaceId) return undefined;
+        // Get transcripts
+        const transResp = await d1Request("workspace_transcripts");
+        if (isMounted) setTranscripts((transResp.data || []).filter(t => t.workspace_id === workspaceId));
 
-    const formsQuery = query(collection(db, "workspaces", workspaceId, "forms"));
-    const unsubscribe = onSnapshot(formsQuery, (snapshot) => {
-      setForms(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
-    });
-
-    return unsubscribe;
-  }, [workspaceId]);
-
-  useEffect(() => {
-    if (!workspaceId) return undefined;
-
-    const transcriptsQuery = query(collection(db, "workspaces", workspaceId, "transcripts"));
-    const unsubscribe = onSnapshot(transcriptsQuery, (snapshot) => {
-      setTranscripts(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
-    });
-
-    return unsubscribe;
-  }, [workspaceId]);
-
-  useEffect(() => {
-    if (!workspaceId) return undefined;
-
-    const snapshotsQuery = query(
-      collection(db, "workspaces", workspaceId, "analysisSnapshots"),
-      orderBy("createdAt", "desc")
-    );
-
-    const unsubscribe = onSnapshot(snapshotsQuery, (snapshot) => {
-      const nextItems = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
-      setLatestSnapshot(nextItems[0] || null);
-      if (!notesHydratedRef.current && nextItems[0]?.interpretationNotes) {
-        setInterpretationNotes(nextItems[0].interpretationNotes);
-        notesHydratedRef.current = true;
+        // Get analysis snapshots
+        const analysisResp = await d1Request("workspace_analysis");
+        const nextSnapshots = (analysisResp.data || []).filter(a => a.workspace_id === workspaceId);
+        nextSnapshots.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+        if (isMounted) {
+          setLatestSnapshot(nextSnapshots[0] || null);
+          if (!notesHydratedRef.current && nextSnapshots[0]?.interpretationNotes) {
+            setInterpretationNotes(nextSnapshots[0].interpretationNotes);
+            notesHydratedRef.current = true;
+          }
+        }
+      } catch (e) {
+        console.error("DataAnalysisDashboard fetch error:", e);
       }
-    });
+    }
 
-    return unsubscribe;
-  }, [workspaceId]);
-
-  useEffect(() => {
-    if (!workspaceId || !workspaceActiveFormId) return undefined;
-
-    const responsesQuery = query(collection(db, "workspaces", workspaceId, "forms", workspaceActiveFormId, "responses"));
-    const unsubscribe = onSnapshot(responsesQuery, (snapshot) => {
-      setResponses(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
-    });
-
-    return unsubscribe;
-  }, [workspaceActiveFormId, workspaceId]);
+    fetchAll();
+    const interval = setInterval(fetchAll, 10000);
+    return () => { isMounted = false; clearInterval(interval); };
+  }, [workspaceId, activeFormId]);
 
   const activeForm = useMemo(() => {
     if (!forms.length) return null;
@@ -136,24 +106,32 @@ export function DataAnalysisDashboard({ workspaceId, activeFormId = null, compac
     setSavingSnapshot(true);
 
     try {
-      const payload = {
-        formId: activeForm.id,
-        formTitle: activeForm.title,
-        responseCount: analysis.responseCount,
-        cronbachAlpha: analysis.cronbachAlpha,
-        quantitativeQuestionCount: analysis.quantitativeQuestionCount,
-        itemStats: analysis.itemStats,
-        distributions: analysis.distributions,
-        narrative,
-        interpretationNotes,
-        transcriptCount: transcripts.length,
-        createdAt: serverTimestamp(),
-      };
+      const id = crypto.randomUUID();
+      await d1Request("workspace_analysis", {
+        method: "POST",
+        body: {
+          id,
+          workspace_id: workspaceId,
+          narrative: JSON.stringify({
+            formId: activeForm.id,
+            formTitle: activeForm.title,
+            responseCount: analysis.responseCount,
+            cronbachAlpha: analysis.cronbachAlpha,
+            quantitativeQuestionCount: analysis.quantitativeQuestionCount,
+            itemStats: analysis.itemStats,
+            distributions: analysis.distributions,
+            narrative,
+            interpretationNotes,
+            transcriptCount: transcripts.length,
+          }),
+          responseCount: analysis.responseCount,
+        }
+      });
 
-      await addDoc(collection(db, "workspaces", workspaceId, "analysisSnapshots"), payload);
-      await updateDoc(doc(db, "workspaces", workspaceId), {
-        responseCount: analysis.responseCount,
-        lastAnalysisAt: serverTimestamp(),
+      await d1Request("workspaces", {
+        method: "PATCH",
+        id: workspaceId,
+        body: { responseCount: analysis.responseCount }
       });
     } catch (error) {
       console.error("Gagal menyimpan snapshot analisis:", error);

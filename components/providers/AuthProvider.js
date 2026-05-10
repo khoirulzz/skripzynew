@@ -2,8 +2,8 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
-import { auth, db } from "@/lib/firebase";
-import { doc, onSnapshot } from "firebase/firestore";
+import { auth } from "@/lib/firebase";
+import { d1Request } from "@/lib/d1Client";
 
 const AuthContext = createContext({
   user: null,
@@ -17,32 +17,36 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    let unsubscribeDoc = null;
+    let intervalId = null;
 
-    const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
+    const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
 
-      if (unsubscribeDoc) {
-        unsubscribeDoc();
-        unsubscribeDoc = null;
+      if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
       }
 
       if (firebaseUser) {
         setLoading(true);
-        // Fetch user document from Firestore dynamically
-        const userRef = doc(db, "users", firebaseUser.uid);
-        unsubscribeDoc = onSnapshot(userRef, (snapshot) => {
-          if (snapshot.exists()) {
-            setUserData(snapshot.data());
-          } else {
-            console.warn("User document not found in Firestore.");
-            setUserData(null);
+        
+        const fetchUserData = async () => {
+          try {
+            const userResp = await d1Request("users", { id: firebaseUser.uid });
+            if (userResp && userResp.data) {
+              setUserData(userResp.data);
+            } else {
+              setUserData(null);
+            }
+          } catch (err) {
+            console.error("Failed to fetch user data:", err);
+          } finally {
+            setLoading(false);
           }
-          setLoading(false);
-        }, (err) => {
-          console.error("Failed to fetch user data:", err);
-          setLoading(false);
-        });
+        };
+
+        await fetchUserData();
+        intervalId = setInterval(fetchUserData, 30000); // Poll every 30s for credit updates
       } else {
         setUserData(null);
         setLoading(false);
@@ -50,15 +54,36 @@ export function AuthProvider({ children }) {
     });
 
     return () => {
-      if (unsubscribeDoc) {
-        unsubscribeDoc();
-      }
+      if (intervalId) clearInterval(intervalId);
       unsubscribeAuth();
     };
   }, []);
 
+  const refreshUserData = async () => {
+    if (!user) return;
+    try {
+      const userResp = await d1Request("users", { id: user.uid });
+      if (userResp && userResp.data) {
+        setUserData(userResp.data);
+      } else {
+        setUserData(null);
+      }
+    } catch (err) {
+      console.error("Failed to fetch user data:", err);
+    }
+  };
+
+  useEffect(() => {
+    if (!user) return;
+    const handleCreditsUpdate = () => {
+      refreshUserData();
+    };
+    window.addEventListener("skripzy:credits_updated", handleCreditsUpdate);
+    return () => window.removeEventListener("skripzy:credits_updated", handleCreditsUpdate);
+  }, [user]);
+
   return (
-    <AuthContext.Provider value={{ user, userData, loading }}>
+    <AuthContext.Provider value={{ user, userData, loading, refreshUserData }}>
       {children}
     </AuthContext.Provider>
   );

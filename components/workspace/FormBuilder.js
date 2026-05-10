@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { doc, serverTimestamp, updateDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { d1Request } from "@/lib/d1Client";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
 import { FormRenderer } from "./FormRenderer";
 import {
@@ -32,10 +31,9 @@ function normalizeFormPayload(form) {
     description: form.description,
     status: form.status || FORM_STATUSES.draft,
     publicSlug: form.publicSlug || "",
-    settings: form.settings || {},
-    sections: form.sections || [],
+    settings: JSON.stringify(form.settings || {}),
+    sections: JSON.stringify(form.sections || []),
     publishedAt: form.publishedAt || null,
-    updatedAt: serverTimestamp(),
   };
 }
 
@@ -102,7 +100,23 @@ export function FormBuilder({ workspaceId, form, existingForms = [], onClose, on
     setSaveMessage("");
     try {
       const nextDraft = { ...draft, ...overrides };
-      await updateDoc(doc(db, "workspaces", workspaceId, "forms", draft.id), normalizeFormPayload(nextDraft));
+      const payload = normalizeFormPayload(nextDraft);
+      // Store form content as JSON blob in the 'content' column
+      await d1Request("workspace_forms", {
+        method: "PATCH",
+        id: draft.id,
+        body: {
+          title: payload.title,
+          status: payload.status,
+          content: JSON.stringify({
+            description: payload.description,
+            publicSlug: payload.publicSlug,
+            settings: nextDraft.settings || {},
+            sections: nextDraft.sections || [],
+            publishedAt: payload.publishedAt,
+          }),
+        }
+      });
       setDraft(nextDraft);
       setSaveMessage("Perubahan form tersimpan.");
       onSaved?.(nextDraft);
@@ -122,10 +136,10 @@ export function FormBuilder({ workspaceId, form, existingForms = [], onClose, on
       const slug = draft.publicSlug || slugify(`${draft.title}-${workspaceId.slice(0, 6)}`);
 
       for (const item of existingForms.filter((entry) => entry.id !== draft.id && entry.status === FORM_STATUSES.published)) {
-        const targetRef = doc(db, "workspaces", workspaceId, "forms", item.id);
-        await updateDoc(targetRef, {
-          status: FORM_STATUSES.draft,
-          updatedAt: serverTimestamp(),
+        await d1Request("workspace_forms", {
+          method: "PATCH",
+          id: item.id,
+          body: { status: FORM_STATUSES.draft }
         });
         if (item.publicSlug) {
           await unpublishPublicFormSnapshot({ slug: item.publicSlug });
@@ -140,9 +154,10 @@ export function FormBuilder({ workspaceId, form, existingForms = [], onClose, on
 
       if (!publishedDraft) return;
 
-      await updateDoc(doc(db, "workspaces", workspaceId), {
-        activeFormId: draft.id,
-        updatedAt: serverTimestamp(),
+      await d1Request("workspaces", {
+        method: "PATCH",
+        id: workspaceId,
+        body: { activeFormId: draft.id }
       });
 
       await publishPublicFormSnapshot({

@@ -1,4 +1,4 @@
-name = "apikey "
+name = "apikey"
 main = "script-worker.js"
 compatibility_date = "2024-01-01"
 
@@ -34,3 +34,8 @@ DOKU_CALLBACK_URL = "https://app.skripzy.id/dashboard/langganan/"
 [[vectorize]]
 binding = "VECTOR_INDEX"
 index_name = "skripzy-index"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "skripzy-db"
+database_id = "aae4a7b9-741d-43c3-8efd-fa76f221eba3"

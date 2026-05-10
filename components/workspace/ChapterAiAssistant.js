@@ -64,7 +64,7 @@ export function ChapterAiAssistant({
   floating = false,
   offsetRight = 16,
 }) {
-  const { user, userData } = useAuth();
+  const { user, userData, refreshUserData } = useAuth();
   const { toolMap } = useBillingCatalog();
   const [isOpen, setIsOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -90,6 +90,7 @@ export function ChapterAiAssistant({
 
     try {
       await deductCredits(user.uid, generationCost);
+      await refreshUserData();
 
       let referenceContext = "";
       

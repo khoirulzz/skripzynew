@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { addDoc, collection, deleteDoc, doc, onSnapshot, serverTimestamp, updateDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { d1Request } from "@/lib/d1Client";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { searchPapersWithFallback, getErrorMessage } from "@/lib/referenceApis";
@@ -104,34 +103,42 @@ export function ReferenceManager({ workspaceId, currentChapterKey = null, onClos
   const creditBalance = userData?.credits ?? 0;
 
   useEffect(() => {
-    if (!workspaceId) return undefined;
+    if (!workspaceId) return;
+    let isMounted = true;
 
-    const refsCollection = collection(db, "workspaces", workspaceId, "references");
-    const unsubscribe = onSnapshot(refsCollection, (snapshot) => {
-      const nextItems = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
-      nextItems.sort((left, right) => {
-        const leftTime = left.updatedAt?.seconds || 0;
-        const rightTime = right.updatedAt?.seconds || 0;
-        return rightTime - leftTime;
-      });
-      setReferences(nextItems);
-      setNoteDrafts((current) => {
-        const nextDrafts = { ...current };
-        nextItems.forEach((item) => {
-          if (!(item.id in nextDrafts)) {
-            nextDrafts[item.id] = item.notes || "";
-          }
+    async function fetchRefs() {
+      try {
+        const resp = await d1Request("workspace_references");
+        const nextItems = (resp.data || []).filter(r => r.workspace_id === workspaceId);
+        nextItems.sort((left, right) => {
+          const leftTime = new Date(left.updated_at || 0).getTime();
+          const rightTime = new Date(right.updated_at || 0).getTime();
+          return rightTime - leftTime;
         });
-        Object.keys(nextDrafts).forEach((referenceId) => {
-          if (!nextItems.some((item) => item.id === referenceId)) {
-            delete nextDrafts[referenceId];
-          }
+        if (!isMounted) return;
+        setReferences(nextItems);
+        setNoteDrafts((current) => {
+          const nextDrafts = { ...current };
+          nextItems.forEach((item) => {
+            if (!(item.id in nextDrafts)) {
+              nextDrafts[item.id] = item.notes || "";
+            }
+          });
+          Object.keys(nextDrafts).forEach((referenceId) => {
+            if (!nextItems.some((item) => item.id === referenceId)) {
+              delete nextDrafts[referenceId];
+            }
+          });
+          return nextDrafts;
         });
-        return nextDrafts;
-      });
-    });
+      } catch (e) {
+        console.error("Failed to fetch references:", e);
+      }
+    }
 
-    return unsubscribe;
+    fetchRefs();
+    const interval = setInterval(fetchRefs, 8000);
+    return () => { isMounted = false; clearInterval(interval); };
   }, [workspaceId]);
 
   const chapterReferences = useMemo(() => {
@@ -204,11 +211,32 @@ export function ReferenceManager({ workspaceId, currentChapterKey = null, onClos
   };
 
   const saveReference = async (payload) => {
-    await addDoc(collection(db, "workspaces", workspaceId, "references"), {
-      ...payload,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
+    const id = crypto.randomUUID();
+    await d1Request("workspace_references", {
+      method: "POST",
+      body: {
+        id,
+        workspace_id: workspaceId,
+        title: payload.title || "",
+        authorString: payload.authorString || "",
+        year: payload.year || "",
+        pdfUrl: payload.pdfUrl || "",
+        venue: payload.venue || "",
+        chunkCount: payload.chunkCount || 0,
+        fileName: payload.fileName || "",
+        notes: payload.notes || "",
+        chapterKeys: JSON.stringify(payload.chapterKeys || []),
+        url: payload.url || payload.displayUrl || "",
+        displayUrl: payload.displayUrl || payload.url || "",
+        abstract: payload.abstract || "",
+        citationApa: payload.citationApa || "",
+        hasFullText: payload.hasFullText ? 1 : 0,
+        fingerprint: payload.fingerprint || "",
+        sourceType: payload.sourceType || "search",
+      }
     });
+    // Optimistic update
+    setReferences(prev => [{ id, ...payload, workspace_id: workspaceId, chapterKeys: payload.chapterKeys || [] }, ...prev]);
   };
 
   const handleImportReference = async (paper) => {
@@ -298,21 +326,26 @@ export function ReferenceManager({ workspaceId, currentChapterKey = null, onClos
   };
 
   const toggleChapterLink = async (reference, chapterKey) => {
-    const nextChapterKeys = (reference.chapterKeys || []).includes(chapterKey)
-      ? reference.chapterKeys.filter((item) => item !== chapterKey)
-      : [...(reference.chapterKeys || []), chapterKey];
+    const currentKeys = Array.isArray(reference.chapterKeys) ? reference.chapterKeys : JSON.parse(reference.chapterKeys || "[]");
+    const nextChapterKeys = currentKeys.includes(chapterKey)
+      ? currentKeys.filter((item) => item !== chapterKey)
+      : [...currentKeys, chapterKey];
 
-    await updateDoc(doc(db, "workspaces", workspaceId, "references", reference.id), {
-      chapterKeys: nextChapterKeys,
-      updatedAt: serverTimestamp(),
+    await d1Request("workspace_references", {
+      method: "PATCH",
+      id: reference.id,
+      body: { chapterKeys: JSON.stringify(nextChapterKeys) }
     });
+    // Optimistic update
+    setReferences(prev => prev.map(r => r.id === reference.id ? { ...r, chapterKeys: nextChapterKeys } : r));
   };
 
   const updateReferenceNotes = async (referenceId, notes) => {
     setNoteDrafts((current) => ({ ...current, [referenceId]: notes }));
-    await updateDoc(doc(db, "workspaces", workspaceId, "references", referenceId), {
-      notes,
-      updatedAt: serverTimestamp(),
+    await d1Request("workspace_references", {
+      method: "PATCH",
+      id: referenceId,
+      body: { notes }
     });
   };
 
@@ -320,7 +353,8 @@ export function ReferenceManager({ workspaceId, currentChapterKey = null, onClos
     const confirmed = window.confirm(`Hapus referensi "${reference.title}" dari workspace?`);
     if (!confirmed) return;
 
-    await deleteDoc(doc(db, "workspaces", workspaceId, "references", reference.id));
+    await d1Request("workspace_references", { method: "DELETE", id: reference.id });
+    setReferences(prev => prev.filter(r => r.id !== reference.id));
     setSelectedIds((current) => current.filter((item) => item !== reference.id));
   };
 
@@ -378,13 +412,17 @@ export function ReferenceManager({ workspaceId, currentChapterKey = null, onClos
         year: reference.year || "",
       });
 
-      await updateDoc(doc(db, "workspaces", workspaceId, "references", reference.id), {
-        pdfUrl: uploadData.secure_url,
-        fileName: file.name,
-        indexedAt: serverTimestamp(),
-        chunkCount,
-        updatedAt: serverTimestamp(),
+      await d1Request("workspace_references", {
+        method: "PATCH",
+        id: reference.id,
+        body: {
+          pdfUrl: uploadData.secure_url,
+          fileName: file.name,
+          chunkCount,
+        }
       });
+      // Optimistic update
+      setReferences(prev => prev.map(r => r.id === reference.id ? { ...r, pdfUrl: uploadData.secure_url, fileName: file.name, chunkCount } : r));
     } catch (uploadError) {
       console.error("Gagal mengunggah referensi:", uploadError);
       setError(uploadError.message || "Gagal mengunggah PDF referensi.");

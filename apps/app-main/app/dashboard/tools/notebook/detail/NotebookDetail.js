@@ -5,6 +5,7 @@ import { useAuth } from "@/components/providers/AuthProvider";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
 import { useBillingCatalog } from "@/lib/useBillingCatalog";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import { callGeminiStream, MODELS } from "@/lib/callWorker";
 import { deductCredits } from "@/lib/credits";
@@ -22,7 +23,7 @@ const WORKER_SECRET = process.env.NEXT_PUBLIC_WORKER_SECRET || "skripzy1234";
 const MAX_FILE_SIZE_MB = 3;
 const MAX_JOURNALS_PER_NOTEBOOK = 10;
 
-export default function NotebookDetailPage({ params }) {
+export default function NotebookDetailPage() {
   const { user, userData } = useAuth();
   const { toolMap } = useBillingCatalog();
   const credits = userData?.credits ?? 0;
@@ -31,9 +32,9 @@ export default function NotebookDetailPage({ params }) {
   const indexingCost = toolMap["notebook-referensi"]?.creditCost ?? 5;
   const queryCost = toolMap["notebook-referensi"]?.creditCost ?? 1; // Same tool, different operation
 
-  // In Next.js 15, params is a promise
-  const unwrappedParams = use(params);
-  const notebookId = unwrappedParams.id;
+  // Retrieve notebookId from query parameters
+  const searchParams = useSearchParams();
+  const notebookId = searchParams.get("id");
 
   const [notebook, setNotebook] = useState(null);
   const [documents, setDocuments] = useState([]);

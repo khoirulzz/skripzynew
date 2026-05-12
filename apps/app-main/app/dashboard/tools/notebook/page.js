@@ -188,7 +188,7 @@ export default function NotebookDashboardPage() {
                   padding: "1.5rem", cursor: "pointer", transition: "all 0.2s",
                   display: "flex", flexDirection: "column", gap: "1rem", position: "relative",
                 }}
-                onClick={() => router.push(`/dashboard/tools/notebook/${nb.id}`)}
+                onClick={() => router.push(`/dashboard/tools/notebook/detail?id=${nb.id}`)}
                 onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.boxShadow = "var(--shadow-lg)"; }}
                 onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = ""; }}
               >

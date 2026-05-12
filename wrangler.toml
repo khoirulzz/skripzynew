@@ -3,7 +3,7 @@ main = "script-worker.js"
 compatibility_date = "2024-01-01"
 
 [placement]
-mode = "smart"
+region = "gcp:asia-southeast1"
 
 
 [vars]

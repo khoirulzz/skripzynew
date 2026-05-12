@@ -15,13 +15,17 @@ const CREDIT_CALL_START = 3;
 const CHAT_GROUPS = "group_4,group_1";
 const CALL_GROUPS = "group_4,group_1";
 
-const SYSTEM_INSTRUCTION = `Kamu adalah "Dosen AI" di platform Skripzy, asisten akademik berbahasa Indonesia.
+const getSystemInstruction = (userData) => {
+  const userName = userData?.namaLengkap?.split(" ")[0] || "Mahasiswa";
+  return `Kamu adalah "Dosen AI" atau biasa dipanggil "Prof Skripzy" di platform Skripzy, asisten akademik berbahasa Indonesia.
+SAPA NAMA USER: ${userName}
 Peranmu:
 - Menjawab pertanyaan seputar metodologi penelitian, struktur skripsi, teknik penulisan ilmiah, analisis data, serta hal lain yang relevan dengan karya ilmiah.
 - Berbicara layaknya dosen pembimbing yang sabar dan suportif, namun tetap akademis.
 - Fleksibilitas Jawaban: Jika pertanyaan bersifat umum atau "small talk", jawablah dengan singkat (2-4 kalimat). Namun, jika pertanyaan bersifat teknis, meminta penjelasan metode, atau jika kamu melakukan pencarian internet yang membutuhkan ringkasan mendalam, berikan jawaban yang lebih komprehensif, terstruktur, dan detail sesuai kebutuhan informasi tersebut.
 - Jika pertanyaan di luar konteks akademik/penelitian, tolak dengan sopan.
 - Gunakan bahasa Indonesia formal tapi komunikatif`;
+};
 
 export default function ChatDosenAIPage() {
   const { user, userData } = useAuth();
@@ -110,9 +114,9 @@ export default function ChatDosenAIPage() {
     const contentStr = contentLines.join("\n\n");
     // Match both fully closed <thinking>...</thinking> OR unclosed <thinking>... to end of string (for streaming)
     const xmlThinkingPattern = /<thinking>([\s\S]*?)(<\/thinking>|$)/gi;
-    
+
     let finalThinkingStr = thinking.join("\n\n").trim();
-    
+
     const finalContent = contentStr.replace(xmlThinkingPattern, (match, p1) => {
       finalThinkingStr += "\n\n" + p1.trim();
       return "";
@@ -167,7 +171,7 @@ export default function ChatDosenAIPage() {
     setInput("");
     const newMessages = [...messages, { role: "user", text: userMsg }];
     setMessages(newMessages);
-    
+
     // Gunakan state manual webSearchActive sebagai penentu mode
     const isSearchNeeded = webSearchActive;
 
@@ -179,11 +183,12 @@ export default function ChatDosenAIPage() {
 
       // Gunakan model grounding (Gemini 2.0) jika mode search aktif
       const targetModel = isSearchNeeded ? MODELS.grounding : MODELS.lite;
-      
+
       // Inject instruksi tambahan jika sedang browsing agar AI tidak cuma "janji"
-      const currentSystemInstruction = isSearchNeeded 
-        ? `${SYSTEM_INSTRUCTION}\n\nIMPORTANT: Internet access is ENABLED. Use the Google Search tool to provide real-time information.`
-        : SYSTEM_INSTRUCTION;
+      const baseInstruction = getSystemInstruction(userData);
+      const currentSystemInstruction = isSearchNeeded
+        ? `${baseInstruction}\n\nIMPORTANT: Internet access is ENABLED. Use the Google Search tool to provide real-time information.`
+        : baseInstruction;
 
       let streamStarted = false;
 
@@ -198,7 +203,7 @@ export default function ChatDosenAIPage() {
         returnMetadata: isSearchNeeded,
         onStream: (chunk) => {
           const { thinking, content } = extractThinkingBlocks(chunk);
-          
+
           if (!streamStarted && content.trim()) {
             streamStarted = true;
             setLoading(false); // Sembunyikan dots setelah teks mulai masuk
@@ -255,9 +260,9 @@ export default function ChatDosenAIPage() {
     } catch (err) {
       console.error("[ChatDosen] Error:", err);
       // Pesan error ramah pengguna
-      setMessages(prev => [...prev, { 
-        role: "model", 
-        text: "⚠️ Waduh, sepertinya sesi pencarian internet sedang padat atau ada gangguan koneksi. \n\nCoba kirim ulang pesan Anda atau matikan mode pencarian (ikon globe) jika masalah berlanjut ya!" 
+      setMessages(prev => [...prev, {
+        role: "model",
+        text: "⚠️ Waduh, sepertinya sesi pencarian internet sedang padat atau ada gangguan koneksi. \n\nCoba kirim ulang pesan Anda atau matikan mode pencarian (ikon globe) jika masalah berlanjut ya!"
       }]);
     } finally {
       setLoading(false);
@@ -403,7 +408,7 @@ export default function ChatDosenAIPage() {
       try {
         let aiText = await callGemini({
           history,
-          systemInstruction: SYSTEM_INSTRUCTION,
+          systemInstruction: getSystemInstruction(userData),
           model: MODELS.primary,
           group: CALL_GROUPS,
           thinkingConfig: { thinkingBudget: 0 },
@@ -689,7 +694,7 @@ export default function ChatDosenAIPage() {
               onClick={() => setWebSearchActive(!webSearchActive)}
               title={webSearchActive ? "Matikan Pencarian Web" : "Aktifkan Pencarian Web"}
               style={{
-                width: "40px", height: "40px", borderRadius: "50%", 
+                width: "40px", height: "40px", borderRadius: "50%",
                 border: webSearchActive ? "2px solid #4B5563" : "1px solid var(--border)",
                 backgroundColor: webSearchActive ? "#4B5563" : "var(--surface-hover)",
                 color: webSearchActive ? "white" : "#9CA3AF",
@@ -699,7 +704,7 @@ export default function ChatDosenAIPage() {
             >
               <PremiumIcon name="globe" size={20} />
             </button>
-            
+
             <input
               id="chat-input"
               type="text" value={input} onChange={e => setInput(e.target.value)}

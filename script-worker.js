@@ -325,7 +325,7 @@ async function proxyGeminiGeneration({ env, body, groupHeader, model, systemInst
     for (const groupName of finalGroups) {
         const keys = (API_GROUPS[groupName] || []).filter(Boolean);
         for (const key of keys) {
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
+            const response = await fetch(`https://gateway.ai.cloudflare.com/v1/094df8c8c682a53ca0a27d87735baa51/skripzy-ai/google-ai-studio/v1beta/models/${model}:generateContent?key=${key}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
@@ -545,53 +545,32 @@ const worker = {
 
                 const paymentUrl = dokuData?.response?.payment?.url || dokuData?.payment?.url || null;
 
-                // Simpan ke Firestore topups collection
-                const firestoreDoc = toFirestoreDocument({
-                    userId: session.uid,
-                    userName: payload.customerName || session.email || "User Skripzy",
-                    userEmail: session.email || payload.customerEmail || "",
-                    status: "waiting_payment",
-                    requestType: payload.requestType || "topup",
-                    productName: payload.productName || "",
-                    paymentMethodId: "automatic",
-                    paymentMethodLabel: "Pembayaran Otomatis (DOKU)",
-                    paymentChannelId: "doku-checkout",
-                    paymentChannelLabel: "DOKU Checkout",
-                    paymentChannelGroup: "gateway",
-                    invoiceNumber: invoiceNumber,
-                    dokuRequestId: requestId,
-                    paymentUrl: paymentUrl || "",
-                    promoId: payload.promoId || null,
-                    promoCode: payload.promoCode || null,
-                    promoType: payload.promoType || null,
-                    basePrice: Math.round(payload.basePrice || payload.amount || 0),
-                    discountAmount: Math.round(payload.discountAmount || 0),
-                    finalPrice: Math.round(payload.amount),
-                    customerNotes: "",
-                    timestamp: new Date().toISOString(),
-                    approvedAt: null,
-                    rejectedAt: null,
-                    rejectedReason: "",
-                    // Plan-specific fields
-                    planId: payload.planId || null,
-                    planName: payload.planName || null,
-                    billingPeriod: payload.billingPeriod || "monthly",
-                    // Topup-specific fields
-                    topupSlug: payload.topupSlug || null,
-                    creditsBase: payload.creditsBase || 0,
-                    bonusCredits: payload.bonusCredits || 0,
-                    amount: payload.creditsTotal || 0,
-                });
+                // Simpan ke D1 topups table
+                const docId = invoiceNumber; // Gunakan invoiceNumber sebagai ID
+                const timestampNow = new Date().toISOString();
+                
+                const stmt = env.DB.prepare(`INSERT INTO topups (
+                    id, userId, userName, userEmail, status, requestType, productName, 
+                    paymentMethodId, paymentMethodLabel, paymentChannelId, paymentChannelLabel, 
+                    paymentChannelGroup, invoiceNumber, dokuRequestId, paymentUrl, promoId, 
+                    promoCode, promoType, basePrice, discountAmount, finalPrice, customerNotes, 
+                    timestamp, planId, planName, billingPeriod, topupSlug, creditsBase, bonusCredits, amount
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+                .bind(
+                    docId, session.uid, payload.customerName || session.email || "User Skripzy",
+                    session.email || payload.customerEmail || "", "waiting_payment", 
+                    payload.requestType || "topup", payload.productName || "", "automatic", 
+                    "Pembayaran Otomatis (DOKU)", "doku-checkout", "DOKU Checkout", "gateway",
+                    invoiceNumber, requestId, paymentUrl || "", payload.promoId || null,
+                    payload.promoCode || null, payload.promoType || null, 
+                    Math.round(payload.basePrice || payload.amount || 0), Math.round(payload.discountAmount || 0), 
+                    Math.round(payload.amount), "", timestampNow, payload.planId || null, 
+                    payload.planName || null, payload.billingPeriod || "monthly", payload.topupSlug || null, 
+                    payload.creditsBase || 0, payload.bonusCredits || 0, payload.creditsTotal || payload.amount || 0
+                );
+                await stmt.run();
 
-                const firestoreRes = await firestoreRequest(env, "topups", {
-                    method: "POST",
-                    body: firestoreDoc,
-                });
-
-                const fsData = await firestoreRes.json().catch(() => ({}));
-                const docId = fsData?.name?.split("/").pop() || null;
-
-                console.log(`[DOKU] Payment created: inv=${invoiceNumber}, docId=${docId}, url=${paymentUrl}`);
+                console.log(`[DOKU] Payment created in D1: inv=${invoiceNumber}, docId=${docId}, url=${paymentUrl}`);
 
                 return new Response(JSON.stringify({
                     ok: true,
@@ -650,32 +629,10 @@ const worker = {
             }
 
             try {
-                // Find the topup doc by invoice number using Firestore REST query
-                const { projectId, webApiKey } = getFirebaseConfig(env);
-                const queryUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents:runQuery?key=${webApiKey}`;
-
-                const queryBody = {
-                    structuredQuery: {
-                        from: [{ collectionId: "topups" }],
-                        where: {
-                            fieldFilter: {
-                                field: { fieldPath: "invoiceNumber" },
-                                op: "EQUAL",
-                                value: { stringValue: invoiceNumber },
-                            },
-                        },
-                        limit: 1,
-                    },
-                };
-
-                const queryRes = await fetch(queryUrl, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(queryBody),
-                });
-
-                const queryResults = await queryRes.json().catch(() => []);
-                const matchDoc = queryResults?.[0]?.document;
+                // Find the topup doc by invoice number using D1
+                const stmt = env.DB.prepare(`SELECT * FROM topups WHERE invoiceNumber = ?`).bind(invoiceNumber);
+                const { results } = await stmt.all();
+                const matchDoc = results[0];
 
                 if (!matchDoc) {
                     console.warn(`[DOKU] No topup doc found for invoice: ${invoiceNumber}`);
@@ -685,8 +642,7 @@ const worker = {
                     });
                 }
 
-                const docName = matchDoc.name;
-                const docData = fromFirestoreDocument(matchDoc);
+                const docData = matchDoc;
                 const currentStatus = docData.status;
 
                 // Skip if already processed
@@ -701,27 +657,18 @@ const worker = {
                 const now = new Date().toISOString();
 
                 if (transactionStatus === "SUCCESS") {
-                    // Update topup doc to approved
-                    const updatePayload = toFirestoreDocument({
-                        status: "approved",
-                        approvedAt: now,
-                        dokuTransactionStatus: transactionStatus,
-                        dokuRawNotification: JSON.stringify(notifData),
-                    });
-
-                    await fetch(`https://firestore.googleapis.com/v1/${docName}?key=${webApiKey}&updateMask.fieldPaths=status&updateMask.fieldPaths=approvedAt&updateMask.fieldPaths=dokuTransactionStatus&updateMask.fieldPaths=dokuRawNotification`, {
-                        method: "PATCH",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify(updatePayload),
-                    });
+                    // Update topup doc to approved in D1
+                    await env.DB.prepare(`UPDATE topups SET status = ?, approvedAt = ?, dokuTransactionStatus = ?, dokuRawNotification = ? WHERE id = ?`)
+                        .bind("approved", now, transactionStatus, JSON.stringify(notifData), docData.id)
+                        .run();
 
                     // Auto-approve: add credits or upgrade plan
                     const userId = docData.userId;
                     if (userId && env.DB) {
                         try {
-                            const stmt = env.DB.prepare(`SELECT * FROM users WHERE id = ?`).bind(userId);
-                            const { results } = await stmt.all();
-                            const userData = results[0];
+                            const userStmt = env.DB.prepare(`SELECT * FROM users WHERE id = ?`).bind(userId);
+                            const { results: userResults } = await userStmt.all();
+                            const userData = userResults[0];
 
                             if (userData) {
                                 const requestType = docData.requestType || "topup";
@@ -746,22 +693,11 @@ const worker = {
                                     console.log(`[DOKU] Credits added for user ${userId}: +${creditsToAdd} (D1)`);
                                 }
 
-                            // Handle promo usage
+                            // Handle promo usage in D1
                             if (docData.promoId) {
-                                const promoUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/promos/${docData.promoId}?key=${webApiKey}`;
-                                const promoRes = await fetch(promoUrl);
-                                if (promoRes.ok) {
-                                    const promoData = fromFirestoreDocument(await promoRes.json());
-                                    const promoUpdate = toFirestoreDocument({
-                                        usedCount: (Number(promoData.usedCount) || 0) + 1,
-                                        updatedAt: now,
-                                    });
-                                    await fetch(`${promoUrl}&updateMask.fieldPaths=usedCount&updateMask.fieldPaths=updatedAt`, {
-                                        method: "PATCH",
-                                        headers: { "Content-Type": "application/json" },
-                                        body: JSON.stringify(promoUpdate),
-                                    });
-                                }
+                                await env.DB.prepare(`UPDATE promos SET usedCount = usedCount + 1, updatedAt = ? WHERE id = ?`)
+                                    .bind(now, docData.promoId)
+                                    .run();
                             }
                         }
                         } catch (e) {
@@ -772,19 +708,9 @@ const worker = {
                     console.log(`[DOKU] Payment SUCCESS processed for invoice: ${invoiceNumber}`);
                 } else {
                     // Payment failed/expired
-                    const failUpdate = toFirestoreDocument({
-                        status: "rejected",
-                        rejectedAt: now,
-                        rejectedReason: `Pembayaran DOKU: ${transactionStatus}`,
-                        dokuTransactionStatus: transactionStatus,
-                        dokuRawNotification: JSON.stringify(notifData),
-                    });
-
-                    await fetch(`https://firestore.googleapis.com/v1/${docName}?key=${webApiKey}&updateMask.fieldPaths=status&updateMask.fieldPaths=rejectedAt&updateMask.fieldPaths=rejectedReason&updateMask.fieldPaths=dokuTransactionStatus&updateMask.fieldPaths=dokuRawNotification`, {
-                        method: "PATCH",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify(failUpdate),
-                    });
+                    await env.DB.prepare(`UPDATE topups SET status = ?, rejectedAt = ?, rejectedReason = ?, dokuTransactionStatus = ?, dokuRawNotification = ? WHERE id = ?`)
+                        .bind("rejected", now, `Pembayaran DOKU: ${transactionStatus}`, transactionStatus, JSON.stringify(notifData), docData.id)
+                        .run();
 
                     console.log(`[DOKU] Payment ${transactionStatus} for invoice: ${invoiceNumber}`);
                 }
@@ -1089,7 +1015,8 @@ const worker = {
             const allowedTables = [
                 "users", "workspaces", "document_metadata",
                 "workspace_references", "workspace_forms", "workspace_transcripts",
-                "workspace_analysis", "workspace_notes"
+                "workspace_analysis", "workspace_notes", "notebooks",
+                "topups", "promos", "pricing"
             ];
 
             if (!allowedTables.includes(table)) {
@@ -1106,17 +1033,47 @@ const worker = {
                 return new Response(JSON.stringify({ error: "D1 Database not bound" }), { status: 500, headers: createCorsHeaders() });
             }
 
-            const uidColumn = table === "users" ? "id" : "user_id";
+            // Global tables that don't have user_id / aren't scoped by user
+            const isGlobalAdminTable = ["promos", "pricing"].includes(table);
+            const uidColumn = table === "users" ? "id" : (table === "topups" ? "userId" : "user_id");
+
+            // Ambil role user dari db
+            let userRole = "user";
+            try {
+                const roleStmt = env.DB.prepare(`SELECT role FROM users WHERE id = ?`).bind(session.uid);
+                const roleResult = await roleStmt.first();
+                if (roleResult && roleResult.role) {
+                    userRole = roleResult.role;
+                }
+            } catch (e) {
+                console.warn("Failed to fetch user role", e);
+            }
+            const isAdmin = userRole === "admin";
 
             try {
                 if (request.method === "GET") {
                     const id = url.searchParams.get("id");
                     if (id) {
-                        const stmt = env.DB.prepare(`SELECT * FROM ${table} WHERE id = ? AND ${uidColumn} = ?`).bind(id, session.uid);
+                        let query = `SELECT * FROM ${table} WHERE id = ?`;
+                        let params = [id];
+                        if (!isGlobalAdminTable && !isAdmin) {
+                            query += ` AND ${uidColumn} = ?`;
+                            params.push(session.uid);
+                        }
+                        const stmt = env.DB.prepare(query).bind(...params);
                         const { results } = await stmt.all();
                         return new Response(JSON.stringify({ data: results[0] || null }), { headers: createCorsHeaders() });
                     } else {
-                        const stmt = env.DB.prepare(`SELECT * FROM ${table} WHERE ${uidColumn} = ?`).bind(session.uid);
+                        let query = `SELECT * FROM ${table}`;
+                        let params = [];
+                        if (!isGlobalAdminTable && !isAdmin) {
+                            query += ` WHERE ${uidColumn} = ?`;
+                            params.push(session.uid);
+                        } else if (table === "topups" && !isAdmin) {
+                            query += ` WHERE userId = ?`;
+                            params.push(session.uid);
+                        }
+                        const stmt = env.DB.prepare(query).bind(...params);
                         const { results } = await stmt.all();
                         return new Response(JSON.stringify({ data: results }), { headers: createCorsHeaders() });
                     }
@@ -1127,7 +1084,9 @@ const worker = {
                     
                     if (table === "users") {
                         body.id = session.uid;
-                    } else {
+                    } else if (table === "topups") {
+                        body.userId = session.uid;
+                    } else if (!isGlobalAdminTable) {
                         body.user_id = session.uid;
                     }
 
@@ -1145,6 +1104,7 @@ const worker = {
                     const body = await request.json();
                     
                     delete body.user_id;
+                    delete body.userId;
                     delete body.id;
 
                     const keys = Object.keys(body);
@@ -1164,7 +1124,15 @@ const worker = {
                 if (request.method === "DELETE") {
                     const id = url.searchParams.get("id");
                     if (!id) return new Response(JSON.stringify({ error: "Missing id" }), { status: 400, headers: createCorsHeaders() });
-                    const stmt = env.DB.prepare(`DELETE FROM ${table} WHERE id = ? AND ${uidColumn} = ?`).bind(id, session.uid);
+                    
+                    let query = `DELETE FROM ${table} WHERE id = ?`;
+                    let params = [id];
+                    if (!isGlobalAdminTable && !isAdmin) {
+                        query += ` AND ${uidColumn} = ?`;
+                        params.push(session.uid);
+                    }
+                    
+                    const stmt = env.DB.prepare(query).bind(...params);
                     const result = await stmt.run();
                     return new Response(JSON.stringify({ success: true, result }), { headers: createCorsHeaders() });
                 }
@@ -1293,7 +1261,7 @@ const worker = {
                 for (const group of groupsToTry) {
                     const keys = (API_GROUPS[group] || []).filter(Boolean);
                     for (const key of keys) {
-                        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:batchEmbedContents?key=${key}`, {
+                        const res = await fetch(`https://gateway.ai.cloudflare.com/v1/094df8c8c682a53ca0a27d87735baa51/skripzy-ai/google-ai-studio/v1beta/models/${model}:batchEmbedContents?key=${key}`, {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify(payload)
@@ -1369,7 +1337,7 @@ const worker = {
             // ──── ENDPOINT BARU: WEBSOCKET PROXY UNTUK GEMINI LIVE ────
             if (url.pathname === "/ws/gemini-live") {
                 const upgradeHeader = request.headers.get("Upgrade");
-                if (upgradeHeader !== "websocket") {
+                if (!upgradeHeader || upgradeHeader.toLowerCase() !== "websocket") {
                     return new Response("Expected Upgrade: websocket", { status: 426 });
                 }
 
@@ -1384,7 +1352,7 @@ const worker = {
                 // Ambil key pertama yang tersedia untuk sesi telepon ini
                 const apiKey = usableKeys[0];
 
-                // Cloudflare Worker akan otomatis mengupgrade `https://` menjadi WSS secara passthrough
+                // Bypass AI Gateway karena belum mendukung WebSocket untuk Gemini Live
                 const targetUrl = `https://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${apiKey}`;
 
                 return fetch(targetUrl, request);
@@ -1554,7 +1522,7 @@ const worker = {
 
                 for (let i = 0; i < usableKeys.length; i++) {
                     const currentKey = usableKeys[i];
-                    let destinationURL = `https://generativelanguage.googleapis.com${url.pathname}?key=${currentKey}`;
+                    let destinationURL = `https://gateway.ai.cloudflare.com/v1/094df8c8c682a53ca0a27d87735baa51/skripzy-ai/google-ai-studio${url.pathname}?key=${currentKey}`;
                     if (isStream) destinationURL += "&alt=sse";
 
                     const apiResponse = await fetch(destinationURL, {

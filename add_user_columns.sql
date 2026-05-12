@@ -1,3 +1,0 @@
-ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user';
-ALTER TABLE users ADD COLUMN status TEXT;
-ALTER TABLE users ADD COLUMN asalInstitusi TEXT;

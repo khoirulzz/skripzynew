@@ -188,7 +188,7 @@ export default function ReferensiCerdasPage() {
 
       setSummaries(prev => ({ ...prev, [paper.id]: aiResponse }));
     } catch (err) {
-      await refundCredits(user.uid, summaryCost).catch(() => {});
+      await refundCredits(user.uid, summaryCost).catch(() => { });
       console.error(err);
       alert("Gagal meringkas abstrak: " + err.message);
     } finally {

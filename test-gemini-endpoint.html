@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Test Gemini Regional</title>
+</head>
+
+<body>
+
+  <h2>Test Gemini Regional Endpoint</h2>
+
+  <input type="text" id="apikey" placeholder="Masukkan API Key" style="width:400px;padding:8px;" />
+
+  <button onclick="testGemini()">
+    Test
+  </button>
+
+  <pre id="result"></pre>
+
+  <script>
+    async function testGemini() {
+      const apiKey = document.getElementById("apikey").value;
+      const result = document.getElementById("result");
+
+      result.textContent = "Testing...";
+
+      const endpoint =
+        "https://asia-southeast1-generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+
+      try {
+        const res = await fetch(
+          `${endpoint}?key=${apiKey}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              contents: [
+                {
+                  parts: [
+                    {
+                      text: "Halo Gemini"
+                    }
+                  ]
+                }
+              ]
+            })
+          }
+        );
+
+        const data = await res.json();
+
+        result.textContent =
+          "STATUS: " + res.status + "\n\n" +
+          JSON.stringify(data, null, 2);
+
+      } catch (err) {
+        result.textContent = err.message;
+      }
+    }
+  </script>
+
+</body>
+
+</html>

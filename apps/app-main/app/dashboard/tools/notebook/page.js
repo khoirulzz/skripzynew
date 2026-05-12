@@ -5,10 +5,7 @@ import { useAuth } from "@/components/providers/AuthProvider";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import {
-  collection, query, where, getDocs, addDoc, deleteDoc, doc, serverTimestamp, orderBy
-} from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { d1Request } from "@/lib/d1Client";
 
 const MAX_NOTEBOOKS_FREE = 5;
 const MAX_JOURNALS_PER_NOTEBOOK = 10;
@@ -35,32 +32,28 @@ export default function NotebookDashboardPage() {
   const fetchNotebooks = async () => {
     setIsLoading(true);
     try {
-      const q = query(
-        collection(db, "notebooks"),
-        where("user_id", "==", user.uid),
-        orderBy("created_at", "desc")
-      );
-      const snap = await getDocs(q);
-      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setNotebooks(list);
+      // 1. Fetch notebooks from D1
+      const nbRes = await d1Request("notebooks");
+      if (nbRes && nbRes.data) {
+        // Sort by created_at desc locally
+        const sorted = nbRes.data.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        setNotebooks(sorted);
+      } else {
+        setNotebooks([]);
+      }
 
-      // Count unique documents per notebook from reference_chunks
-      const chunksQ = query(
-        collection(db, "reference_chunks"),
-        where("user_id", "==", user.uid)
-      );
-      const chunksSnap = await getDocs(chunksQ);
-      const counts = {};
-      chunksSnap.docs.forEach(d => {
-        const data = d.data();
-        const nbId = data.notebook_id;
-        if (!nbId) return;
-        if (!counts[nbId]) counts[nbId] = new Set();
-        counts[nbId].add(data.document_id);
-      });
-      const finalCounts = {};
-      Object.keys(counts).forEach(k => { finalCounts[k] = counts[k].size; });
-      setDocCounts(finalCounts);
+      // 2. Fetch document counts per notebook from D1 document_metadata
+      const docRes = await d1Request("document_metadata");
+      if (docRes && docRes.data) {
+        const counts = {};
+        docRes.data.forEach(d => {
+          const nbId = d.notebook_id;
+          if (!nbId) return;
+          if (!counts[nbId]) counts[nbId] = 0;
+          counts[nbId]++;
+        });
+        setDocCounts(counts);
+      }
     } catch (err) {
       console.error("Error fetching notebooks:", err);
     } finally {
@@ -76,11 +69,13 @@ export default function NotebookDashboardPage() {
     }
     setIsCreating(true);
     try {
-      await addDoc(collection(db, "notebooks"), {
-        user_id: user.uid,
-        title: newTitle.trim(),
-        description: newDesc.trim() || "Notebook referensi penelitian",
-        created_at: serverTimestamp(),
+      await d1Request("notebooks", {
+        method: "POST",
+        body: {
+          id: `nb_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+          title: newTitle.trim(),
+          description: newDesc.trim() || "Notebook referensi penelitian",
+        }
       });
       setNewTitle("");
       setNewDesc("");
@@ -98,17 +93,9 @@ export default function NotebookDashboardPage() {
     if (!deleteTarget) return;
     setIsDeleting(true);
     try {
-      // Delete all chunks belonging to this notebook
-      const chunksQ = query(
-        collection(db, "reference_chunks"),
-        where("notebook_id", "==", deleteTarget.id)
-      );
-      const chunksSnap = await getDocs(chunksQ);
-      const deletePromises = chunksSnap.docs.map(d => deleteDoc(doc(db, "reference_chunks", d.id)));
-      await Promise.all(deletePromises);
-
-      // Delete the notebook itself
-      await deleteDoc(doc(db, "notebooks", deleteTarget.id));
+      // IDEALNYA: Hapus dari vectorize & dokumennya juga.
+      // Untuk sekarang, kita hapus notebook-nya dari D1.
+      await d1Request("notebooks", { method: "DELETE", id: deleteTarget.id });
       setDeleteTarget(null);
       fetchNotebooks();
     } catch (err) {

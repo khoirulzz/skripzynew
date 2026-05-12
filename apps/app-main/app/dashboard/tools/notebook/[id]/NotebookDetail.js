@@ -9,8 +9,7 @@ import ReactMarkdown from "react-markdown";
 import { callGeminiStream, MODELS } from "@/lib/callWorker";
 import { deductCredits } from "@/lib/credits";
 import { indexDocument, searchSimilarChunks } from "@/lib/ragService";
-import { collection, query, where, getDocs, orderBy, writeBatch } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { d1Request } from "@/lib/d1Client";
 import { searchPapersWithFallback, getErrorMessage } from "@/lib/referenceApis";
 import AnimatedLoadingScreen from "@/components/workspace/AnimatedLoadingScreen";
 
@@ -78,11 +77,9 @@ export default function NotebookDetailPage({ params }) {
 
   const fetchNotebookDetails = async () => {
     try {
-      const q = query(collection(db, "notebooks"), where("user_id", "==", user.uid));
-      const snapshot = await getDocs(q);
-      const nb = snapshot.docs.find(doc => doc.id === notebookId);
-      if (nb) {
-        setNotebook({ id: nb.id, ...nb.data() });
+      const nbRes = await d1Request("notebooks", { id: notebookId });
+      if (nbRes && nbRes.data) {
+        setNotebook(nbRes.data);
       }
     } catch (err) {
       console.error("Error fetching notebook details:", err);
@@ -92,29 +89,18 @@ export default function NotebookDetailPage({ params }) {
   const fetchDocuments = async () => {
     if (!notebookId) return;
     try {
-      const q = query(
-        collection(db, "reference_chunks"),
-        where("user_id", "==", user.uid),
-        where("notebook_id", "==", notebookId)
-      );
-      const snapshot = await getDocs(q);
-
-      const docsMap = {};
-      snapshot.docs.forEach(doc => {
-        const data = doc.data();
-        if (!docsMap[data.document_id]) {
-          docsMap[data.document_id] = {
-            id: data.document_id,
-            title: data.document_title,
-            url: data.cloudinary_url,
-            createdAt: data.created_at?.toDate() || new Date()
-          };
-        }
-      });
-
-      const docsArray = Object.values(docsMap);
-      docsArray.sort((a, b) => b.createdAt - a.createdAt);
-      setDocuments(docsArray);
+      const docRes = await d1Request("document_metadata");
+      if (docRes && docRes.data) {
+        const notebookDocs = docRes.data.filter(d => d.notebook_id === notebookId);
+        const docsArray = notebookDocs.map(data => ({
+          id: data.id || data.document_id,
+          title: data.document_title,
+          url: data.cloudinary_url,
+          createdAt: new Date(data.created_at || Date.now())
+        }));
+        docsArray.sort((a, b) => b.createdAt - a.createdAt);
+        setDocuments(docsArray);
+      }
     } catch (err) {
       console.error("Error fetching documents:", err);
     }
@@ -270,15 +256,8 @@ export default function NotebookDetailPage({ params }) {
     if (!confirm(`Apakah Anda yakin ingin menghapus jurnal "${docToDelete.title}"?`)) return;
 
     try {
-      // 1. Hapus dari Firestore
-      const q = query(
-        collection(db, "reference_chunks"),
-        where("document_id", "==", docToDelete.id)
-      );
-      const snapshot = await getDocs(q);
-      const batch = writeBatch(db);
-      snapshot.docs.forEach(docSnap => batch.delete(docSnap.ref));
-      await batch.commit();
+      // 1. Hapus dari D1 document_metadata (Idealnya juga dari Vectorize jika ada API spesifik)
+      await d1Request("document_metadata", { method: "DELETE", id: docToDelete.id });
 
       // 2. Hapus dari Cloudinary
       const publicId = getCloudinaryPublicId(docToDelete.url);

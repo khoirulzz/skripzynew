@@ -1324,8 +1324,8 @@ const worker = {
                     if (filter) {
                         options.filter = filter;
                     }
-                    const matches = await env.VECTOR_INDEX.query(vector, options);
-                    return new Response(JSON.stringify({ matches }), {
+                    const queryResult = await env.VECTOR_INDEX.query(vector, options);
+                    return new Response(JSON.stringify(queryResult), {
                         status: 200,
                         headers: createCorsHeaders(),
                     });
@@ -1427,6 +1427,14 @@ const worker = {
                     // FIX UTAMA:
                     // OpenAlex tidak memakai publication_year:2020-2025.
                     // Untuk range tahun harus pakai from_publication_date dan to_publication_date.
+                    // Helper function for OpenAlex date filtering
+                    const buildOpenAlexDateFilter = (from, to) => {
+                        const filters = [];
+                        if (from) filters.push(`from_publication_date:${from}-01-01`);
+                        if (to) filters.push(`to_publication_date:${to}-12-31`);
+                        return filters.join(",");
+                    };
+
                     const dateFilter = buildOpenAlexDateFilter(yearFrom, yearTo);
                     if (dateFilter) {
                         openalexUrl += `&filter=${encodeURIComponent(dateFilter)}`;

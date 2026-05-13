@@ -417,7 +417,7 @@ export default function ChatDosenAIPage() {
         let aiText = await callGemini({
           history,
           systemInstruction: getSystemInstruction(userData),
-          model: MODELS.primary,
+          model: MODELS.lite,
           group: CALL_GROUPS,
           thinkingConfig: { thinkingBudget: 0 },
         });
@@ -489,6 +489,17 @@ export default function ChatDosenAIPage() {
         .markdown-body {
           font-size: 0.9rem;
           line-height: 1.6;
+        }
+        /* Fix contrast for chat bubbles */
+        .chat-user-text, .chat-user-text * {
+          color: #ffffff !important;
+        }
+        .chat-ai-text, .chat-ai-text * {
+          color: var(--text-main) !important;
+        }
+        .chat-ai-text code {
+          background: var(--primary-light) !important;
+          color: var(--primary) !important;
         }
         .markdown-body p {
           margin-bottom: 0.75rem;
@@ -617,13 +628,14 @@ export default function ChatDosenAIPage() {
                       padding: "0.75rem 1rem", borderRadius: "14px",
                       borderTopRightRadius: isUser ? "4px" : "14px",
                       borderTopLeftRadius: !isUser ? "4px" : "14px",
-                      backgroundColor: isUser ? "var(--primary)" : "var(--surface-hover)",
-                      color: isUser ? "white" : "var(--text-main)",
+                      backgroundColor: isUser ? "var(--primary)" : "var(--surface)",
+                      color: isUser ? "#ffffff" : "var(--text-main)",
                       boxShadow: isUser ? "0 1px 3px rgba(99,102,241,0.15)" : "none",
                       wordBreak: "break-word",
-                      fontSize: isMobile ? "0.875rem" : "0.9rem"
+                      fontSize: isMobile ? "0.875rem" : "0.9rem",
+                      border: isUser ? "none" : "1px solid var(--border)"
                     }}>
-                      <div className="markdown-body">
+                      <div className={`markdown-body ${isUser ? "chat-user-text" : "chat-ai-text"}`} style={{ color: isUser ? "#ffffff" : "var(--text-main)" }}>
                         {isUser ? (
                           <div style={{ whiteSpace: "pre-wrap" }}>{msg.text}</div>
                         ) : (

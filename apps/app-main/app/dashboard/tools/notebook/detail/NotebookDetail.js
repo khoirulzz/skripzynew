@@ -206,7 +206,20 @@ export default function NotebookDetailPage() {
         await deductCredits(user.uid, indexingCost);
         processedCount++;
 
+        // Optimistic UI Update agar jurnal langsung muncul
+        const newDoc = {
+          id: docId,
+          title: file.name,
+          url: uploadData.secure_url,
+          createdAt: new Date()
+        };
+        setDocuments(prev => [newDoc, ...prev]);
+
+        // Fetch langsung setelah indexing untuk memastikan state dari DB
         await fetchDocuments();
+        // Retry setelah delay singkat untuk memastikan data D1 sudah konsisten
+        setTimeout(() => fetchDocuments(), 1500);
+        setTimeout(() => fetchDocuments(), 4000);
       } catch (err) {
         console.error(`Error processing ${file.name}:`, err);
         alert(`Gagal memproses ${file.name}: ${err.message}`);
@@ -215,6 +228,10 @@ export default function NotebookDetailPage() {
 
     setIsUploading(false);
     setUploadProgress("");
+    // Final refresh setelah semua file selesai
+    if (processedCount > 0) {
+      setTimeout(() => fetchDocuments(), 2000);
+    }
   };
 
   const handleUpload = (e) => {
@@ -353,6 +370,7 @@ ATURAN:
       await callGeminiStream({
         prompt: input,
         systemInstruction,
+        group: "group_3,group_4",
         model: MODELS.primary,
         onStream: (text) => {
           fullAiResponse = text;
@@ -647,14 +665,17 @@ ATURAN:
               <div key={idx} style={{ display: "flex", justifyContent: msg.role === "user" ? "flex-end" : "flex-start" }}>
                 <div style={{
                   maxWidth: isMobile ? "90%" : "85%", padding: isMobile ? "0.75rem" : "1rem", borderRadius: "1rem",
-                  backgroundColor: msg.role === "user" ? "var(--primary)" : "var(--surface-hover)",
-                  color: msg.role === "user" ? "white" : "var(--text-main)",
+                  backgroundColor: msg.role === "user" ? "var(--primary)" : "var(--surface)",
+                  color: msg.role === "user" ? "#ffffff" : "var(--text-main)",
                   border: msg.role === "user" ? "none" : "1px solid var(--border)",
                   borderTopRightRadius: msg.role === "user" ? 0 : "1rem",
                   borderTopLeftRadius: msg.role === "user" ? "1rem" : 0,
                   fontSize: isMobile ? "0.85rem" : "0.95rem"
                 }}>
-                  <div className={`markdown-body ${msg.role === "user" ? "text-white" : ""}`}>
+                  <div
+                    className={`markdown-body ${msg.role === "user" ? "notebook-user-bubble" : "notebook-ai-bubble"}`}
+                    style={{ color: msg.role === "user" ? "#ffffff" : "var(--text-main)" }}
+                  >
                     <ReactMarkdown
                       components={{
                         a: ({ node, ...props }) => {
@@ -674,8 +695,8 @@ ATURAN:
                                   }
                                 }}
                                 style={{
-                                  backgroundColor: "rgba(79, 70, 229, 0.1)",
-                                  color: "var(--primary)",
+                                  backgroundColor: msg.role === "user" ? "rgba(255,255,255,0.2)" : "rgba(79, 70, 229, 0.1)",
+                                  color: msg.role === "user" ? "#ffffff" : "var(--primary)",
                                   padding: "0.1rem 0.3rem",
                                   borderRadius: "0.25rem",
                                   textDecoration: "none",
@@ -775,6 +796,31 @@ ATURAN:
         
         .markdown-body p { margin-bottom: 0.5rem; }
         .markdown-body p:last-child { margin-bottom: 0; }
+
+        /* Notebook chat bubble text contrast — explicit overrides for dark & light mode */
+        .notebook-user-bubble,
+        .notebook-user-bubble *,
+        .notebook-user-bubble p,
+        .notebook-user-bubble li,
+        .notebook-user-bubble strong,
+        .notebook-user-bubble em,
+        .notebook-user-bubble code {
+          color: #ffffff !important;
+        }
+        .notebook-ai-bubble,
+        .notebook-ai-bubble p,
+        .notebook-ai-bubble li,
+        .notebook-ai-bubble strong,
+        .notebook-ai-bubble em {
+          color: var(--text-main) !important;
+        }
+        .notebook-ai-bubble code {
+          color: var(--primary) !important;
+          background: var(--primary-light);
+          padding: 0.1rem 0.3rem;
+          border-radius: 4px;
+          font-size: 0.85em;
+        }
       `}</style>
 
       {/* PDF Viewer Modal */}

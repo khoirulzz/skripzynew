@@ -26,6 +26,7 @@ export default function AdminSidebar({ isCollapsed = false, isMobile = false, is
     { name: "Manajemen User", path: "/admin/users", icon: "users" },
     { name: "Manajemen Harga", path: "/admin/pricing", icon: "tag" },
     { name: "Manajemen Promo", path: "/admin/promos", icon: "gift" },
+    { name: "API Usage", path: "/admin/api-usage", icon: "activity" },
   ];
 
   const isItemActive = (item) => {

@@ -293,14 +293,205 @@ async function getPublicFormSnapshot(env, slug) {
     return fromFirestoreDocument(data);
 }
 
-async function proxyGeminiGeneration({ env, body, groupHeader, model, systemInstruction = null, temperature = 0.6 }) {
-    const API_GROUPS = {
-        group_1: [env.GEMINI_API_KEY_1, env.GEMINI_API_KEY_2],
-        group_2: [env.GEMINI_API_KEY_3, env.GEMINI_API_KEY_4],
-        group_3: [env.GEMINI_API_KEY_5, env.GEMINI_API_KEY_6],
-        group_4: [env.GEMINI_API_KEY_7, env.GEMINI_API_KEY_8]
-    };
+// ── API Usage Tracking & Rate Limiting ────────────────────────
 
+const RATE_LIMITS = {
+    "gemini-flash-latest": 20,
+    "gemini-2.5-flash": 20,
+    "gemini-flash-lite-latest": 500
+};
+
+// Global helper untuk mendapatkan grup beserta nama variablenya
+const getApiGroups = (env) => ({
+    group_1: [{ name: "GEMINI_API_KEY_1", key: env.GEMINI_API_KEY_1 }, { name: "GEMINI_API_KEY_2", key: env.GEMINI_API_KEY_2 }],
+    group_2: [{ name: "GEMINI_API_KEY_3", key: env.GEMINI_API_KEY_3 }, { name: "GEMINI_API_KEY_4", key: env.GEMINI_API_KEY_4 }],
+    group_3: [{ name: "GEMINI_API_KEY_5", key: env.GEMINI_API_KEY_5 }, { name: "GEMINI_API_KEY_6", key: env.GEMINI_API_KEY_6 }],
+    group_4: [{ name: "GEMINI_API_KEY_7", key: env.GEMINI_API_KEY_7 }, { name: "GEMINI_API_KEY_8", key: env.GEMINI_API_KEY_8 }]
+});
+
+async function checkLocalRateLimit(env, apiKeyObj, model) {
+    if (!env.DB) return true; 
+
+    const today = new Date().toISOString().split('T')[0]; 
+    const limit = RATE_LIMITS[model] || 1500;
+
+    try {
+        const stmt = env.DB.prepare(`SELECT SUM(requests_count) as total_requests FROM api_usage WHERE api_key = ? AND model_name = ? AND date(timestamp) = ?`).bind(apiKeyObj.name, model, today);
+        const result = await stmt.first();
+        const total = result?.total_requests || 0;
+        return total < limit; 
+    } catch (e) {
+        console.error("Failed to check rate limit", e);
+        return true; 
+    }
+}
+
+async function recordApiUsage(env, apiKeyObj, model, tokensUsed = 0, requestsCount = 1) {
+    if (!env.DB) return;
+    try {
+        const timestamp = new Date().toISOString();
+        const stmt = env.DB.prepare(`INSERT INTO api_usage (api_key, model_name, tokens_used, requests_count, timestamp) VALUES (?, ?, ?, ?, ?)`)
+            .bind(apiKeyObj.name, model, tokensUsed, requestsCount, timestamp);
+        await stmt.run();
+    } catch (e) {
+        console.error("Failed to record API usage", e);
+    }
+}
+
+// ── Centralized Gemini Rotation Logic ────────────────────────
+
+async function executeGeminiWithRotation(env, groupsToTry, urlModel, isStream, payload, clientColo, clientCountry, forceSingleModel = false) {
+    const API_GROUPS = getApiGroups(env);
+
+    let modelsToTry = [urlModel];
+    if (!forceSingleModel) {
+        if (urlModel === "gemini-flash-latest") {
+            modelsToTry = ["gemini-flash-latest", "gemini-2.5-flash", "gemini-flash-lite-latest"];
+        } else if (urlModel === "gemini-2.5-flash") {
+            modelsToTry = ["gemini-2.5-flash", "gemini-flash-lite-latest"];
+        }
+    }
+
+    let lastError = null;
+    let isLocationError = false;
+
+    for (const groupName of groupsToTry) {
+        const keys = (API_GROUPS[groupName] || []).filter(k => k.key);
+        for (const keyObj of keys) {
+            for (const model of modelsToTry) {
+                // Pre-flight Check
+                const canUse = await checkLocalRateLimit(env, keyObj, model);
+                if (!canUse) {
+                    console.log(`[Rate Limit] Skipping ${model} on key ${keyObj.name}... (Limit Reached)`);
+                    continue; 
+                }
+
+                const path = isStream ? `/v1beta/models/${model}:streamGenerateContent?alt=sse` : (payload.includes("embedContent") ? `/v1beta/models/${model}:embedContent` : `/v1beta/models/${model}:generateContent`);
+                const destinationURL = `https://gateway.ai.cloudflare.com/v1/094df8c8c682a53ca0a27d87735baa51/skripzy-ai/google-ai-studio${path}&key=${keyObj.key}`;
+
+                const apiResponse = await fetch(destinationURL, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: payload,
+                });
+
+                if (apiResponse.ok) {
+                    if (!isStream) {
+                        const clone = apiResponse.clone();
+                        clone.json().then(data => {
+                            const tokens = data?.usageMetadata?.totalTokenCount || 0;
+                            recordApiUsage(env, keyObj, model, tokens, 1);
+                        }).catch(() => {});
+                    } else {
+                        recordApiUsage(env, keyObj, model, 0, 1);
+                    }
+
+                    return new Response(apiResponse.body, {
+                        status: apiResponse.status,
+                        headers: {
+                            "Access-Control-Allow-Origin": "*",
+                            "Access-Control-Expose-Headers": "x-cf-edge-info",
+                            "x-cf-edge-info": `${clientColo}-${clientCountry}`,
+                            "Content-Type": apiResponse.headers.get("Content-Type") || "application/json",
+                        },
+                    });
+                }
+
+                const errorText = await apiResponse.text();
+                lastError = { status: apiResponse.status, body: errorText };
+
+                if ((apiResponse.status === 400 || apiResponse.status === 403) &&
+                    (errorText.includes("User location is not supported") ||
+                     errorText.includes("location") ||
+                     errorText.includes("region") ||
+                     errorText.includes("PERMISSION_DENIED"))) {
+                    isLocationError = true;
+                    break; 
+                }
+
+                if (apiResponse.status === 429) {
+                    await recordApiUsage(env, keyObj, model, 0, 999999);
+                    continue; 
+                }
+
+                if (!RETRYABLE_STATUS.has(apiResponse.status)) {
+                    break;
+                }
+            }
+            if (isLocationError) break; 
+        }
+        if (isLocationError) break;
+    }
+
+    // FALLBACK KE GROQ
+    console.warn(`[REST Proxy] Gemini failed. Last status: ${lastError?.status}. Falling back to Groq...`);
+    try {
+        const reqBody = JSON.parse(payload);
+        const systemInstruction = reqBody.systemInstruction?.parts?.[0]?.text;
+        const prompt = reqBody.contents?.[reqBody.contents.length - 1]?.parts?.[0]?.text;
+        const history = reqBody.contents?.slice(0, -1)?.map(c => ({
+            role: c.role,
+            text: c.parts?.[0]?.text
+        }));
+        const temperature = reqBody.generationConfig?.temperature;
+        
+        const groqResult = await internalGroqFallback(env, prompt, history, systemInstruction, temperature);
+        
+        if (isStream) {
+            const fakeGeminiSSE = `data: ${JSON.stringify({
+                candidates: [{ content: { parts: [{ text: groqResult.text }] } }]
+            })}\n\ndata: [DONE]\n\n`;
+            
+            return new Response(fakeGeminiSSE, {
+                status: 200,
+                headers: {
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Expose-Headers": "x-cf-edge-info",
+                    "x-cf-edge-info": `${clientColo}-${clientCountry}`,
+                    "Content-Type": "text/event-stream",
+                }
+            });
+        } else {
+            const fakeGeminiResponse = {
+                candidates: [{ content: { parts: [{ text: groqResult.text }] } }]
+            };
+            return new Response(JSON.stringify(fakeGeminiResponse), {
+                status: 200,
+                headers: {
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Expose-Headers": "x-cf-edge-info",
+                    "x-cf-edge-info": `${clientColo}-${clientCountry}`,
+                    "Content-Type": "application/json",
+                }
+            });
+        }
+    } catch (err) {
+        console.error("[Groq Fallback] Error:", err.message);
+    }
+
+    const errorHeaders = createCorsHeaders();
+    errorHeaders["Access-Control-Expose-Headers"] = "x-cf-edge-info";
+    errorHeaders["x-cf-edge-info"] = `${clientColo}-${clientCountry}`;
+
+    if (lastError && !RETRYABLE_STATUS.has(lastError.status)) {
+        return new Response(lastError.body, {
+            status: lastError.status,
+            headers: errorHeaders,
+        });
+    }
+
+    return new Response(JSON.stringify({
+        error: `Sistem sedang padat atau kena limit. Silakan coba sesaat lagi.`,
+        retryable: true,
+        upstreamStatus: lastError?.status ?? 503,
+        details: lastError?.body ?? null,
+    }), {
+        status: 503,
+        headers: errorHeaders,
+    });
+}
+
+async function proxyGeminiGeneration({ env, body, groupHeader, model, systemInstruction = null, temperature = 0.6 }) {
     const groupsToTry = (groupHeader || "group_3").split(",").map((item) => item.trim()).filter(Boolean);
     const finalGroups = groupsToTry.length ? groupsToTry : ["group_3"];
 
@@ -320,53 +511,27 @@ async function proxyGeminiGeneration({ env, body, groupHeader, model, systemInst
         payload.systemInstruction = { parts: [{ text: systemInstruction }] };
     }
 
-    let lastError = null;
+    const response = await executeGeminiWithRotation(
+        env, 
+        finalGroups, 
+        model, 
+        false, 
+        JSON.stringify(payload), 
+        "WORKSPACE", 
+        "ID",
+        false
+    );
 
-    for (const groupName of finalGroups) {
-        const keys = (API_GROUPS[groupName] || []).filter(Boolean);
-        for (const key of keys) {
-            const response = await fetch(`https://gateway.ai.cloudflare.com/v1/094df8c8c682a53ca0a27d87735baa51/skripzy-ai/google-ai-studio/v1beta/models/${model}:generateContent?key=${key}`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload),
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-                if (text) {
-                    return { text, model };
-                }
-                lastError = { status: 500, body: "Empty response from Gemini" };
-                continue;
-            }
-
-            const errorText = await response.text();
-            lastError = { status: response.status, body: errorText };
-
-            // Trigger Groq fallback for any location/quota restriction from Gemini
-            const isLocationError = (
-                (response.status === 400 || response.status === 403) &&
-                (errorText.includes("User location is not supported") ||
-                 errorText.includes("location") ||
-                 errorText.includes("region") ||
-                 errorText.includes("PERMISSION_DENIED"))
-            );
-
-            if (isLocationError) {
-                console.warn(`[proxyGeminiGeneration] Gemini location/permission error (${response.status}). Falling back to Groq...`);
-                try {
-                    return await internalGroqFallback(env, body.prompt, null, systemInstruction, temperature);
-                } catch (err) {
-                    throw new Error("Gemini kena User Location restriction, dan Groq fallback juga gagal: " + err.message);
-                }
-            }
-
-            if (!RETRYABLE_STATUS.has(response.status)) break;
+    if (response.ok) {
+        const data = await response.json();
+        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+        if (text) {
+            return { text, model };
         }
     }
 
-    throw new Error(lastError?.body || "Gagal menghasilkan konten AI workspace.");
+    const errText = await response.text().catch(()=>"Failed to read error body");
+    throw new Error(errText || "Gagal menghasilkan konten AI workspace.");
 }
 
 async function internalGroqFallback(env, prompt, history, systemInstruction, temperature) {
@@ -1235,6 +1400,41 @@ const worker = {
                 });
             }
 
+            // ──── ENDPOINT BARU: ADMIN API USAGE ────
+            if (url.pathname === "/api/admin/api-usage" && request.method === "GET") {
+                if (!env.DB) {
+                    return new Response(JSON.stringify({ error: "D1 database not bound" }), { status: 500, headers: createCorsHeaders() });
+                }
+
+                try {
+                    // Aggregation query: Usage per day, per model, per API key
+                    const stmt = env.DB.prepare(`
+                        SELECT 
+                            date(timestamp) as date,
+                            model_name,
+                            api_key,
+                            SUM(requests_count) as total_requests,
+                            SUM(tokens_used) as total_tokens
+                        FROM api_usage
+                        GROUP BY date, model_name, api_key
+                        ORDER BY date DESC, total_requests DESC
+                        LIMIT 200
+                    `);
+                    
+                    const { results } = await stmt.all();
+                    
+                    return new Response(JSON.stringify({ success: true, data: results }), {
+                        status: 200,
+                        headers: createCorsHeaders()
+                    });
+                } catch (err) {
+                    return new Response(JSON.stringify({ error: err.message }), {
+                        status: 500,
+                        headers: createCorsHeaders()
+                    });
+                }
+            }
+
             // ──── ENDPOINT BARU: BATCH EMBEDDING UNTUK RAG ────
             if (url.pathname === "/api/ai/embed-batch" && request.method === "POST") {
                 const { texts, model = "gemini-embedding-2" } = await request.json();
@@ -1257,11 +1457,12 @@ const worker = {
                 const groupHeader = request.headers.get("x-api-group") || "group_3";
                 const groupsToTry = groupHeader.split(",").map(g => g.trim()).filter(Boolean);
 
+                const API_GROUPS = getApiGroups(env);
                 let lastError = null;
                 for (const group of groupsToTry) {
-                    const keys = (API_GROUPS[group] || []).filter(Boolean);
-                    for (const key of keys) {
-                        const res = await fetch(`https://gateway.ai.cloudflare.com/v1/094df8c8c682a53ca0a27d87735baa51/skripzy-ai/google-ai-studio/v1beta/models/${model}:batchEmbedContents?key=${key}`, {
+                    const keys = (API_GROUPS[group] || []).filter(k => k.key);
+                    for (const keyObj of keys) {
+                        const res = await fetch(`https://gateway.ai.cloudflare.com/v1/094df8c8c682a53ca0a27d87735baa51/skripzy-ai/google-ai-studio/v1beta/models/${model}:batchEmbedContents?key=${keyObj.key}`, {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify(payload)
@@ -1342,15 +1543,16 @@ const worker = {
                 }
 
                 const groupRequested = url.searchParams.get("group") || "group_4";
+                const API_GROUPS = getApiGroups(env);
                 const targetKeys = API_GROUPS[groupRequested] || API_GROUPS["group_4"];
-                const usableKeys = targetKeys.filter(Boolean);
+                const usableKeys = targetKeys.filter(k => k.key);
 
                 if (usableKeys.length === 0) {
                     return new Response("Grup API tidak memiliki key yang valid.", { status: 500 });
                 }
 
                 // Ambil key pertama yang tersedia untuk sesi telepon ini
-                const apiKey = usableKeys[0];
+                const apiKey = usableKeys[0].key;
 
                 // Bypass AI Gateway karena belum mendukung WebSocket untuk Gemini Live
                 const targetUrl = `https://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${apiKey}`;
@@ -1521,122 +1723,23 @@ const worker = {
 
             const isStream = url.searchParams.get("alt") === "sse";
             const payload = await request.text();
-            let lastError = null;
 
-            for (const requestedGroup of groupsToTry) {
-                const targetKeys = API_GROUPS[requestedGroup] || [];
-                const usableKeys = targetKeys.filter(Boolean);
-                if (usableKeys.length === 0) continue;
+            const modelMatch = url.pathname.match(/\/models\/([^:]+):/);
+            const urlModel = modelMatch ? modelMatch[1] : "gemini-flash-latest";
+            
+            // Hanya gunakan 1 model jika ini adalah embedding atau Chat Dosen (lite)
+            const forceSingleModel = url.pathname.includes("embedContent") || url.pathname.includes("embedding") || urlModel === "gemini-flash-lite-latest";
 
-                for (let i = 0; i < usableKeys.length; i++) {
-                    const currentKey = usableKeys[i];
-                    let destinationURL = `https://gateway.ai.cloudflare.com/v1/094df8c8c682a53ca0a27d87735baa51/skripzy-ai/google-ai-studio${url.pathname}?key=${currentKey}`;
-                    if (isStream) destinationURL += "&alt=sse";
-
-                    const apiResponse = await fetch(destinationURL, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: payload,
-                    });
-
-                    if (apiResponse.ok) {
-                        return new Response(apiResponse.body, {
-                            status: apiResponse.status,
-                            headers: {
-                                "Access-Control-Allow-Origin": "*",
-                                "Access-Control-Expose-Headers": "x-cf-edge-info",
-                                "x-cf-edge-info": `${clientColo}-${clientCountry}`,
-                                "Content-Type": apiResponse.headers.get("Content-Type") || "application/json",
-                            },
-                        });
-                    }
-
-                    const errorText = await apiResponse.text();
-                    lastError = { status: apiResponse.status, body: errorText };
-                    console.error(`Rotasi [${requestedGroup}]: API Key ke-${i + 1} gagal. Status: ${apiResponse.status}`);
-
-                    // ──── FALLBACK GROQ JIKA KENA LIMIT LOKASI ────
-                    const isLocationOrPermissionError = (
-                        (apiResponse.status === 400 || apiResponse.status === 403) &&
-                        (errorText.includes("User location is not supported") ||
-                         errorText.includes("location") ||
-                         errorText.includes("region") ||
-                         errorText.includes("PERMISSION_DENIED"))
-                    );
-
-                    if (isLocationOrPermissionError) {
-                        console.warn(`[REST Proxy] Gemini location/permission error (${apiResponse.status}). Falling back to Groq...`);
-                        try {
-                            const reqBody = JSON.parse(payload);
-                            const systemInstruction = reqBody.systemInstruction?.parts?.[0]?.text;
-                            const prompt = reqBody.contents?.[reqBody.contents.length - 1]?.parts?.[0]?.text;
-                            const history = reqBody.contents?.slice(0, -1)?.map(c => ({
-                                role: c.role,
-                                text: c.parts?.[0]?.text
-                            }));
-                            const temperature = reqBody.generationConfig?.temperature;
-                            
-                            const groqResult = await internalGroqFallback(env, prompt, history, systemInstruction, temperature);
-                            
-                            if (isStream) {
-                                const fakeGeminiSSE = `data: ${JSON.stringify({
-                                    candidates: [{ content: { parts: [{ text: groqResult.text }] } }]
-                                })}\n\ndata: [DONE]\n\n`;
-                                
-                                return new Response(fakeGeminiSSE, {
-                                    status: 200,
-                                    headers: {
-                                        "Access-Control-Allow-Origin": "*",
-                                        "Access-Control-Expose-Headers": "x-cf-edge-info",
-                                        "x-cf-edge-info": `${clientColo}-${clientCountry}`,
-                                        "Content-Type": "text/event-stream",
-                                    }
-                                });
-                            } else {
-                                const fakeGeminiResponse = {
-                                    candidates: [{ content: { parts: [{ text: groqResult.text }] } }]
-                                };
-                                return new Response(JSON.stringify(fakeGeminiResponse), {
-                                    status: 200,
-                                    headers: {
-                                        "Access-Control-Allow-Origin": "*",
-                                        "Access-Control-Expose-Headers": "x-cf-edge-info",
-                                        "x-cf-edge-info": `${clientColo}-${clientCountry}`,
-                                        "Content-Type": "application/json",
-                                    }
-                                });
-                            }
-                        } catch (err) {
-                            console.error("[Groq Fallback] Error:", err.message);
-                        }
-                    }
-
-                    if (!RETRYABLE_STATUS.has(apiResponse.status)) {
-                        const errorHeaders = createCorsHeaders();
-                        errorHeaders["Access-Control-Expose-Headers"] = "x-cf-edge-info";
-                        errorHeaders["x-cf-edge-info"] = `${clientColo}-${clientCountry}`;
-                        
-                        return new Response(errorText, {
-                            status: apiResponse.status,
-                            headers: errorHeaders,
-                        });
-                    }
-                }
-            }
-
-            const errorHeaders = createCorsHeaders();
-            errorHeaders["Access-Control-Expose-Headers"] = "x-cf-edge-info";
-            errorHeaders["x-cf-edge-info"] = `${clientColo}-${clientCountry}`;
-
-            return new Response(JSON.stringify({
-                error: `Sistem sedang padat atau kena limit sementara. Silakan coba sesaat lagi.`,
-                retryable: true,
-                upstreamStatus: lastError?.status ?? 503,
-                details: lastError?.body ?? null,
-            }), {
-                status: 503,
-                headers: errorHeaders,
-            });
+            return await executeGeminiWithRotation(
+                env, 
+                groupsToTry, 
+                urlModel, 
+                isStream, 
+                payload, 
+                clientColo, 
+                clientCountry,
+                forceSingleModel
+            );
 
         } catch (e) {
             return new Response(JSON.stringify({ error: e.message }), {

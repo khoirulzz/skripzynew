@@ -284,7 +284,7 @@ export function TiptapEditor({ content, onChange, placeholder = "Mulai menulis a
       } else if (actionType === "custom") {
         prompt = `Berikut adalah instruksi dari penulis: "${customInstruction}".\n\nTerapkan instruksi tersebut pada teks di bawah ini. HANYA KEMBALIKAN HASILNYA, tanpa pengantar atau tanda kutip tambahan:\n\n${text}`;
       }
-      const result = await generateWorkspaceChapter({ prompt, group: "group_3", model: "gemini-2.5-flash", temperature: 0.6 });
+      const result = await generateWorkspaceChapter({ prompt, group: "group_2,group_3", model: "gemini-flash-latest", temperature: 0.6 });
       return result.text;
     } catch (err) {
       console.error("AI Refactor error:", err);
@@ -303,11 +303,13 @@ export function TiptapEditor({ content, onChange, placeholder = "Mulai menulis a
 
     setShowCustomInstruction(false);
     setIsAiProcessing(true);
-    setMobileAiBarVisible(false);
+    // Don't close mobile bar immediately so user sees the loading state
+    
     try {
       const newText = await handleAiAction(actionType, text, customInstruction);
       if (newText) {
         editor.chain().focus().deleteRange({ from, to }).insertContent(newText).run();
+        setMobileAiBarVisible(false); // Only close after success
       }
     } finally {
       setIsAiProcessing(false);
@@ -476,14 +478,13 @@ export function TiptapEditor({ content, onChange, placeholder = "Mulai menulis a
         <div style={{
           display: "flex",
           alignItems: "center",
-          flexWrap: "nowrap",
-          overflowX: "auto",
-          gap: "0",
-          padding: "0.35rem 0.75rem",
+          flexWrap: "wrap",
+          gap: "4px 0",
+          padding: "0.5rem 0.75rem",
           borderBottom: "1px solid var(--border)",
-          backgroundColor: "color-mix(in srgb, var(--primary) 6%, var(--surface))",
-          WebkitOverflowScrolling: "touch",
           position: "relative",
+          width: "100%",
+          boxSizing: "border-box"
         }}>
           <span style={{
             fontSize: "0.65rem",
@@ -515,12 +516,42 @@ export function TiptapEditor({ content, onChange, placeholder = "Mulai menulis a
       )}
 
       {/* Editor Content */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "2rem" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: isMobile ? "1rem" : "2rem", position: "relative" }}>
+        
+        {/* ANIMASI AI MEMPROSES */}
+        {isAiProcessing && (
+          <div style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(var(--background-rgb), 0.4)",
+            backdropFilter: "blur(2px)",
+            zIndex: 10,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexDirection: "column",
+            gap: "0.5rem"
+          }}>
+            <div style={{ padding: "0.75rem 1.25rem", backgroundColor: "var(--surface)", border: "1px solid var(--primary)", borderRadius: "var(--radius-full)", boxShadow: "0 0 15px rgba(99,102,241,0.3)", display: "flex", alignItems: "center", gap: "0.75rem", color: "var(--primary)", fontWeight: 600 }}>
+              <PremiumIcon name="sparkles" size={18} className="animate-pulse" />
+              AI sedang memperbaiki teks...
+              <PremiumIcon name="loader" size={16} className="animate-spin" />
+            </div>
+          </div>
+        )}
         {/* BubbleMenu — only on non-touch (desktop) */}
         {!isTouchDevice && (
           <BubbleMenu
             editor={editor}
-            tippyOptions={{ duration: 150, interactive: true }}
+            tippyOptions={{ 
+              duration: 150, 
+              interactive: true,
+              boundary: "viewport",
+              maxWidth: "min(400px, 90vw)"
+            }}
             className="glass-panel"
             style={{
               display: "flex",
@@ -532,6 +563,7 @@ export function TiptapEditor({ content, onChange, placeholder = "Mulai menulis a
               backgroundColor: "var(--surface)",
               alignItems: "center",
               position: "relative",
+              flexWrap: "wrap",
             }}
           >
             <AiActionButtons
@@ -542,8 +574,31 @@ export function TiptapEditor({ content, onChange, placeholder = "Mulai menulis a
             />
           </BubbleMenu>
         )}
-        <EditorContent editor={editor} />
+        <EditorContent editor={editor} className={isAiProcessing ? "tiptap-ai-refactoring" : ""} />
       </div>
+
+      <style jsx global>{`
+        .tiptap-ai-refactoring .ProseMirror-selectednode,
+        .tiptap-ai-refactoring .ProseMirror ::selection {
+          background-color: rgba(99, 102, 241, 0.2) !important;
+          animation: tiptap-scan 2s infinite ease-in-out;
+        }
+
+        @keyframes tiptap-scan {
+          0%, 100% { opacity: 0.6; }
+          50% { opacity: 1; background-color: rgba(99, 102, 241, 0.4) !important; }
+        }
+
+        .tiptap-canvas {
+          outline: none !important;
+          min-height: 500px;
+        }
+        
+        /* Hide scrollbar for mobile AI bar but allow scrolling */
+        .mobile-ai-scroll-container::-webkit-scrollbar {
+          display: none;
+        }
+      `}</style>
     </div>
   );
 }

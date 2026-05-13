@@ -174,8 +174,8 @@ ${instruction || "Tidak ada arahan tambahan."}
 
       const result = await generateWorkspaceChapter({
         prompt,
-        group: "group_3",
-        model: "gemini-2.5-flash",
+        group: "group_1,group_2",
+        model: "gemini-flash-latest",
         temperature: activeChapter === 3 ? 0.55 : 0.7,
       });
 

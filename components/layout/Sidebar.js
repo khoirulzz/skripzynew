@@ -191,7 +191,7 @@ export function Sidebar({ isCollapsed = false, toggleCollapse, isMobile = false 
               <div style={{ width: "32px", height: "32px", borderRadius: "50%", backgroundColor: "var(--primary-light)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--primary)", fontWeight: 700, fontSize: "0.85rem", flexShrink: 0, overflow: "hidden" }}>
                 {userData?.photoUrl
                   ? <img src={userData.photoUrl} alt="Profil" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                  : (userData?.namaLengkap?.charAt(0) || "U")
+                  : (userData?.namaLengkap?.charAt(0) || userData?.name?.charAt(0) || "U")
                 }
               </div>
               <div style={{ flex: 1, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis", fontSize: "0.85rem", fontWeight: 600, color: "var(--text-main)" }}>

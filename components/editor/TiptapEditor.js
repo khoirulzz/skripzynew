@@ -251,12 +251,18 @@ function AiFloatingMenu({ onClose }) {
 }
 
 // ==== Main Tiptap Editor ====
-export function TiptapEditor({ content, onChange, placeholder = "Mulai menulis atau tekan '/' untuk menu AI..." }) {
+export function TiptapEditor({ 
+  content, 
+  onChange, 
+  placeholder = "Mulai menulis atau tekan '/' untuk menu AI...",
+  isMobile: isMobileProp 
+}) {
   const { user } = useAuth();
   const [showAiMenu, setShowAiMenu] = useState(false);
   const [isAiProcessing, setIsAiProcessing] = useState(false);
   const [showCustomInstruction, setShowCustomInstruction] = useState(false);
   const [isTouchDevice, setIsTouchDevice] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const [mobileAiBarVisible, setMobileAiBarVisible] = useState(false);
 
   // Capture editor ref for use inside callbacks without causing re-renders
@@ -264,7 +270,19 @@ export function TiptapEditor({ content, onChange, placeholder = "Mulai menulis a
 
   useEffect(() => {
     setIsTouchDevice("ontouchstart" in window || navigator.maxTouchPoints > 0);
-  }, []);
+    
+    const checkMobile = () => {
+      if (isMobileProp !== undefined) {
+        setIsMobile(isMobileProp);
+      } else {
+        setIsMobile(window.innerWidth < 768);
+      }
+    };
+    
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, [isMobileProp]);
 
   // Stable AI executor — defined with useCallback so reference doesn't change on re-render
   const handleAiAction = useCallback(async (actionType, text, customInstruction = "") => {

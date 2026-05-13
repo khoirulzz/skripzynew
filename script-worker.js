@@ -372,7 +372,12 @@ async function executeGeminiWithRotation(env, ctx, groupsToTry, urlModel, isStre
                     continue; 
                 }
 
-                const path = isStream ? `/v1beta/models/${model}:streamGenerateContent?alt=sse` : (payload.includes("embedContent") ? `/v1beta/models/${model}:embedContent` : `/v1beta/models/${model}:generateContent`);
+                const isEmbedding = urlModel.includes("embedding");
+                const path = isStream
+                    ? `/v1beta/models/${model}:streamGenerateContent?alt=sse`
+                    : isEmbedding
+                        ? `/v1beta/models/${model}:embedContent`
+                        : `/v1beta/models/${model}:generateContent`;
                 const destinationURL = `https://gateway.ai.cloudflare.com/v1/094df8c8c682a53ca0a27d87735baa51/skripzy-ai/google-ai-studio${path}&key=${keyObj.key}`;
 
                 const apiResponse = await fetch(destinationURL, {

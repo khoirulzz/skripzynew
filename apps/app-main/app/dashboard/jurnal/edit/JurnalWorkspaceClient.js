@@ -243,22 +243,35 @@ const [isMobile, setIsMobile] = useState(false);
   const progress = useMemo(() => calculateWorkspaceProgress(contentBuffer, "jurnal", workspace?.journalSections || []), [contentBuffer, workspace?.journalSections]);
   const contextPanelWidth = isMobile ? "min(calc(100vw - 1.5rem), 420px)" : "360px";
 
+  // Stabilize persistWorkspace using Ref to avoid dependency loop with polling
+  const saveContextRef = useRef({ 
+    workspace, activeChapter, progress, references, latestAnalysis, activeForm 
+  });
+  
+  useEffect(() => {
+    saveContextRef.current = { 
+      workspace, activeChapter, progress, references, latestAnalysis, activeForm 
+    };
+  }, [workspace, activeChapter, progress, references, latestAnalysis, activeForm]);
+
   const persistWorkspace = useCallback(
     async (nextContentBuffer = contentBuffer, overrides = {}) => {
-      if (!workspace || isSaving) return;
+      const ctx = saveContextRef.current;
+      if (!ctx.workspace || isSaving) return;
+      
       setIsSaving(true);
       setSaveState("saving");
 
       try {
         await persistWorkspaceDoc({
-          workspaceId: workspace.id,
+          workspaceId: ctx.workspace.id,
           nextContentBuffer,
-          activeChapter,
-          progress,
-          referenceCount: references.length,
-          responseCount: latestAnalysis?.responseCount || workspace.responseCount || 0,
-          methodologyType: workspace.methodologyType || "kuantitatif",
-          activeFormId: activeForm?.id || workspace.activeFormId || null,
+          activeChapter: ctx.activeChapter,
+          progress: ctx.progress,
+          referenceCount: ctx.references.length,
+          responseCount: ctx.latestAnalysis?.responseCount || ctx.workspace.responseCount || 0,
+          methodologyType: ctx.workspace.methodologyType || "kuantitatif",
+          activeFormId: ctx.activeForm?.id || ctx.workspace.activeFormId || null,
           overrides,
         });
         setSaveState("saved");
@@ -269,22 +282,17 @@ const [isMobile, setIsMobile] = useState(false);
         setIsSaving(false);
       }
     },
-    [activeChapter, activeForm, contentBuffer, isSaving, latestAnalysis, progress, references.length, workspace]
+    [contentBuffer, isSaving]
   );
 
   useEffect(() => {
     if (!hydratedRef.current) return undefined;
     setSaveState("dirty");
-
-    const timeoutId = window.setTimeout(() => {
-      void persistWorkspace(contentBuffer);
-    }, 1600);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [contentBuffer, persistWorkspace]);
+    // Autosave removed at user request to reduce query load
+  }, [contentBuffer]);
 
   useEffect(() => {
-    if (!workspace) return undefined;
+    if (!workspace?.id) return undefined;
 
     const timeoutId = window.setTimeout(() => {
       void d1Request("workspaces", {
@@ -301,7 +309,7 @@ const [isMobile, setIsMobile] = useState(false);
     }, 900);
 
     return () => window.clearTimeout(timeoutId);
-  }, [activeChapter, activeForm?.id, latestAnalysis?.responseCount, progress, references.length, workspace]);
+  }, [activeChapter, activeForm?.id, latestAnalysis?.responseCount, progress, references.length, workspace?.id]);
 
   useEffect(() => {
     const handler = (event) => {
@@ -310,9 +318,21 @@ const [isMobile, setIsMobile] = useState(false);
         void persistWorkspace(contentBuffer);
       }
     };
+
+    const handleBeforeUnload = (e) => {
+      if (saveState === "dirty") {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+
     window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [contentBuffer, persistWorkspace]);
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("keydown", handler);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [contentBuffer, persistWorkspace, saveState]);
 
   const handleStatusChange = async (status) => {
     if (!workspace) return;
@@ -609,11 +629,23 @@ const [isMobile, setIsMobile] = useState(false);
               <>
                 <SummaryChip label="Progress" value={`${progress}%`} tone={progress >= 100 ? "success" : "default"} />
                 <SummaryChip label="Form" value={activeForm?.title || "Belum aktif"} />
-                <SummaryChip
-                  label="Autosave"
-                  value={saveState === "saving" ? "Menyimpan..." : saveState === "dirty" ? "Perubahan baru" : saveState === "error" ? "Gagal" : "Aman"}
-                  tone={saveState === "error" ? "danger" : saveState === "saved" ? "success" : "default"}
-                />
+                <button 
+                  className={`btn ${saveState === "dirty" ? "btn-primary" : "btn-outline"}`}
+                  onClick={() => persistWorkspace(contentBuffer)}
+                  disabled={isSaving}
+                  style={{ 
+                    padding: "0.4rem 0.8rem", 
+                    fontSize: "0.75rem", 
+                    borderRadius: "12px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.4rem",
+                    transition: "all 0.2s"
+                  }}
+                 >
+                   <PremiumIcon name={saveState === "saving" ? "loader" : "save"} size={14} className={saveState === "saving" ? "animate-spin" : ""} />
+                   {saveState === "saving" ? "Menyimpan..." : saveState === "dirty" ? "Simpan Perubahan" : "Tersimpan"}
+                 </button>
               </>
             ) : null}
             {isSm ? (
@@ -865,6 +897,7 @@ const [isMobile, setIsMobile] = useState(false);
                   content={contentBuffer[currentChapter.key] || ""}
                   onChange={(html) => handleEditorChange(currentChapter.key, html)}
                   placeholder={currentChapter.promptContext || "Mulai menulis di sini..."}
+                  isMobile={isSm}
                 />
                 </div>
               </div>

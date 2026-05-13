@@ -317,6 +317,7 @@ export default function SettingsPage() {
         {/* ── Akun Section ── */}
         <Section title="Akun">
           <Row icon="shield" label="Email" value={userData?.email || user?.email || "-"} chevron={false} />
+          <Row icon="user" label="Status" value={userData?.status || "Belum diatur"} chevron={false} />
           <Row icon="creditCard" label="Status Plan" value={badge.label + " — " + credits.toLocaleString("id-ID") + " kredit tersisa"} onClick={() => router.push("/dashboard/langganan")} />
         </Section>
 

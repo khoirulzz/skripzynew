@@ -136,9 +136,14 @@ export function Header({ onMenuClick = null, isMobile = false }) {
                 fontWeight: 700,
                 fontSize: "0.85rem",
                 flexShrink: 0,
+                overflow: "hidden"
               }}
             >
-              {userData?.namaLengkap?.charAt(0) || "U"}
+              {userData?.photoUrl ? (
+                <img src={userData.photoUrl} alt="Profil" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              ) : (
+                userData?.namaLengkap?.charAt(0) || userData?.name?.charAt(0) || "U"
+              )}
             </div>
             <button
               onClick={handleLogout}

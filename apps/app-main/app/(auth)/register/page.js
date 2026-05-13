@@ -47,6 +47,7 @@ export default function RegisterPage() {
           id: user.uid,
           email: formData.email,
           name: formData.namaLengkap,
+          namaLengkap: formData.namaLengkap,
           plan: "free",
           credits: 15,
           status: formData.status,
@@ -84,6 +85,7 @@ export default function RegisterPage() {
             id: user.uid,
             email: user.email,
             name: user.displayName || "User Skripzy",
+            namaLengkap: user.displayName || "User Skripzy",
             plan: "free",
             credits: 15
           }

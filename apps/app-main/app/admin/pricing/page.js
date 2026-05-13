@@ -859,7 +859,7 @@ export default function PricingManagement() {
           </p>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "1rem" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "1rem" }}>
           {catalog.plans.map((item) => (
             <PlanCard key={item.planId} item={item} onEdit={(selected) => openModal("plan", selected)} />
           ))}

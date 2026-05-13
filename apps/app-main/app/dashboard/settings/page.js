@@ -10,10 +10,12 @@ import { d1Request } from "@/lib/d1Client";
 import Link from "next/link";
 
 const WORKER_URL = process.env.NEXT_PUBLIC_WORKER_URL || "https://apikey.skripzy-app.workers.dev";
+const WORKER_SECRET = process.env.NEXT_PUBLIC_WORKER_SECRET || "skripzy1234";
 
 const PLAN_BADGE = {
   free: { label: "FREE", color: "#6B7280", bg: "rgba(107,114,128,0.12)" },
   pro: { label: "PRO", color: "#4F46E5", bg: "rgba(79,70,229,0.12)" },
+  plus: { label: "PLUS", color: "#EA580C", bg: "rgba(234,88,12,0.12)" },
   premium: { label: "PREMIUM", color: "#F59E0B", bg: "rgba(245,158,11,0.12)" },
 };
 
@@ -24,7 +26,10 @@ async function uploadProfilePhotoToCloudinary(file) {
 
   const sigRes = await fetch(`${WORKER_URL}/api/cloudinary-sign`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { 
+      "Content-Type": "application/json",
+      "x-skripzy-secret": WORKER_SECRET 
+    },
     body: JSON.stringify({ folder: "Skripzy/Profil" }),
   });
   if (!sigRes.ok) throw new Error("Gagal mendapatkan signature upload.");

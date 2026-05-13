@@ -364,14 +364,16 @@ export default function UserManagement() {
       </div>
 
       {/* Table */}
-      <div
-        style={{
-          backgroundColor: "var(--surface)",
-          border: "1px solid var(--border)",
-          borderRadius: 12,
-          overflow: "hidden",
-        }}
-      >
+      <div style={{ overflowX: "auto", paddingBottom: "1rem" }}>
+        <div
+          style={{
+            backgroundColor: "var(--surface)",
+            border: "1px solid var(--border)",
+            borderRadius: 12,
+            overflow: "hidden",
+            minWidth: "800px"
+          }}
+        >
         {/* Header */}
         <div
           style={{
@@ -492,6 +494,7 @@ export default function UserManagement() {
             </div>
           ))
         )}
+        </div>
       </div>
 
       {editTarget && (

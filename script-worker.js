@@ -312,11 +312,17 @@ const getApiGroups = (env) => ({
 async function checkLocalRateLimit(env, apiKeyObj, model) {
     if (!env.DB) return true; 
 
-    const today = new Date().toISOString().split('T')[0]; 
     const limit = RATE_LIMITS[model] || 1500;
 
     try {
-        const stmt = env.DB.prepare(`SELECT SUM(requests_count) as total_requests FROM api_usage WHERE api_key = ? AND model_name = ? AND date(timestamp) = ?`).bind(apiKeyObj.name, model, today);
+        // Limit reset pada tengah malam waktu PT (Pacific Time, sekitar UTC-8)
+        const stmt = env.DB.prepare(`
+            SELECT SUM(requests_count) as total_requests 
+            FROM api_usage 
+            WHERE api_key = ? 
+              AND model_name = ? 
+              AND date(timestamp, '-8 hours') = date('now', '-8 hours')
+        `).bind(apiKeyObj.name, model);
         const result = await stmt.first();
         const total = result?.total_requests || 0;
         return total < limit; 
@@ -340,7 +346,7 @@ async function recordApiUsage(env, apiKeyObj, model, tokensUsed = 0, requestsCou
 
 // ── Centralized Gemini Rotation Logic ────────────────────────
 
-async function executeGeminiWithRotation(env, groupsToTry, urlModel, isStream, payload, clientColo, clientCountry, forceSingleModel = false) {
+async function executeGeminiWithRotation(env, ctx, groupsToTry, urlModel, isStream, payload, clientColo, clientCountry, forceSingleModel = false) {
     const API_GROUPS = getApiGroups(env);
 
     let modelsToTry = [urlModel];
@@ -378,12 +384,14 @@ async function executeGeminiWithRotation(env, groupsToTry, urlModel, isStream, p
                 if (apiResponse.ok) {
                     if (!isStream) {
                         const clone = apiResponse.clone();
-                        clone.json().then(data => {
-                            const tokens = data?.usageMetadata?.totalTokenCount || 0;
-                            recordApiUsage(env, keyObj, model, tokens, 1);
-                        }).catch(() => {});
+                        ctx.waitUntil(
+                            clone.json().then(data => {
+                                const tokens = data?.usageMetadata?.totalTokenCount || 0;
+                                return recordApiUsage(env, keyObj, model, tokens, 1);
+                            }).catch(() => {})
+                        );
                     } else {
-                        recordApiUsage(env, keyObj, model, 0, 1);
+                        ctx.waitUntil(recordApiUsage(env, keyObj, model, 0, 1));
                     }
 
                     return new Response(apiResponse.body, {
@@ -410,7 +418,7 @@ async function executeGeminiWithRotation(env, groupsToTry, urlModel, isStream, p
                 }
 
                 if (apiResponse.status === 429) {
-                    await recordApiUsage(env, keyObj, model, 0, 999999);
+                    ctx.waitUntil(recordApiUsage(env, keyObj, model, 0, 999999));
                     continue; 
                 }
 
@@ -491,7 +499,7 @@ async function executeGeminiWithRotation(env, groupsToTry, urlModel, isStream, p
     });
 }
 
-async function proxyGeminiGeneration({ env, body, groupHeader, model, systemInstruction = null, temperature = 0.6 }) {
+async function proxyGeminiGeneration({ env, ctx, body, groupHeader, model, systemInstruction = null, temperature = 0.6 }) {
     const groupsToTry = (groupHeader || "group_3").split(",").map((item) => item.trim()).filter(Boolean);
     const finalGroups = groupsToTry.length ? groupsToTry : ["group_3"];
 
@@ -513,6 +521,7 @@ async function proxyGeminiGeneration({ env, body, groupHeader, model, systemInst
 
     const response = await executeGeminiWithRotation(
         env, 
+        ctx,
         finalGroups, 
         model, 
         false, 
@@ -1279,8 +1288,14 @@ const worker = {
                     const setClause = keys.map(k => `${k} = ?`).join(", ") + (hasUpdatedAt ? ", updated_at = CURRENT_TIMESTAMP" : "");
                     const values = keys.map(k => body[k]);
 
-                    const stmt = env.DB.prepare(`UPDATE ${table} SET ${setClause} WHERE id = ? AND ${uidColumn} = ?`)
-                        .bind(...values, id, session.uid);
+                    let updateQuery = `UPDATE ${table} SET ${setClause} WHERE id = ?`;
+                    let updateParams = [...values, id];
+                    if (!isGlobalAdminTable && !isAdmin) {
+                        updateQuery += ` AND ${uidColumn} = ?`;
+                        updateParams.push(session.uid);
+                    }
+
+                    const stmt = env.DB.prepare(updateQuery).bind(...updateParams);
                     
                     const result = await stmt.run();
                     return new Response(JSON.stringify({ success: true, result }), { headers: createCorsHeaders() });
@@ -1338,11 +1353,14 @@ const worker = {
 
             // ──── ENDPOINT BARU: GENERATE CLOUDINARY SIGNATURE ────
             if (url.pathname === "/api/cloudinary-sign" && request.method === "POST") {
+                const payload = await request.json().catch(() => ({}));
+                const folderName = payload.folder || "Referensi";
+                
                 const timestamp = Math.round((new Date).getTime() / 1000);
 
-                // Kita mengurutkan parameter sesuai standar Cloudinary, tambahkan folder "Referensi"
+                // Kita mengurutkan parameter sesuai standar Cloudinary, tambahkan folder
                 const paramsToSign = {
-                    folder: "Referensi",
+                    folder: folderName,
                     timestamp: timestamp
                 };
                 const keys = Object.keys(paramsToSign).sort();
@@ -1407,10 +1425,10 @@ const worker = {
                 }
 
                 try {
-                    // Aggregation query: Usage per day, per model, per API key
+                    // Aggregation query: Usage per day (Pacific Time), per model, per API key
                     const stmt = env.DB.prepare(`
                         SELECT 
-                            date(timestamp) as date,
+                            date(timestamp, '-8 hours') as date,
                             model_name,
                             api_key,
                             SUM(requests_count) as total_requests,
@@ -1732,6 +1750,7 @@ const worker = {
 
             return await executeGeminiWithRotation(
                 env, 
+                ctx,
                 groupsToTry, 
                 urlModel, 
                 isStream, 

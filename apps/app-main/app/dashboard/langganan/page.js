@@ -26,6 +26,9 @@ import {
   useUserBillingRequests,
 } from "@/lib/useBillingCatalog";
 
+const WORKER_URL = process.env.NEXT_PUBLIC_WORKER_URL || "https://apikey.skripzy-app.workers.dev";
+const WORKER_SECRET = process.env.NEXT_PUBLIC_WORKER_SECRET || "skripzy1234";
+
 const STATUS_STYLES = {
   pending: { bg: "rgba(245,158,11,0.12)", color: "#D97706", label: "Menunggu Verifikasi" },
   approved: { bg: "rgba(16,185,129,0.12)", color: "#059669", label: "Disetujui" },
@@ -367,12 +370,13 @@ export default function LanggananPage() {
   };
 
   const uploadToCloudinary = async (file) => {
-    const WORKER_URL = process.env.NEXT_PUBLIC_WORKER_URL || "https://apikey.skripzy-app.workers.dev";
-    
     // 1. Get Signature
     const sigRes = await fetch(`${WORKER_URL}/api/cloudinary-sign`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "x-skripzy-secret": WORKER_SECRET 
+      },
       body: JSON.stringify({ folder: "Skripzy/Pembayaran" }),
     });
     

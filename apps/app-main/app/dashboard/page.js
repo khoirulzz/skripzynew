@@ -1,5 +1,5 @@
 "use client";
-
+import { useState, useEffect } from "react";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
 import { useBillingCatalog } from "@/lib/useBillingCatalog";
 import Link from "next/link";
@@ -169,20 +169,20 @@ function FreeBadge() {
   );
 }
 
-function WorkspaceCard({ item, plan }) {
+function WorkspaceCard({ item, plan, isMobile }) {
   const isLocked = item.pro && plan === "free";
   const inner = (
     <div
-      className="glass-panel"
+      className={isMobile ? "native-card" : "glass-panel"}
       style={{
         display: "flex",
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
-        gap: "1.5rem",
-        padding: "1.75rem",
+        gap: isMobile ? "0.75rem" : "1.5rem",
+        padding: isMobile ? "1.25rem 1rem" : "1.75rem",
         height: "100%",
-        borderRadius: "24px",
+        borderRadius: isMobile ? "16px" : "24px",
         cursor: isLocked ? "not-allowed" : "pointer",
         opacity: isLocked ? 0.65 : 1,
         transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
@@ -207,20 +207,20 @@ function WorkspaceCard({ item, plan }) {
       <div style={{ display: "flex", flexDirection: "column", gap: "1rem", flex: 1 }}>
         {/* Icon container */}
         <div style={{
-          width: "48px", height: "48px", borderRadius: "12px",
+          width: isMobile ? "40px" : "48px", height: isMobile ? "40px" : "48px", borderRadius: "10px",
           backgroundColor: item.iconBg,
           display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
         }}>
-          <PremiumIcon name={item.icon} size={24} style={{ color: item.iconColor }} />
+          <PremiumIcon name={item.icon} size={isMobile ? 20 : 24} style={{ color: item.iconColor }} />
         </div>
 
         {/* Text container */}
         <div>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.25rem" }}>
-            <h4 style={{ fontSize: "1.1rem", margin: 0, color: "var(--text-main)", fontWeight: 700 }}>{item.title}</h4>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.15rem" }}>
+            <h4 style={{ fontSize: isMobile ? "0.9rem" : "1.1rem", margin: 0, color: "var(--text-main)", fontWeight: 700 }}>{item.title}</h4>
             {item.pro && <ProBadge />}
           </div>
-          <p style={{ fontSize: "0.85rem", margin: 0, color: "var(--text-muted)", lineHeight: 1.5 }}>{item.desc}</p>
+          <p style={{ fontSize: isMobile ? "0.7rem" : "0.85rem", margin: 0, color: "var(--text-muted)", lineHeight: 1.4 }}>{item.desc}</p>
         </div>
       </div>
 
@@ -242,15 +242,15 @@ function WorkspaceCard({ item, plan }) {
   return <Link href={item.href} style={{ display: "block", textDecoration: "none" }}>{inner}</Link>;
 }
 
-function QuickToolCard({ tool, plan }) {
+function QuickToolCard({ tool, plan, isMobile }) {
   const isLocked = tool.pro && plan === "free";
   const inner = (
     <div
-      className="glass-panel"
+      className={isMobile ? "native-card" : "glass-panel"}
       style={{
-        padding: "1.75rem",
-        display: "flex", flexDirection: "column", gap: "1.25rem",
-        borderRadius: "24px",
+        padding: isMobile ? "1.25rem 1rem" : "1.75rem",
+        display: "flex", flexDirection: "row", alignItems: "center", gap: isMobile ? "1rem" : "1.25rem",
+        borderRadius: isMobile ? "16px" : "24px",
         cursor: isLocked ? "not-allowed" : "pointer",
         opacity: isLocked ? 0.65 : 1,
         transition: "all 0.3s ease",
@@ -271,20 +271,20 @@ function QuickToolCard({ tool, plan }) {
     >
       {/* Icon container */}
       <div style={{
-        width: "44px", height: "44px", borderRadius: "10px",
+        width: isMobile ? "38px" : "44px", height: isMobile ? "38px" : "44px", borderRadius: "9px",
         backgroundColor: tool.iconBg,
-        display: "flex", alignItems: "center", justifyContent: "center",
+        display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
       }}>
-        <PremiumIcon name={tool.icon} size={22} style={{ color: tool.iconColor }} />
+        <PremiumIcon name={tool.icon} size={isMobile ? 18 : 22} style={{ color: tool.iconColor }} />
       </div>
 
       {/* Title + Desc */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.2rem", flex: 1 }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          <h4 style={{ fontSize: "1rem", margin: 0, color: "var(--text-main)", fontWeight: 700 }}>{tool.title}</h4>
+          <h4 style={{ fontSize: isMobile ? "0.85rem" : "1rem", margin: 0, color: "var(--text-main)", fontWeight: 700 }}>{tool.title}</h4>
           {tool.pro ? <ProBadge /> : <FreeBadge />}
         </div>
-        <p style={{ fontSize: "0.85rem", margin: 0, lineHeight: 1.5, color: "var(--text-muted)" }}>{tool.desc}</p>
+        <p style={{ fontSize: isMobile ? "0.65rem" : "0.85rem", margin: 0, lineHeight: 1.4, color: "var(--text-muted)" }}>{tool.desc}</p>
       </div>
     </div>
   );
@@ -301,6 +301,15 @@ import { useAuth } from "@/components/providers/AuthProvider";
 export default function DashboardPage() {
   const { userData } = useAuth();
   const { toolMap } = useBillingCatalog();
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
   const currentPlan = userData?.plan || "free";
   const quickTools = QUICK_TOOLS.map((tool) => {
     if (tool.slug === "asisten-ai") {
@@ -325,10 +334,10 @@ export default function DashboardPage() {
       <section style={{ marginBottom: "5rem" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "2rem", flexWrap: "wrap", gap: "1rem" }}>
           <div style={{ position: "relative" }}>
-            <h2 style={{ fontSize: "1.75rem", fontWeight: 800, margin: 0, color: "var(--text-main)", letterSpacing: "-0.03em" }}>
+            <h2 style={{ fontSize: isMobile ? "1.25rem" : "1.75rem", fontWeight: 800, margin: 0, color: "var(--text-main)", letterSpacing: "-0.03em" }}>
               Workspace Hub
             </h2>
-            <p style={{ fontSize: "1rem", color: "var(--text-muted)", margin: "0.5rem 0 0 0" }}>Kelola proyek penelitian Anda</p>
+            <p style={{ fontSize: isMobile ? "0.75rem" : "1rem", color: "var(--text-muted)", margin: "0.25rem 0 0 0" }}>Kelola proyek penelitian Anda</p>
 
             {/* Decorative sparkles */}
             <div style={{
@@ -343,9 +352,14 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "1.5rem" }}>
+        <div style={{ 
+          display: "grid", 
+          gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(300px, 1fr))", 
+          gap: isMobile ? "0.85rem" : "1.5rem",
+          margin: 0
+        }}>
           {WORKSPACE_ITEMS.map((item) => (
-            <WorkspaceCard key={item.href} item={item} plan={currentPlan} />
+            <WorkspaceCard key={item.href} item={item} plan={currentPlan} isMobile={isMobile} />
           ))}
         </div>
       </section>
@@ -354,14 +368,14 @@ export default function DashboardPage() {
       <section>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "2rem", flexWrap: "wrap", gap: "1rem" }}>
           <div>
-            <h2 style={{ fontSize: "1.5rem", fontWeight: 800, margin: 0, color: "var(--text-main)", letterSpacing: "-0.02em" }}>Quick Tools & AI Features</h2>
+            <h2 style={{ fontSize: isMobile ? "1.15rem" : "1.5rem", fontWeight: 800, margin: 0, color: "var(--text-main)", letterSpacing: "-0.02em" }}>Quick Tools & AI Features</h2>
           </div>
         </div>
 
         {/* Free tools */}
         <div style={{ marginBottom: "3rem" }}>
           <p style={{
-            fontSize: "0.75rem",
+            fontSize: isMobile ? "0.65rem" : "0.75rem",
             fontWeight: 800,
             color: "var(--text-muted)",
             marginBottom: "1.25rem",
@@ -373,21 +387,31 @@ export default function DashboardPage() {
           }}>
             <span style={{ color: "var(--success)" }}>✓</span> Tersedia untuk Semua Plan
           </p>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: "1.25rem" }}>
+          <div style={{ 
+            display: "grid", 
+            gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(240px, 1fr))", 
+            gap: isMobile ? "0.85rem" : "1.25rem",
+            margin: 0
+          }}>
             {quickTools.filter(t => !t.pro).map(tool => (
-              <QuickToolCard key={tool.href} tool={tool} plan={currentPlan} />
+              <QuickToolCard key={tool.href} tool={tool} plan={currentPlan} isMobile={isMobile} />
             ))}
           </div>
         </div>
 
         {/* Pro-only tools */}
         <div>
-          <p style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--text-muted)", marginBottom: "1rem", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+          <p style={{ fontSize: isMobile ? "0.65rem" : "0.75rem", fontWeight: 700, color: "var(--text-muted)", marginBottom: "1rem", textTransform: "uppercase", letterSpacing: "0.08em" }}>
             ★ Khusus Pro & Plus
           </p>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: "1.25rem" }}>
+          <div style={{ 
+            display: "grid", 
+            gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(240px, 1fr))", 
+            gap: isMobile ? "0.85rem" : "1.25rem",
+            margin: 0
+          }}>
             {quickTools.filter(t => t.pro).map(tool => (
-              <QuickToolCard key={tool.href} tool={tool} plan={currentPlan} />
+              <QuickToolCard key={tool.href} tool={tool} plan={currentPlan} isMobile={isMobile} />
             ))}
           </div>
         </div>

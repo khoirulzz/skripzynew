@@ -14,6 +14,14 @@ export default function SkripsiListPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   useEffect(() => {
     async function fetchWorkspaces() {
@@ -52,14 +60,14 @@ export default function SkripsiListPage() {
   }, [user, isModalOpen]);
 
   return (
-    <div className="animate-fade-in">
-      <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", marginBottom: "2rem", gap: "1rem" }}>
+    <div className="animate-fade-in" style={{ paddingBottom: isMobile ? "2rem" : 0 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", marginBottom: isMobile ? "1.5rem" : "2rem", gap: "1rem" }}>
         <div>
-          <h1 style={{ fontSize: "1.75rem", margin: 0 }}>Proyek Skripsi</h1>
-          <p className="text-muted" style={{ margin: 0 }}>Kelola dokumen penelitian Anda</p>
+          <h1 style={{ fontSize: isMobile ? "1.25rem" : "1.75rem", margin: 0 }}>Proyek Skripsi</h1>
+          <p className="text-muted" style={{ margin: "0.2rem 0 0 0", fontSize: isMobile ? "0.75rem" : "1rem" }}>Kelola dokumen penelitian Anda</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
-          <PremiumIcon name="fileText" size={18} />
+        <button className="btn btn-primary" onClick={() => setIsModalOpen(true)} style={{ padding: isMobile ? "0.5rem 0.75rem" : "0.6rem 1rem", fontSize: isMobile ? "0.85rem" : "1rem" }}>
+          <PremiumIcon name="fileText" size={isMobile ? 16 : 18} />
           <span className="hide-mobile">Buat Skripsi Baru</span>
           <span className="show-mobile">Baru</span>
         </button>

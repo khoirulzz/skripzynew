@@ -94,7 +94,7 @@ export default function DashboardLayout({ children }) {
             onMenuClick={isMobile ? () => setIsMobileOpen((prev) => !prev) : null}
             isMobile={isMobile}
           />
-          <div style={{ padding: "1.5rem", overflowY: "auto", flex: 1, position: "relative" }}>
+          <div style={{ padding: isMobile ? "0.75rem" : "1.5rem", overflowY: "auto", flex: 1, position: "relative" }}>
             {/* Content wrapper */}
             <div style={{ position: "relative", zIndex: 1 }}>
               {children}

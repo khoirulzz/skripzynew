@@ -59,6 +59,15 @@ export default function NotebookDetailPage() {
   const [isSearching, setIsSearching] = useState(false);
   const [searchApiAttempt, setSearchApiAttempt] = useState("core");
   const [searchError, setSearchError] = useState("");
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => window.innerWidth < 768;
+    setIsMobile(checkMobile());
+    const handleResize = () => setIsMobile(checkMobile());
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   // Local query caching
   const [queryCache, setQueryCache] = useState({});
@@ -231,7 +240,7 @@ export default function NotebookDetailPage() {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
-    
+
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       processFiles(e.dataTransfer.files);
     }
@@ -265,9 +274,9 @@ export default function NotebookDetailPage() {
       if (publicId) {
         await fetch(`${WORKER_URL}/api/cloudinary-delete`, {
           method: "POST",
-          headers: { 
+          headers: {
             "Content-Type": "application/json",
-            "x-skripzy-secret": WORKER_SECRET 
+            "x-skripzy-secret": WORKER_SECRET
           },
           body: JSON.stringify({ publicId })
         });
@@ -418,7 +427,7 @@ ATURAN:
         const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(paper.pdfUrl)}`;
         res = await fetch(proxyUrl);
       }
-      
+
       if (!res.ok) throw new Error(`Gagal mengambil PDF: HTTP ${res.status}`);
       const blob = await res.blob();
       const file = new File([blob], `${paper.title.substring(0, 30)}.pdf`, { type: "application/pdf" });
@@ -426,7 +435,7 @@ ATURAN:
       setUploadProgress("Mengekstrak teks...");
       // 2. Ekstrak teks
       const text = await extractTextFromPDF(file);
-      
+
       setUploadProgress("Membuat index vektor (AI)...");
       // 3. Index ke Firestore menggunakan URL external
       const docId = `doc_${Date.now()}`;
@@ -434,7 +443,7 @@ ATURAN:
 
       // 4. Potong kredit
       await deductCredits(user.uid, indexingCost);
-      
+
       setUploadProgress("Selesai!");
       fetchDocuments();
     } catch (err) {
@@ -462,16 +471,16 @@ ATURAN:
   };
 
   return (
-    <div className="animate-fade-in" style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 120px)", color: "var(--text-main)", position: "relative" }}>
+    <div className="animate-fade-in" style={{ display: "flex", flexDirection: "column", height: isMobile ? "calc(100vh - 80px)" : "calc(100vh - 120px)", color: "var(--text-main)", position: "relative" }}>
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.5rem" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-          <Link href="/dashboard/tools/notebook" style={{ color: "var(--text-muted)", transition: "color 0.2s" }} onMouseOver={(e) => e.currentTarget.style.color = "var(--text-main)"} onMouseOut={(e) => e.currentTarget.style.color = "var(--text-muted)"}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: isMobile ? "1rem" : "1.5rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "0.5rem" : "0.75rem" }}>
+          <Link href="/dashboard/tools/notebook" style={{ color: "var(--text-muted)", transition: "color 0.2s" }}>
             <PremiumIcon name="arrowLeft" size={20} />
           </Link>
-          <div>
-            <h1 style={{ fontSize: "1.25rem", fontWeight: 700, margin: 0 }}>{notebook ? notebook.title : "Notebook Referensi"}</h1>
-            <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", margin: 0 }}>{notebook ? notebook.description : "Kelola jurnal & tanya jawab berbasis RAG"}</p>
+          <div style={{ maxWidth: isMobile ? "150px" : "none" }}>
+            <h1 style={{ fontSize: isMobile ? "1rem" : "1.25rem", fontWeight: 700, margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{notebook ? notebook.title : "Notebook Referensi"}</h1>
+            <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{notebook ? notebook.description : "Kelola jurnal & tanya jawab"}</p>
           </div>
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.5rem" }}>
@@ -487,16 +496,16 @@ ATURAN:
             }}
           >
             <PremiumIcon name="bookMarked" size={16} />
-            <span style={{ fontSize: "0.875rem", fontWeight: 600 }}>{isSidebarOpen ? "Tutup Referensi" : "Pilih Referensi"}</span>
+            <span style={{ fontSize: isMobile ? "0.75rem" : "0.875rem", fontWeight: 600 }}>{isSidebarOpen ? (isMobile ? "Tutup" : "Tutup Referensi") : (isMobile ? "Referensi" : "Pilih Referensi")}</span>
             {selectedDocs.length > 0 && !isSidebarOpen && (
               <span style={{ marginLeft: "0.25rem", backgroundColor: "var(--primary)", color: "white", fontSize: "0.65rem", padding: "0.1rem 0.4rem", borderRadius: "9999px", fontWeight: "bold" }}>
                 {selectedDocs.length}
               </span>
             )}
           </button>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.4rem 0.75rem", backgroundColor: "var(--surface-hover)", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.4rem 0.6rem", backgroundColor: "var(--surface-hover)", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)" }}>
             <PremiumIcon name="zap" size={14} style={{ color: "var(--primary)" }} />
-            <span style={{ fontSize: "0.875rem", fontWeight: 600 }}>{credits} Kredit</span>
+            <span style={{ fontSize: isMobile ? "0.7rem" : "0.875rem", fontWeight: 600 }}>{credits}</span>
           </div>
         </div>
       </div>
@@ -505,15 +514,22 @@ ATURAN:
         {/* Sidebar: Documents */}
         <div style={{
           display: "flex", flexDirection: "column", transition: "all 0.3s ease-in-out", height: "100%", overflow: "hidden",
-          width: isSidebarOpen ? "320px" : "0px", opacity: isSidebarOpen ? 1 : 0, margin: 0
+          width: isSidebarOpen ? (isMobile ? "100%" : "320px") : "0px",
+          opacity: isSidebarOpen ? 1 : 0,
+          position: isMobile ? "absolute" : "relative",
+          zIndex: 40,
+          left: 0, top: 0,
+          backgroundColor: "var(--background)",
+          margin: 0
         }}>
-          <div 
-            className="glass-panel" 
-            style={{ 
-              padding: "1rem", display: "flex", flexDirection: "column", gap: "1rem", flex: 1, minHeight: 0, width: "320px", boxShadow: "var(--shadow-md)",
-              border: isDragging ? "2px dashed var(--primary)" : "1px solid var(--border)",
+          <div
+            className={isMobile ? "native-card" : "glass-panel"}
+            style={{
+              padding: "1rem", display: "flex", flexDirection: "column", gap: "1rem", flex: 1, minHeight: 0, width: isMobile ? "100%" : "320px", boxShadow: "var(--shadow-md)",
+              border: isDragging ? "2px dashed var(--primary)" : (isMobile ? "none" : "1px solid var(--border)"),
               backgroundColor: isDragging ? "rgba(79, 70, 229, 0.05)" : "var(--background)",
-              transition: "all 0.2s ease"
+              transition: "all 0.2s ease",
+              margin: isMobile ? "0 -0.75rem" : 0
             }}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
@@ -522,9 +538,9 @@ ATURAN:
             <div style={{ display: "flex", alignItems: "center", justifyItems: "space-between", justifyContent: "space-between" }}>
               <h3 style={{ fontWeight: 600, fontSize: "0.875rem", margin: 0 }}>Referensi Saya</h3>
               <div style={{ display: "flex", gap: "0.5rem" }}>
-                <button 
-                  onClick={() => setShowSearchModal(true)} 
-                  style={{ padding: 0, background: "transparent", border: "none", cursor: "pointer", display: "flex" }} 
+                <button
+                  onClick={() => setShowSearchModal(true)}
+                  style={{ padding: 0, background: "transparent", border: "none", cursor: "pointer", display: "flex" }}
                   disabled={isUploading}
                 >
                   <div style={{ padding: "0.4rem", backgroundColor: "rgba(16, 185, 129, 0.1)", color: "var(--success)", borderRadius: "var(--radius-sm)", transition: "background-color 0.2s" }} onMouseOver={(e) => e.currentTarget.style.backgroundColor = "rgba(16, 185, 129, 0.2)"} onMouseOut={(e) => e.currentTarget.style.backgroundColor = "rgba(16, 185, 129, 0.1)"}>
@@ -612,7 +628,7 @@ ATURAN:
         </div>
 
         {/* Main: Chat */}
-        <div className="glass-panel" style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <div className={isMobile ? "native-card" : "glass-panel"} style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", margin: isMobile ? "0 -0.75rem" : 0 }}>
           {/* Chat Messages */}
           <div className="custom-scrollbar" style={{ flex: 1, overflowY: "auto", padding: "1rem", display: "flex", flexDirection: "column", gap: "1.5rem" }}>
             {messages.length === 0 && (
@@ -630,12 +646,13 @@ ATURAN:
             {messages.map((msg, idx) => (
               <div key={idx} style={{ display: "flex", justifyContent: msg.role === "user" ? "flex-end" : "flex-start" }}>
                 <div style={{
-                  maxWidth: "85%", padding: "1rem", borderRadius: "1rem",
+                  maxWidth: isMobile ? "90%" : "85%", padding: isMobile ? "0.75rem" : "1rem", borderRadius: "1rem",
                   backgroundColor: msg.role === "user" ? "var(--primary)" : "var(--surface-hover)",
                   color: msg.role === "user" ? "white" : "var(--text-main)",
                   border: msg.role === "user" ? "none" : "1px solid var(--border)",
                   borderTopRightRadius: msg.role === "user" ? 0 : "1rem",
-                  borderTopLeftRadius: msg.role === "user" ? "1rem" : 0
+                  borderTopLeftRadius: msg.role === "user" ? "1rem" : 0,
+                  fontSize: isMobile ? "0.85rem" : "0.95rem"
                 }}>
                   <div className={`markdown-body ${msg.role === "user" ? "text-white" : ""}`}>
                     <ReactMarkdown
@@ -721,14 +738,14 @@ ATURAN:
                 </div>
               </div>
             </form>
-            <div style={{ marginTop: "0.5rem", display: "flex", alignItems: "center", justifyItems: "center", justifyContent: "center", gap: "1rem", fontSize: "0.65rem", color: "var(--text-muted)" }}>
-              <span style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
-                <PremiumIcon name="zap" size={10} /> {queryCost} kredit / tanya
-              </span>
-              <span style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
-                <PremiumIcon name="check" size={10} /> Konteks: {selectedDocs.length} Jurnal
-              </span>
-            </div>
+          </div>
+          <div style={{ padding: "0.5rem 1rem", display: "flex", alignItems: "center", justifyContent: "center", gap: isMobile ? "0.5rem" : "1rem", fontSize: "0.6rem", color: "var(--text-muted)", borderTop: isMobile ? "none" : "1px solid var(--border)" }}>
+            <span style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
+              <PremiumIcon name="zap" size={10} /> {queryCost} kredit
+            </span>
+            <span style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
+              <PremiumIcon name="check" size={10} /> {selectedDocs.length} Jurnal
+            </span>
           </div>
         </div>
       </div>
@@ -762,8 +779,8 @@ ATURAN:
 
       {/* PDF Viewer Modal */}
       {selectedDocForViewer && (
-        <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
-          <div style={{ backgroundColor: "var(--background)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", boxShadow: "var(--shadow-lg)", maxWidth: "56rem", width: "100%", maxHeight: "90vh", display: "flex", flexDirection: "column", height: "85vh" }}>
+        <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: isMobile ? 0 : "1rem" }}>
+          <div style={{ backgroundColor: "var(--background)", border: isMobile ? "none" : "1px solid var(--border)", borderRadius: isMobile ? 0 : "var(--radius-md)", boxShadow: "var(--shadow-lg)", maxWidth: "56rem", width: "100%", maxHeight: "100vh", display: "flex", flexDirection: "column", height: isMobile ? "100vh" : "85vh" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "1rem", borderBottom: "1px solid var(--border)" }}>
               <h3 style={{ fontWeight: 600, fontSize: "0.875rem", margin: 0 }}>{selectedDocForViewer.title}</h3>
               <button
@@ -890,14 +907,14 @@ ATURAN:
                   <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--text-muted)" }}>
                     Menampilkan hasil pencarian dari sumber terpercaya (Core UK / OpenAlex / Unpaywall)
                   </p>
-                  
+
                   {searchResults.map((paper, idx) => (
                     <div key={idx} style={{ padding: "1rem", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", backgroundColor: "var(--surface-hover)" }}>
                       <h4 style={{ margin: "0 0 0.5rem 0", fontSize: "1rem", fontWeight: 600 }}>{paper.title}</h4>
                       <p style={{ margin: "0 0 0.5rem 0", fontSize: "0.8rem", color: "var(--text-muted)" }}>
                         {paper.authorString} • {paper.year || "Tahun tidak diketahui"} {paper.venue ? `• ${paper.venue}` : ""}
                       </p>
-                      
+
                       <p style={{ fontSize: "0.85rem", lineHeight: 1.5, margin: "0 0 1rem 0", color: "var(--text-main)", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
                         {paper.abstract || <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}>Abstrak tidak tersedia.</span>}
                       </p>
@@ -912,7 +929,7 @@ ATURAN:
                               onMouseOut={(e) => e.currentTarget.style.backgroundColor = "rgba(79, 70, 229, 0.1)"}
                             >
                               <PremiumIcon name="plus" size={14} />
-                                  Tambahkan ke Notebook (-{indexingCost} Kredit)
+                              Tambahkan ke Notebook (-{indexingCost} Kredit)
                             </button>
                             <a
                               href={paper.displayUrl}

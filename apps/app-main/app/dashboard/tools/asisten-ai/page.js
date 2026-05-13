@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import ReactMarkdown from "react-markdown";
 import { callGemini, MODELS } from "@/lib/callWorker";
@@ -18,6 +18,14 @@ export default function AsistenAIPage() {
   const titleCost = toolMap["asisten-ai-judul"]?.creditCost ?? 2;
   const backgroundCost = toolMap["asisten-ai-latar-belakang"]?.creditCost ?? 3;
   const [activeTab, setActiveTab] = useState("judul"); // "judul" | "latar_belakang"
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   // States untuk Generator Judul
   const [topic, setTopic] = useState("");
@@ -206,15 +214,17 @@ Berikan hasil murni dalam format Markdown yang rapi. Tanpa markdown block dan ka
   };
 
   return (
-    <div className="animate-fade-in" style={{ maxWidth: "1000px", margin: "0 auto" }}>
+    <div className="animate-fade-in" style={{ maxWidth: "1000px", margin: "0 auto", paddingBottom: isMobile ? "2rem" : 0 }}>
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "2rem" }}>
-        <Link href="/dashboard" style={{ color: "var(--text-muted)" }}><PremiumIcon name="arrowLeft" size={20} /></Link>
-        <div>
-          <h1 style={{ fontSize: "1.5rem", margin: 0 }}>Asisten AI</h1>
-          <p style={{ margin: 0, fontSize: "0.875rem" }}>Bantuan cerdas untuk ide dan draf penelitian Anda</p>
+      <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: isMobile ? "flex-start" : "center", gap: isMobile ? "0.75rem" : "1rem", marginBottom: isMobile ? "1.5rem" : "2rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+          {!isMobile && <Link href="/dashboard" style={{ color: "var(--text-muted)" }}><PremiumIcon name="arrowLeft" size={20} /></Link>}
+          <div>
+            <h1 style={{ fontSize: isMobile ? "1rem" : "1.5rem", margin: 0 }}>Asisten AI</h1>
+            <p style={{ margin: "0.1rem 0 0 0", fontSize: isMobile ? "0.65rem" : "0.75rem", color: "var(--text-muted)" }}>Bantuan cerdas untuk ide & draf penelitian</p>
+          </div>
         </div>
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.85rem", fontWeight: 600 }}>
+        <div style={{ marginLeft: isMobile ? 0 : "auto", display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.75rem", fontWeight: 600 }}>
           <span className="text-muted">Kredit Anda:</span>
           <span style={{ color: "var(--text-main)" }}>{credits}</span>
         </div>
@@ -244,14 +254,14 @@ Berikan hasil murni dalam format Markdown yang rapi. Tanpa markdown block dan ka
         </button>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2rem" }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: isMobile ? "1rem" : "2rem" }}>
 
         {/* === KIRI: INPUT === */}
-        <div className="glass-panel p-6" style={{ alignSelf: "start" }}>
+        <div className="glass-panel" style={{ alignSelf: "start", padding: isMobile ? "0.85rem" : "1.5rem", borderRadius: isMobile ? "16px" : "24px" }}>
           {activeTab === "judul" && (
             <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-              <h3 style={{ fontSize: "1.1rem", margin: 0 }}>Cari Ide Judul (Novelty)</h3>
-              <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", margin: "0 0 0.5rem" }}>
+              <h3 style={{ fontSize: isMobile ? "0.95rem" : "1.1rem", margin: 0 }}>Cari Ide Judul (Novelty)</h3>
+              <p style={{ fontSize: isMobile ? "0.75rem" : "0.8rem", color: "var(--text-muted)", margin: "0 0 0.5rem" }}>
                 AI akan mencari jurnal dari Database Paper dan menganalisis gap penelitian, dan merekomendasikan judul beserta rumusan masalahnya.
               </p>
 
@@ -261,17 +271,19 @@ Berikan hasil murni dalam format Markdown yang rapi. Tanpa markdown block dan ka
                 </div>
               )}
 
-              <div className="form-group">
-                <label className="form-label">Topik Penilitian</label>
+              <div className="form-group" style={{ marginBottom: isMobile ? "0.5rem" : "1rem" }}>
+                <label className="form-label" style={{ fontSize: isMobile ? "0.75rem" : "0.85rem", marginBottom: "0.2rem" }}>Topik Penelitian</label>
                 <input
                   type="text"
                   className="form-input"
+                  style={{ fontSize: isMobile ? "0.8rem" : "0.95rem", padding: isMobile ? "0.6rem" : "0.75rem" }}
                   placeholder="Contoh: Pengaruh AI terhadap Pendidikan Dasar"
                   value={topic}
                   onChange={e => setTopic(e.target.value)}
                 />
               </div>
 
+              {!isMobile && (
               <button
                 className="btn btn-primary w-full"
                 onClick={handleGenerateJudul}
@@ -279,13 +291,14 @@ Berikan hasil murni dalam format Markdown yang rapi. Tanpa markdown block dan ka
               >
                 {loadingJudul ? "Menganalisis..." : `Generate Ide Judul (-${titleCost} Kredit)`}
               </button>
+              )}
             </div>
           )}
 
           {activeTab === "latar_belakang" && (
             <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-              <h3 style={{ fontSize: "1.1rem", margin: 0 }}>Draf Latar Belakang</h3>
-              <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", margin: "0 0 0.5rem" }}>
+              <h3 style={{ fontSize: isMobile ? "0.95rem" : "1.1rem", margin: 0 }}>Draf Latar Belakang</h3>
+              <p style={{ fontSize: isMobile ? "0.75rem" : "0.8rem", color: "var(--text-muted)", margin: "0 0 0.5rem" }}>
                 Susun latar belakang penelitian dengan narasi alami.
               </p>
 
@@ -295,17 +308,17 @@ Berikan hasil murni dalam format Markdown yang rapi. Tanpa markdown block dan ka
                 </div>
               )}
 
-              <div className="form-group">
-                <label className="form-label">Judul Penelitian</label>
-                <input type="text" className="form-input" value={bgTitle} onChange={e => setBgTitle(e.target.value)} />
+              <div className="form-group" style={{ marginBottom: isMobile ? "0.5rem" : "1rem" }}>
+                <label className="form-label" style={{ fontSize: isMobile ? "0.75rem" : "0.85rem", marginBottom: "0.2rem" }}>Judul Penelitian</label>
+                <input type="text" className="form-input" style={{ fontSize: isMobile ? "0.8rem" : "0.95rem", padding: isMobile ? "0.6rem" : "0.75rem" }} value={bgTitle} onChange={e => setBgTitle(e.target.value)} />
               </div>
-              <div className="form-group">
-                <label className="form-label">Fenomena Umum (Paragraf Awal)</label>
-                <textarea className="form-input" rows="3" value={bgPhenomenon} onChange={e => setBgPhenomenon(e.target.value)} />
+              <div className="form-group" style={{ marginBottom: isMobile ? "0.5rem" : "1rem" }}>
+                <label className="form-label" style={{ fontSize: isMobile ? "0.75rem" : "0.85rem", marginBottom: "0.2rem" }}>Fenomena Umum (Paragraf Awal)</label>
+                <textarea className="form-input" rows="3" style={{ fontSize: isMobile ? "0.8rem" : "0.95rem", padding: isMobile ? "0.6rem" : "0.75rem" }} value={bgPhenomenon} onChange={e => setBgPhenomenon(e.target.value)} />
               </div>
-              <div className="form-group">
-                <label className="form-label">Masalah Spesifik & Urgensi</label>
-                <textarea className="form-input" rows="3" value={bgProblem} onChange={e => setBgProblem(e.target.value)} />
+              <div className="form-group" style={{ marginBottom: isMobile ? "0.5rem" : "1rem" }}>
+                <label className="form-label" style={{ fontSize: isMobile ? "0.75rem" : "0.85rem", marginBottom: "0.2rem" }}>Masalah Spesifik & Urgensi</label>
+                <textarea className="form-input" rows="3" style={{ fontSize: isMobile ? "0.8rem" : "0.95rem", padding: isMobile ? "0.6rem" : "0.75rem" }} value={bgProblem} onChange={e => setBgProblem(e.target.value)} />
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
@@ -318,6 +331,7 @@ Berikan hasil murni dalam format Markdown yang rapi. Tanpa markdown block dan ka
                 <label htmlFor="incRef" style={{ fontSize: "0.85rem", cursor: "pointer" }}>Sertakan referensi (Core + OpenAlex + Unpaywall)</label>
               </div>
 
+              {!isMobile && (
               <button
                 className="btn btn-primary w-full"
                 onClick={handleGenerateBg}
@@ -326,12 +340,13 @@ Berikan hasil murni dalam format Markdown yang rapi. Tanpa markdown block dan ka
               >
                 {loadingBg ? "Menyusun Draf..." : `Buat Draf Latar Belakang (-${backgroundCost} Kredit)`}
               </button>
+              )}
             </div>
           )}
         </div>
 
         {/* === KANAN: OUTPUT === */}
-        <div className="glass-panel p-6" style={{ overflowY: "auto", maxHeight: "600px" }}>
+        <div className="glass-panel" style={{ overflowY: "auto", maxHeight: isMobile ? "none" : "600px", padding: isMobile ? "0.85rem" : "1.5rem", borderRadius: isMobile ? "16px" : "24px", marginBottom: isMobile ? "5rem" : 0 }}>
           {activeTab === "judul" && !loadingJudul && !resultJudul && (
             <div style={{ color: "var(--text-muted)", textAlign: "center", marginTop: "3rem", fontSize: "0.9rem" }}>
               Isi form untuk mulai mencari ide judul. Hasil analisis research gap, novelty, dan judul akan tampil di sini.
@@ -349,7 +364,7 @@ Berikan hasil murni dalam format Markdown yang rapi. Tanpa markdown block dan ka
             </div>
           )}
           {activeTab === "judul" && resultJudul && (
-            <div className="markdown-body">
+            <div className="markdown-body" style={{ fontSize: isMobile ? "0.75rem" : "0.9rem" }}>
               <ReactMarkdown>{resultJudul}</ReactMarkdown>
             </div>
           )}
@@ -371,13 +386,29 @@ Berikan hasil murni dalam format Markdown yang rapi. Tanpa markdown block dan ka
             </div>
           )}
           {activeTab === "latar_belakang" && resultBg && (
-            <div className="markdown-body">
+            <div className="markdown-body" style={{ fontSize: isMobile ? "0.75rem" : "0.9rem" }}>
               <ReactMarkdown>{resultBg}</ReactMarkdown>
             </div>
           )}
         </div>
 
       </div>
+
+      {/* ── Mobile Sticky Bottom Bar ────────────── */}
+      {isMobile && (
+        <div style={{ position: "fixed", bottom: "1.5rem", left: "1rem", right: "1rem", zIndex: 50, display: "flex", pointerEvents: "none" }}>
+          {activeTab === "judul" && (
+            <button className="btn btn-primary" style={{ flex: 1, padding: "0.6rem", fontSize: "0.85rem", fontWeight: 600, borderRadius: "24px", display: "flex", justifyContent: "center", alignItems: "center", gap: "0.4rem", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", pointerEvents: "auto" }} onClick={handleGenerateJudul} disabled={loadingJudul || !topic.trim()}>
+              {loadingJudul ? <><PremiumIcon name="sparkles" size={14} className="animate-pulse" /> Menganalisis...</> : <><PremiumIcon name="sparkles" size={14} /> Generate Judul</>}
+            </button>
+          )}
+          {activeTab === "latar_belakang" && (
+            <button className="btn btn-primary" style={{ flex: 1, padding: "0.6rem", fontSize: "0.85rem", fontWeight: 600, borderRadius: "24px", display: "flex", justifyContent: "center", alignItems: "center", gap: "0.4rem", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", pointerEvents: "auto" }} onClick={handleGenerateBg} disabled={loadingBg || !bgTitle.trim() || !bgPhenomenon.trim() || !bgProblem.trim()}>
+              {loadingBg ? <><PremiumIcon name="sparkles" size={14} className="animate-pulse" /> Menyusun Draf...</> : <><PremiumIcon name="sparkles" size={14} /> Buat Latar Belakang</>}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

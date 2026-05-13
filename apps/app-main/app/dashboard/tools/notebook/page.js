@@ -24,6 +24,14 @@ export default function NotebookDashboardPage() {
   const [isCreating, setIsCreating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [docCounts, setDocCounts] = useState({});
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   useEffect(() => {
     if (user) fetchNotebooks();
@@ -109,19 +117,17 @@ export default function NotebookDashboardPage() {
   const canCreate = plan !== "free" || notebooks.length < MAX_NOTEBOOKS_FREE;
 
   return (
-    <div className="animate-fade-in" style={{ maxWidth: "1080px", margin: "0 auto", color: "var(--text-main)" }}>
+    <div className="animate-fade-in" style={{ maxWidth: "1080px", margin: "0 auto", color: "var(--text-main)", paddingBottom: isMobile ? "2rem" : 0 }}>
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "2rem", flexWrap: "wrap", gap: "1rem" }}>
+      <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: isMobile ? "flex-start" : "center", justifyContent: "space-between", marginBottom: isMobile ? "1.5rem" : "2rem", gap: "1rem" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-          <Link href="/dashboard" style={{ color: "var(--text-muted)", transition: "color 0.2s" }}
-            onMouseOver={e => e.currentTarget.style.color = "var(--text-main)"}
-            onMouseOut={e => e.currentTarget.style.color = "var(--text-muted)"}>
+          <Link href="/dashboard" style={{ color: "var(--text-muted)" }}>
             <PremiumIcon name="arrowLeft" size={20} />
           </Link>
           <div>
-            <h1 style={{ fontSize: "1.5rem", fontWeight: 700, margin: 0 }}>Notebook Referensi</h1>
-            <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", margin: "0.25rem 0 0 0" }}>
-              Kelola projek referensi & tanya jawab berbasis RAG
+            <h1 style={{ fontSize: isMobile ? "1.25rem" : "1.5rem", fontWeight: 700, margin: 0 }}>Notebook Referensi</h1>
+            <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: "0.2rem 0 0 0" }}>
+              Kelola projek referensi RAG
             </p>
           </div>
         </div>
@@ -129,14 +135,15 @@ export default function NotebookDashboardPage() {
           onClick={() => canCreate ? setShowCreateModal(true) : alert(`Maksimal ${MAX_NOTEBOOKS_FREE} notebook untuk plan gratis.`)}
           style={{
             display: "flex", alignItems: "center", gap: "0.5rem",
-            padding: "0.6rem 1.25rem", borderRadius: "var(--radius-sm)",
+            padding: isMobile ? "0.5rem 1rem" : "0.6rem 1.25rem", borderRadius: "var(--radius-sm)",
             background: "linear-gradient(135deg, #4F46E5, #7C3AED)", color: "white",
-            border: "none", cursor: "pointer", fontWeight: 600, fontSize: "0.875rem",
+            border: "none", cursor: "pointer", fontWeight: 600, fontSize: isMobile ? "0.8rem" : "0.875rem",
             transition: "all 0.2s", boxShadow: "0 2px 8px rgba(79,70,229,0.3)",
             opacity: canCreate ? 1 : 0.5,
+            width: isMobile ? "100%" : "auto", justifyContent: "center"
           }}
-          onMouseOver={e => { if (canCreate) e.currentTarget.style.transform = "translateY(-1px)"; }}
-          onMouseOut={e => e.currentTarget.style.transform = "translateY(0)"}
+          onMouseOver={e => { if (canCreate && !isMobile) e.currentTarget.style.transform = "translateY(-1px)"; }}
+          onMouseOut={e => { if (canCreate && !isMobile) e.currentTarget.style.transform = "translateY(0)"; }}
         >
           <PremiumIcon name="plus" size={16} /> Buat Notebook
         </button>
@@ -154,19 +161,19 @@ export default function NotebookDashboardPage() {
 
       {/* Grid */}
       {isLoading ? (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "1.25rem" }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(280px, 1fr))", gap: isMobile ? "0.75rem" : "1.25rem" }}>
           {[1, 2, 3].map(i => (
-            <div key={i} className="glass-panel animate-pulse" style={{ height: "180px", borderRadius: "var(--radius-md)" }} />
+            <div key={i} className="glass-panel animate-pulse" style={{ height: "180px", borderRadius: "var(--radius-md)", margin: 0 }} />
           ))}
         </div>
       ) : notebooks.length === 0 ? (
-        <div className="glass-panel" style={{ padding: "4rem 2rem", textAlign: "center" }}>
+        <div className="glass-panel" style={{ padding: isMobile ? "2rem 1rem" : "4rem 2rem", textAlign: "center", margin: 0 }}>
           <div style={{ width: "72px", height: "72px", borderRadius: "50%", backgroundColor: "rgba(79,70,229,0.1)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1.25rem" }}>
             <PremiumIcon name="bookMarked" size={36} style={{ color: "var(--primary)" }} />
           </div>
           <h3 style={{ fontSize: "1.1rem", fontWeight: 700, margin: "0 0 0.5rem" }}>Belum ada Notebook</h3>
           <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", margin: "0 0 1.5rem", maxWidth: "360px", marginLeft: "auto", marginRight: "auto" }}>
-            Buat notebook baru untuk mulai mengunggah jurnal referensi dan berdiskusi dengan AI.
+            Buat notebook baru untuk mulai mengunggah jurnal referensi.
           </p>
           <button onClick={() => setShowCreateModal(true)} style={{
             padding: "0.6rem 1.5rem", borderRadius: "var(--radius-sm)",
@@ -177,7 +184,7 @@ export default function NotebookDashboardPage() {
           </button>
         </div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "1.25rem" }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(280px, 1fr))", gap: isMobile ? "0.75rem" : "1.25rem" }}>
           {notebooks.map(nb => {
             const journalCount = docCounts[nb.id] || 0;
             return (
@@ -185,12 +192,13 @@ export default function NotebookDashboardPage() {
                 key={nb.id}
                 className="glass-panel"
                 style={{
-                  padding: "1.5rem", cursor: "pointer", transition: "all 0.2s",
+                  padding: "1.25rem", cursor: "pointer", transition: "all 0.2s",
                   display: "flex", flexDirection: "column", gap: "1rem", position: "relative",
+                  margin: 0
                 }}
                 onClick={() => router.push(`/dashboard/tools/notebook/detail?id=${nb.id}`)}
-                onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.boxShadow = "var(--shadow-lg)"; }}
-                onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = ""; }}
+                onMouseEnter={e => { if (!isMobile) { e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.boxShadow = "var(--shadow-lg)"; } }}
+                onMouseLeave={e => { if (!isMobile) { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = ""; } }}
               >
                 {/* Icon & Delete */}
                 <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>

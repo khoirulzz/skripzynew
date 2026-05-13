@@ -90,6 +90,14 @@ export default function SimulasiSidangPage() {
   const [isRecording, setIsRecording] = useState(false);
   const recognitionRef = useRef(null);
   const chatEndRef = useRef(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   useEffect(() => {
     if (isSessionActive) {
@@ -474,24 +482,26 @@ Sajikan dengan gaya bahasa akademis namun membangun (konstruktif).`;
   };
 
   return (
-    <div className="animate-fade-in" style={{ maxWidth: "800px", margin: "0 auto", paddingBottom: "2rem" }}>
+    <div className="animate-fade-in" style={{ maxWidth: "800px", margin: "0 auto", paddingBottom: isMobile ? "2rem" : 0 }}>
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "2rem" }}>
-        {isSessionActive ? (
-          <button onClick={() => setShowConfirmEnd(true)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--danger)" }} title="Keluar">
-            <PremiumIcon name="arrowLeft" size={20} />
-          </button>
-        ) : (
-          <Link href="/dashboard" style={{ color: "var(--text-muted)" }}><PremiumIcon name="arrowLeft" size={20} /></Link>
-        )}
-        <div>
-          <h1 style={{ fontSize: "1.5rem", margin: 0 }}>Simulasi Sidang AI</h1>
-          <p style={{ margin: 0, fontSize: "0.875rem", color: "var(--text-muted)" }}>Latihan presentasi dan defend skripsi bersama Dosen Penguji</p>
+      <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: isMobile ? "flex-start" : "center", gap: isMobile ? "0.75rem" : "1rem", marginBottom: isMobile ? "1.5rem" : "2rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+          {isSessionActive ? (
+            <button onClick={() => setShowConfirmEnd(true)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--danger)" }} title="Keluar">
+              <PremiumIcon name="arrowLeft" size={20} />
+            </button>
+          ) : (
+            <Link href="/dashboard" style={{ color: "var(--text-muted)" }}><PremiumIcon name="arrowLeft" size={20} /></Link>
+          )}
+          <div>
+            <h1 style={{ fontSize: isMobile ? "1.25rem" : "1.5rem", margin: 0 }}>Simulasi Sidang AI</h1>
+            <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--text-muted)" }}>Latihan defend skripsi dengan Dosen AI</p>
+          </div>
         </div>
         {!isSessionActive && (
-          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.4rem 0.85rem", backgroundColor: "rgba(236, 72, 153, 0.1)", borderRadius: "var(--radius-lg)", fontSize: "0.8rem", fontWeight: 600, color: "#DB2777" }}>
+          <div style={{ marginLeft: isMobile ? 0 : "auto", display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.4rem 0.85rem", backgroundColor: "rgba(236, 72, 153, 0.1)", borderRadius: "var(--radius-lg)", fontSize: "0.75rem", fontWeight: 600, color: "#DB2777" }}>
             <PremiumIcon name="barChart" size={14} />
-            <span>{sessionCost} credit / sesi</span>
+            <span>{sessionCost} credit</span>
             <span style={{ padding: "1px 6px", background: "linear-gradient(135deg, #6366F1, #8B5CF6)", color: "white", borderRadius: "8px", fontSize: "0.6rem", fontWeight: 800 }}>PRO</span>
           </div>
         )}
@@ -509,7 +519,7 @@ Sajikan dengan gaya bahasa akademis namun membangun (konstruktif).`;
 
       {/* SETUP PHASE */}
       {!isSessionActive && (
-        <div className="glass-panel p-6">
+        <div className={isMobile ? "native-card" : "glass-panel p-6"} style={{ margin: isMobile ? "0 -0.75rem" : 0 }}>
           <form onSubmit={handleStartSession}>
             <h2 style={{ fontSize: "1.2rem", margin: "0 0 1.5rem 0" }}>Persiapan Sidang</h2>
 
@@ -521,7 +531,7 @@ Sajikan dengan gaya bahasa akademis namun membangun (konstruktif).`;
 
             <div className="form-group">
               <label className="form-label">Jenis Sidang & Karakter Dosen</label>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1rem" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "1rem" }}>
                 {["proposal", "skripsi"].map(mode => (
                   <button
                     key={mode} type="button" onClick={() => setSidangMode(mode)} disabled={plan === "free"}
@@ -530,7 +540,7 @@ Sajikan dengan gaya bahasa akademis namun membangun (konstruktif).`;
                       border: sidangMode === mode ? "2px solid #EC4899" : "2px solid var(--border)",
                       backgroundColor: sidangMode === mode ? "rgba(236,72,153,0.05)" : "transparent",
                       cursor: plan === "free" ? "not-allowed" : "pointer", opacity: plan === "free" ? 0.6 : 1,
-                      fontWeight: 600, color: sidangMode === mode ? "#DB2777" : "var(--text-main)", textTransform: "capitalize"
+                      fontWeight: 600, color: sidangMode === mode ? "#DB2777" : "var(--text-main)", textTransform: "capitalize", fontSize: isMobile ? "0.85rem" : "0.95rem"
                     }}
                   >
                     📋 Sidang {mode === "proposal" ? "Proposal" : "Skripsi"}
@@ -602,12 +612,12 @@ Sajikan dengan gaya bahasa akademis namun membangun (konstruktif).`;
 
       {/* CHAT/SESSION PHASE */}
       {isSessionActive && (
-        <div className="glass-panel" style={{ display: "flex", flexDirection: "column", height: "65vh" }}>
+        <div className={isMobile ? "native-card" : "glass-panel"} style={{ display: "flex", flexDirection: "column", height: isMobile ? "calc(100vh - 180px)" : "65vh", margin: isMobile ? "0 -0.75rem" : 0 }}>
 
-          <div style={{ padding: "1rem 1.5rem", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "rgba(236,72,153,0.02)" }}>
+          <div style={{ padding: isMobile ? "0.75rem 1rem" : "1rem 1.5rem", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "rgba(236,72,153,0.02)" }}>
             <div>
-              <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 700 }}>
-                {sidangMode} • Tanya: {questionCount}/{maxQuestions} • Sanggah: {sanggahanCount}/{maxSanggahan}
+              <div style={{ fontSize: "0.65rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 700 }}>
+                {sidangMode} • Q: {questionCount}/{maxQuestions} • S: {sanggahanCount}/{maxSanggahan}
               </div>
               <div style={{ fontWeight: 600, color: "var(--text-main)", fontSize: "0.95rem" }}>{DOSEN_PROFILES.find(p => p.id === dosenProfile).label}</div>
             </div>
@@ -622,15 +632,15 @@ Sajikan dengan gaya bahasa akademis namun membangun (konstruktif).`;
             )}
           </div>
 
-          <div style={{ flex: 1, padding: "1.5rem", overflowY: "auto", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+          <div style={{ flex: 1, padding: isMobile ? "1rem" : "1.5rem", overflowY: "auto", display: "flex", flexDirection: "column", gap: isMobile ? "1rem" : "1.25rem" }}>
             {messages.map((msg, idx) => {
               const isUser = msg.role === "user";
               return (
                 <div key={idx} style={{ alignSelf: isUser ? "flex-end" : "flex-start", maxWidth: "80%", display: "flex", gap: "0.75rem", flexDirection: isUser ? "row-reverse" : "row" }}>
-                  <div style={{ width: "36px", height: "36px", borderRadius: "50%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: isUser ? "var(--primary-light)" : "var(--surface-hover)", color: isUser ? "var(--primary)" : "var(--text-muted)" }}>
-                    <PremiumIcon name={isUser ? "user" : "mic"} size={18} />
+                  <div style={{ width: isMobile ? "30px" : "36px", height: isMobile ? "30px" : "36px", borderRadius: "50%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: isUser ? "var(--primary-light)" : "var(--surface-hover)", color: isUser ? "var(--primary)" : "var(--text-muted)" }}>
+                    <PremiumIcon name={isUser ? "user" : "mic"} size={isMobile ? 16 : 18} />
                   </div>
-                  <div style={{ backgroundColor: isUser ? "var(--primary)" : "var(--surface-hover)", color: isUser ? "#fff" : "var(--text-main)", padding: "0.85rem 1.25rem", borderRadius: "16px", borderTopRightRadius: isUser ? 0 : "16px", borderTopLeftRadius: !isUser ? 0 : "16px", lineHeight: 1.6, fontSize: "0.95rem" }}>
+                  <div style={{ backgroundColor: isUser ? "var(--primary)" : "var(--surface-hover)", color: isUser ? "#fff" : "var(--text-main)", padding: isMobile ? "0.65rem 1rem" : "0.85rem 1.25rem", borderRadius: "16px", borderTopRightRadius: isUser ? 0 : "16px", borderTopLeftRadius: !isUser ? 0 : "16px", lineHeight: 1.5, fontSize: isMobile ? "0.875rem" : "0.95rem" }}>
                     {isUser ? msg.text : (
                       <div className="markdown-body" style={{ color: "inherit" }}>
                         <ReactMarkdown>{msg.text}</ReactMarkdown>
@@ -657,15 +667,15 @@ Sajikan dengan gaya bahasa akademis namun membangun (konstruktif).`;
           </div>
 
           {!isFinished && (
-            <div style={{ padding: "1rem", borderTop: "1px solid var(--border)", display: "flex", gap: "0.75rem", alignItems: "flex-end" }}>
-              <button onClick={() => { if (isRecording) { recognitionRef.current?.stop(); setIsRecording(false); } else { recognitionRef.current?.start(); setIsRecording(true); if (window.currentAudio) window.currentAudio.pause(); } }} style={{ width: "48px", height: "48px", borderRadius: "50%", border: "none", cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: isRecording ? "rgba(239,68,68,0.1)" : "var(--surface-hover)", color: isRecording ? "var(--danger)" : "var(--text-muted)", transition: "all 0.2s" }} title="Gunakan mikrofon">
-                <PremiumIcon name="mic" size={24} className={isRecording ? "animate-pulse" : ""} />
+            <div style={{ padding: isMobile ? "0.75rem" : "1rem", borderTop: "1px solid var(--border)", display: "flex", gap: "0.5rem", alignItems: "flex-end" }}>
+              <button onClick={() => { if (isRecording) { recognitionRef.current?.stop(); setIsRecording(false); } else { recognitionRef.current?.start(); setIsRecording(true); if (window.currentAudio) window.currentAudio.pause(); } }} style={{ width: isMobile ? "40px" : "48px", height: isMobile ? "40px" : "48px", borderRadius: "50%", border: "none", cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: isRecording ? "rgba(239,68,68,0.1)" : "var(--surface-hover)", color: isRecording ? "var(--danger)" : "var(--text-muted)", transition: "all 0.2s" }} title="Gunakan mikrofon">
+                <PremiumIcon name="mic" size={isMobile ? 20 : 24} className={isRecording ? "animate-pulse" : ""} />
               </button>
-              <div style={{ flex: 1, backgroundColor: "var(--surface)", border: "1px solid var(--border)", borderRadius: "24px", padding: "0.5rem 1rem", display: "flex", alignItems: "center" }}>
-                <input type="text" value={currentInput} onChange={e => setCurrentInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter") handleSendMessage(); }} placeholder={isRecording ? "Sedang mendengarkan..." : "Jawab pertanyaan dosen..."} style={{ width: "100%", background: "transparent", border: "none", outline: "none", fontSize: "0.95rem" }} />
+              <div style={{ flex: 1, backgroundColor: "var(--surface)", border: "1px solid var(--border)", borderRadius: "24px", padding: "0.4rem 1rem", display: "flex", alignItems: "center" }}>
+                <input type="text" value={currentInput} onChange={e => setCurrentInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter") handleSendMessage(); }} placeholder={isRecording ? "Sedang mendengarkan..." : "Jawab pertanyaan dosen..."} style={{ width: "100%", background: "transparent", border: "none", outline: "none", fontSize: isMobile ? "0.875rem" : "0.95rem" }} />
               </div>
-              <button onClick={handleSendMessage} disabled={!currentInput.trim() || chatLoading} style={{ width: "48px", height: "48px", borderRadius: "50%", border: "none", cursor: currentInput.trim() ? "pointer" : "not-allowed", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: currentInput.trim() ? "var(--primary)" : "var(--surface-hover)", color: currentInput.trim() ? "white" : "var(--text-muted)" }}>
-                <PremiumIcon name="send" size={20} />
+              <button onClick={handleSendMessage} disabled={!currentInput.trim() || chatLoading} style={{ width: isMobile ? "40px" : "48px", height: isMobile ? "40px" : "48px", borderRadius: "50%", border: "none", cursor: currentInput.trim() ? "pointer" : "not-allowed", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: currentInput.trim() ? "var(--primary)" : "var(--surface-hover)", color: currentInput.trim() ? "white" : "var(--text-muted)" }}>
+                <PremiumIcon name="send" size={isMobile ? 18 : 20} />
               </button>
             </div>
           )}

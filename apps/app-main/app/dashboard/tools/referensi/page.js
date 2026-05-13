@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import ReactMarkdown from "react-markdown";
 import { searchPapersWithFallback, getErrorMessage } from "@/lib/referenceApis";
@@ -22,11 +22,11 @@ function getSourceLabel(source = "") {
   return "Sumber Tidak Diketahui";
 }
 
-function PaperCard({ paper, onSummarize, hasSummary, isSummarizing, summaryCost, summaryText }) {
+function PaperCard({ paper, onSummarize, hasSummary, isSummarizing, summaryCost, summaryText, isMobile }) {
   return (
-    <div className="glass-panel p-6" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+    <div className={isMobile ? "native-card" : "glass-panel p-6"} style={{ display: "flex", flexDirection: "column", gap: "1rem", margin: isMobile ? "0 -0.75rem" : 0 }}>
       <div>
-        <h3 style={{ fontSize: "1.1rem", margin: "0 0 0.5rem 0", fontWeight: 700 }}>
+        <h3 style={{ fontSize: isMobile ? "1rem" : "1.1rem", margin: "0 0 0.5rem 0", fontWeight: 700 }}>
           <a href={paper.displayUrl || paper.url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--primary)", textDecoration: "none" }}>
             {paper.title}
           </a>
@@ -42,12 +42,12 @@ function PaperCard({ paper, onSummarize, hasSummary, isSummarizing, summaryCost,
           </a>
         )}
 
-        <p style={{ fontSize: "0.9rem", lineHeight: 1.6, margin: 0, color: "var(--text-main)", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical" }}>
+        <p style={{ fontSize: isMobile ? "0.85rem" : "0.9rem", lineHeight: 1.6, margin: 0, color: "var(--text-main)", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: isMobile ? 4 : 3, WebkitBoxOrient: "vertical" }}>
           {paper.abstract || <em style={{ color: "var(--text-muted)" }}>Abstrak tidak tersedia.</em>}
         </p>
       </div>
 
-      <div style={{ backgroundColor: "var(--surface-hover)", padding: "0.75rem 1rem", borderRadius: "8px", fontSize: "0.8rem", borderLeft: "3px solid var(--border)" }}>
+      <div style={{ backgroundColor: "var(--surface-hover)", padding: "0.75rem 1rem", borderRadius: "8px", fontSize: "0.75rem", borderLeft: "3px solid var(--border)" }}>
         <span style={{ fontWeight: 600, marginRight: "0.5rem", color: "var(--text-muted)" }}>Sitasi:</span>
         {paper.authorString} ({paper.year}). {paper.title}. {paper.venue || 'Sumber tidak diketahui'}.
       </div>
@@ -79,12 +79,12 @@ function PaperCard({ paper, onSummarize, hasSummary, isSummarizing, summaryCost,
   );
 }
 
-function PaperSection({ title, description, papers, onSummarize, summaries, loadingSum, summaryCost, emptyText }) {
+function PaperSection({ title, description, papers, onSummarize, summaries, loadingSum, summaryCost, emptyText, isMobile }) {
   if (!papers || papers.length === 0) return null;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-      <div style={{ padding: "0.75rem 1rem", backgroundColor: "rgba(99, 102, 241, 0.1)", borderRadius: "8px", fontSize: "0.85rem", color: "var(--primary)" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: isMobile ? "0.75rem" : "1rem" }}>
+      <div style={{ padding: "0.75rem 1rem", backgroundColor: "rgba(99, 102, 241, 0.1)", borderRadius: isMobile ? 0 : "8px", fontSize: "0.8rem", color: "var(--primary)", margin: isMobile ? "0 -0.75rem" : 0 }}>
         {title} — {description}
       </div>
 
@@ -101,6 +101,7 @@ function PaperSection({ title, description, papers, onSummarize, summaries, load
             isSummarizing={isSummarizing}
             summaryCost={summaryCost}
             summaryText={summaries[paper.id]}
+            isMobile={isMobile}
           />
         );
       })}
@@ -129,6 +130,14 @@ export default function ReferensiCerdasPage() {
   const [searchMessage, setSearchMessage] = useState("");
   const [summaries, setSummaries] = useState({});
   const [loadingSum, setLoadingSum] = useState({});
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   const handleSearch = async (e) => {
     e.preventDefault();
@@ -197,28 +206,30 @@ export default function ReferensiCerdasPage() {
   };
 
   return (
-    <div className="animate-fade-in" style={{ maxWidth: "1000px", margin: "0 auto", paddingBottom: "2rem" }}>
+    <div className="animate-fade-in" style={{ maxWidth: "1000px", margin: "0 auto", paddingBottom: isMobile ? "2rem" : 0 }}>
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "2rem" }}>
-        <Link href="/dashboard" style={{ color: "var(--text-muted)" }}>
-          <PremiumIcon name="arrowLeft" size={20} />
-        </Link>
-        <div>
-          <h1 style={{ fontSize: "1.5rem", margin: 0 }}>Referensi Cerdas</h1>
-          <p style={{ margin: 0, fontSize: "0.875rem" }}>
-            Cari sumber ilmiah global & ringkas instan (Core + OpenAlex + Unpaywall)
-          </p>
+      <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: isMobile ? "flex-start" : "center", gap: isMobile ? "0.75rem" : "1rem", marginBottom: isMobile ? "1.5rem" : "2rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+          <Link href="/dashboard" style={{ color: "var(--text-muted)" }}>
+            <PremiumIcon name="arrowLeft" size={20} />
+          </Link>
+          <div>
+            <h1 style={{ fontSize: isMobile ? "1.25rem" : "1.5rem", margin: 0 }}>Referensi Cerdas</h1>
+            <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--text-muted)" }}>
+              Cari sumber ilmiah global & ringkas instan
+            </p>
+          </div>
         </div>
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.4rem 0.85rem", backgroundColor: "var(--surface-hover)", borderRadius: "var(--radius-lg)", fontSize: "0.8rem", fontWeight: 600 }}>
+        <div style={{ marginLeft: isMobile ? 0 : "auto", display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.4rem 0.85rem", backgroundColor: "var(--surface-hover)", borderRadius: "var(--radius-lg)", fontSize: "0.75rem", fontWeight: 600 }}>
           <span>Kredit:</span>
           <span style={{ color: "var(--text-main)" }}>{credits}</span>
         </div>
       </div>
 
       {/* Box Pencarian */}
-      <div className="glass-panel p-6 mb-6">
-        <form onSubmit={handleSearch} style={{ display: "flex", gap: "1rem", alignItems: "flex-end", flexWrap: "wrap" }}>
-          <div className="form-group" style={{ flex: "1 1 300px", margin: 0 }}>
+      <div className={isMobile ? "native-card" : "glass-panel p-6 mb-6"} style={{ margin: isMobile ? "0 -0.75rem 1.5rem" : "0 0 1.5rem 0" }}>
+        <form onSubmit={handleSearch} style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: "1rem", alignItems: isMobile ? "stretch" : "flex-end" }}>
+          <div className="form-group" style={{ flex: "1 1 auto", margin: 0 }}>
             <label className="form-label">Kata Kunci Pencarian</label>
             <input
               type="text"
@@ -228,7 +239,7 @@ export default function ReferensiCerdasPage() {
               onChange={e => setQuery(e.target.value)}
             />
           </div>
-          <div className="form-group" style={{ width: "200px", margin: 0 }}>
+          <div className="form-group" style={{ width: isMobile ? "100%" : "200px", margin: 0 }}>
             <label className="form-label">Tahun</label>
             <select className="form-input" value={yearRange} onChange={e => setYearRange(e.target.value)}>
               <option value="3">3 Tahun Terakhir</option>
@@ -237,7 +248,7 @@ export default function ReferensiCerdasPage() {
               <option value="all">Semua Tahun</option>
             </select>
           </div>
-          <button type="submit" className="btn btn-primary" disabled={loading || !query.trim()} style={{ height: "42px", padding: "0 1.5rem" }}>
+          <button type="submit" className="btn btn-primary" disabled={loading || !query.trim()} style={{ height: "42px", padding: isMobile ? "0.85rem" : "0 1.5rem", width: isMobile ? "100%" : "auto" }}>
             {loading ? "Mencari..." : "Cari Jurnal"}
           </button>
         </form>
@@ -275,6 +286,7 @@ export default function ReferensiCerdasPage() {
           summaries={summaries}
           loadingSum={loadingSum}
           summaryCost={summaryCost}
+          isMobile={isMobile}
         />
       )}
 
@@ -288,6 +300,7 @@ export default function ReferensiCerdasPage() {
             summaries={summaries}
             loadingSum={loadingSum}
             summaryCost={summaryCost}
+            isMobile={isMobile}
           />
         </div>
       )}

@@ -60,7 +60,7 @@
 
 * {
   box-sizing: border-box;
-  margin: 2px;
+  margin: 0;
   padding: 0;
 }
 
@@ -187,7 +187,13 @@ a {
   width: 100%;
   max-width: 1200px;
   margin: 0 auto;
-  padding: 0 2rem;
+  padding: 0 1.5rem;
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: 0 1rem;
+  }
 }
 
 .flex {
@@ -607,6 +613,36 @@ a {
 
 .workspace-scroll::-webkit-scrollbar-thumb:hover {
   background-color: rgba(79, 70, 229, 0.42);
+}
+
+/* --- Mobile Native UI Utilities --- */
+@media (max-width: 768px) {
+  .mobile-hide { display: none !important; }
+  .mobile-full { width: 100% !important; margin-left: 0 !important; margin-right: 0 !important; border-radius: 0 !important; }
+  .mobile-p-0 { padding: 0 !important; }
+  .mobile-p-2 { padding: 0.5rem !important; }
+  .mobile-p-4 { padding: 1rem !important; }
+  .mobile-m-0 { margin: 0 !important; }
+  .mobile-gap-2 { gap: 0.5rem !important; }
+  .mobile-gap-4 { gap: 1rem !important; }
+  .mobile-stack { flex-direction: column !important; }
+  .mobile-text-sm { font-size: 0.875rem !important; }
+  .mobile-text-xs { font-size: 0.75rem !important; }
+  
+  .native-card {
+    background: var(--surface);
+    border: none;
+    border-bottom: 1px solid var(--border);
+    border-radius: 0;
+    padding: 1.25rem 1rem;
+    box-shadow: none;
+  }
+  
+  .native-header {
+    font-size: 1.25rem !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.02em !important;
+  }
 }
 
 /* Forms */

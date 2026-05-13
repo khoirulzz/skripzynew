@@ -74,14 +74,14 @@ function ChoiceCard({ title, subtitle, badge, selected, disabled, accent, onClic
       <div style={{ padding: "1.2rem", display: "flex", justifyContent: "space-between", gap: "0.75rem", alignItems: "flex-start", position: "relative", zIndex: 1 }}>
         <div style={{ flex: 1 }}>
           <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
-            <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 800 }}>{title}</h3>
+            <h3 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 800 }}>{title}</h3>
             {badge && (
-              <span style={{ padding: "0.25rem 0.65rem", borderRadius: 999, backgroundColor: selected ? accent : `${accent}20`, color: selected ? "#fff" : accent, fontSize: "0.65rem", fontWeight: 800, whiteSpace: "nowrap", transition: "all 0.3s ease" }}>
+              <span style={{ padding: "0.25rem 0.65rem", borderRadius: 999, backgroundColor: selected ? accent : `${accent}20`, color: selected ? "#fff" : accent, fontSize: "0.6rem", fontWeight: 800, whiteSpace: "nowrap", transition: "all 0.3s ease" }}>
                 {badge}
               </span>
             )}
           </div>
-          {subtitle && <p style={{ margin: "0.4rem 0 0", fontSize: "0.82rem", color: "var(--text-muted)", lineHeight: 1.4 }}>{subtitle}</p>}
+          {subtitle && <p style={{ margin: "0.4rem 0 0", fontSize: "0.78rem", color: "var(--text-muted)", lineHeight: 1.4 }}>{subtitle}</p>}
         </div>
         <button
           onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
@@ -180,8 +180,17 @@ export default function LanggananPage() {
   const currentCredits = userData?.credits ?? 0;
 
   const [currentStep, setCurrentStep] = useState(1);
+  const [productType, setProductType] = useState("plan");
   const [selectedTarget, setSelectedTarget] = useState(null);
   const [paymentMethodId, setPaymentMethodId] = useState("manual");
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   const totalSteps = paymentMethodId === "manual" ? 5 : 4;
   const stepLabels = paymentMethodId === "manual" 
@@ -455,8 +464,8 @@ export default function LanggananPage() {
   };
 
   return (
-    <div className="animate-fade-in" style={{ maxWidth: "900px", margin: "0 auto", padding: "0 1.25rem 3rem" }}>
-      <div style={{ display: "flex", alignItems: "flex-start", gap: "1rem", marginBottom: "2rem" }}>
+    <div className="animate-fade-in" style={{ maxWidth: "1200px", margin: "0 auto", padding: isMobile ? "0 0 3rem 0" : "0 1.25rem 3rem" }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: "1rem", marginBottom: "2rem", padding: isMobile ? "0 1rem" : "0" }}>
         <Link href="/dashboard" style={{ color: "var(--text-muted)", paddingTop: "0.2rem" }}>
           <PremiumIcon name="arrowLeft" size={20} />
         </Link>
@@ -468,7 +477,7 @@ export default function LanggananPage() {
         </div>
       </div>
 
-      <div style={{ backgroundColor: "var(--surface)", border: "1px solid var(--border)", borderRadius: 24, padding: "clamp(1.25rem, 5vw, 2rem)", boxShadow: "0 12px 32px rgba(0,0,0,0.03)", marginBottom: "2rem" }}>
+      <div style={{ backgroundColor: "var(--surface)", borderTop: "1px solid var(--border)", borderBottom: "1px solid var(--border)", borderLeft: isMobile ? "none" : "1px solid var(--border)", borderRight: isMobile ? "none" : "1px solid var(--border)", borderRadius: isMobile ? 0 : 24, padding: isMobile ? "1.5rem 1rem" : "clamp(1.25rem, 5vw, 2rem)", boxShadow: isMobile ? "none" : "0 12px 32px rgba(0,0,0,0.03)", marginBottom: "2rem" }}>
         <StepperProgress currentStep={currentStep} steps={stepLabels} />
 
         {(successMsg || errorMsg) && (
@@ -481,109 +490,128 @@ export default function LanggananPage() {
         {/* STEP 1: PILIH PAKET */}
         {currentStep === 1 && (
           <div className="animate-fade-in">
-            <div style={{ marginBottom: "1.5rem", display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: "1rem" }}>
-              <div>
-                <h2 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 900 }}>Pilih Plan Langganan</h2>
-              </div>
-              <div style={{ 
-                display: "flex", 
-                gap: "0.4rem", 
-                background: "var(--surface)", 
-                padding: "0.35rem", 
-                borderRadius: "999px", 
-                border: "1px solid var(--border)",
-                maxWidth: "100%",
-                overflowX: "auto",
-                WebkitOverflowScrolling: "touch",
-                scrollbarWidth: "none",
-                msOverflowStyle: "none"
-              }}>
-                <style dangerouslySetInnerHTML={{ __html: `
-                  div::-webkit-scrollbar { display: none; }
-                `}} />
-                {BILLING_PERIODS.map((period) => (
-                  <button 
-                    key={period.id} 
-                    onClick={() => setBillingPeriodId(period.id)} 
-                    style={{ 
-                      padding: "0.5rem 0.9rem", 
-                      borderRadius: "999px", 
-                      fontSize: "0.8rem", 
-                      fontWeight: billingPeriodId === period.id ? 800 : 600, 
-                      background: billingPeriodId === period.id ? "var(--primary)" : "transparent", 
-                      color: billingPeriodId === period.id ? "#fff" : "var(--text-muted)", 
-                      border: "none", 
-                      cursor: "pointer", 
-                      transition: "all 0.2s ease",
-                      whiteSpace: "nowrap",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "0.35rem",
-                      flexShrink: 0
-                    }}
-                  >
-                    {period.label}
-                    {period.discount > 0 && (
-                      <span style={{ 
-                        padding: "0.15rem 0.45rem", 
-                        borderRadius: "999px", 
-                        background: billingPeriodId === period.id ? "rgba(255,255,255,0.25)" : "rgba(16,185,129,0.15)", 
-                        color: billingPeriodId === period.id ? "#fff" : "#059669", 
-                        fontSize: "0.62rem", 
-                        fontWeight: 900 
-                      }}>
-                        -{period.discount}%
-                      </span>
-                    )}
-                  </button>
-                ))}
-              </div>
+            <div style={{ display: "flex", gap: "0.5rem", marginBottom: "2rem", padding: "0.4rem", backgroundColor: "var(--surface-hover)", borderRadius: "100px", border: "1px solid var(--border)" }}>
+              <button 
+                onClick={() => { setProductType('plan'); setSelectedTarget(null); clearMessages(); }}
+                style={{ flex: 1, padding: "0.75rem", borderRadius: "100px", border: "none", cursor: "pointer", fontWeight: 700, transition: "all 0.2s", backgroundColor: productType === 'plan' ? "var(--primary)" : "transparent", color: productType === 'plan' ? "white" : "var(--text-muted)", boxShadow: productType === 'plan' ? "var(--shadow-sm)" : "none" }}>
+                Upgrade Plan
+              </button>
+              <button 
+                onClick={() => { setProductType('topup'); setSelectedTarget(null); clearMessages(); }}
+                style={{ flex: 1, padding: "0.75rem", borderRadius: "100px", border: "none", cursor: "pointer", fontWeight: 700, transition: "all 0.2s", backgroundColor: productType === 'topup' ? "var(--primary)" : "transparent", color: productType === 'topup' ? "white" : "var(--text-muted)", boxShadow: productType === 'topup' ? "var(--shadow-sm)" : "none" }}>
+                Top Up Kredit
+              </button>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "1rem", marginBottom: "2rem" }}>
-              {plans.map((plan) => {
-                const isSelected = selectedOrder?.type === "plan" && selectedOrder.item.planId === plan.planId;
-                const isCurrent = currentPlan === plan.planId;
-                return (
-                  <ChoiceCard key={plan.planId} title={plan.name} subtitle={plan.description} badge={plan.popular ? "Paling Dipilih" : isCurrent ? "Aktif" : null} selected={isSelected} disabled={false} accent={plan.accent} onClick={() => { clearMessages(); setSelectedTarget({ type: "plan", id: plan.planId }); }}>
-                    <div style={{ display: "flex", alignItems: "baseline", gap: "0.3rem", marginBottom: "0.8rem", flexWrap: "wrap" }}>
-                      <span style={{ fontSize: "0.95rem", color: "var(--text-muted)" }}>Rp</span>
-                      <span style={{ fontSize: "2rem", fontWeight: 900 }}>{Number(calculatePeriodPrice(plan.price || 0, billingPeriodId).finalPrice).toLocaleString("id-ID")}</span>
-                      <span style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>/{BILLING_PERIODS.find(p => p.id === billingPeriodId)?.label}</span>
-                    </div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "0.55rem" }}>
-                      {plan.creditsPerMonth && <div style={{ display: "flex", gap: "0.5rem" }}><PremiumIcon name="coins" size={15} style={{ color: "#F59E0B" }} /> <span style={{ fontSize: "0.82rem", fontWeight: 800 }}>{plan.creditsPerMonth} Kredit / bulan</span></div>}
-                      {plan.features.map((feature) => (
-                        <div key={feature} style={{ display: "flex", gap: "0.5rem" }}><PremiumIcon name="checkCircle" size={15} style={{ color: plan.accent }} /> <span style={{ fontSize: "0.82rem" }}>{feature}</span></div>
-                      ))}
-                    </div>
-                  </ChoiceCard>
-                );
-              })}
-            </div>
+            {productType === "plan" ? (
+              <>
+                <div style={{ marginBottom: "1.5rem", display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: "1rem" }}>
+                  <div>
+                    <h2 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 900 }}>Pilih Plan Langganan</h2>
+                  </div>
+                  <div style={{ 
+                    display: "flex", 
+                    gap: "0.4rem", 
+                    background: "var(--surface)", 
+                    padding: "0.35rem", 
+                    borderRadius: "999px", 
+                    border: "1px solid var(--border)",
+                    maxWidth: "100%",
+                    overflowX: "auto",
+                    WebkitOverflowScrolling: "touch",
+                    scrollbarWidth: "none",
+                    msOverflowStyle: "none"
+                  }}>
+                    <style dangerouslySetInnerHTML={{ __html: `
+                      div::-webkit-scrollbar { display: none; }
+                    `}} />
+                    {BILLING_PERIODS.map((period) => (
+                      <button 
+                        key={period.id} 
+                        onClick={() => setBillingPeriodId(period.id)} 
+                        style={{ 
+                          padding: "0.5rem 0.9rem", 
+                          borderRadius: "999px", 
+                          fontSize: "0.8rem", 
+                          fontWeight: billingPeriodId === period.id ? 800 : 600, 
+                          background: billingPeriodId === period.id ? "var(--primary)" : "transparent", 
+                          color: billingPeriodId === period.id ? "#fff" : "var(--text-muted)", 
+                          border: "none", 
+                          cursor: "pointer", 
+                          transition: "all 0.2s ease",
+                          whiteSpace: "nowrap",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.35rem",
+                          flexShrink: 0
+                        }}
+                      >
+                        {period.label}
+                        {period.discount > 0 && (
+                          <span style={{ 
+                            padding: "0.15rem 0.45rem", 
+                            borderRadius: "999px", 
+                            background: billingPeriodId === period.id ? "rgba(255,255,255,0.25)" : "rgba(16,185,129,0.15)", 
+                            color: billingPeriodId === period.id ? "#fff" : "#059669", 
+                            fontSize: "0.62rem", 
+                            fontWeight: 900 
+                          }}>
+                            -{period.discount}%
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-            <div style={{ marginBottom: "1.5rem" }}>
-              <h2 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 900 }}>Top Up Kredit Dinamis</h2>
-            </div>
-            
-            {topups.length > 0 && (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "1rem" }}>
-                {topups.map((item) => {
-                  const isSelected = selectedOrder?.type === "topup" && selectedOrder.item.slug === item.slug;
-                  return (
-                    <ChoiceCard key={item.slug} title={item.name} subtitle={item.description} badge={item.badgeText} selected={isSelected} disabled={false} accent={item.accent} onClick={() => { clearMessages(); setSelectedTarget({ type: "topup", id: item.slug }); }}>
-                      <div style={{ padding: "0.9rem", borderRadius: 14, backgroundColor: "var(--surface-hover)" }}>
-                        <p style={{ margin: 0, fontSize: "0.7rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 700 }}>Total Kredit</p>
-                        <p style={{ margin: "0.3rem 0 0", fontSize: "1.65rem", fontWeight: 900 }}>{getTotalCreditsFromTopup(item).toLocaleString("id-ID")}</p>
-                      </div>
-                      <div style={{ marginTop: "0.85rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>Harga paket</span>
-                        <span style={{ fontSize: "1rem", fontWeight: 900 }}>{formatRupiah(item.price)}</span>
-                      </div>
-                    </ChoiceCard>
-                  );
-                })}
-              </div>
+                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(280px, 1fr))", gap: "1rem", marginBottom: "2rem" }}>
+                  {plans.map((plan) => {
+                    const isSelected = selectedOrder?.type === "plan" && selectedOrder.item.planId === plan.planId;
+                    const isCurrent = currentPlan === plan.planId;
+                    return (
+                      <ChoiceCard key={plan.planId} title={plan.name} subtitle={plan.description} badge={plan.popular ? "Paling Dipilih" : isCurrent ? "Aktif" : null} selected={isSelected} disabled={false} accent={plan.accent} onClick={() => { clearMessages(); setSelectedTarget({ type: "plan", id: plan.planId }); }}>
+                        <div style={{ display: "flex", alignItems: "baseline", gap: "0.3rem", marginBottom: "0.8rem", flexWrap: "wrap" }}>
+                          <span style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>Rp</span>
+                          <span style={{ fontSize: "1.75rem", fontWeight: 900 }}>{Number(calculatePeriodPrice(plan.price || 0, billingPeriodId).finalPrice).toLocaleString("id-ID")}</span>
+                          <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>/{BILLING_PERIODS.find(p => p.id === billingPeriodId)?.label}</span>
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.55rem" }}>
+                          {plan.creditsPerMonth && <div style={{ display: "flex", gap: "0.5rem" }}><PremiumIcon name="coins" size={15} style={{ color: "#F59E0B" }} /> <span style={{ fontSize: "0.78rem", fontWeight: 800 }}>{plan.creditsPerMonth} Kredit / bulan</span></div>}
+                          {plan.features.map((feature) => (
+                            <div key={feature} style={{ display: "flex", gap: "0.5rem" }}><PremiumIcon name="checkCircle" size={15} style={{ color: plan.accent }} /> <span style={{ fontSize: "0.78rem" }}>{feature}</span></div>
+                          ))}
+                        </div>
+                      </ChoiceCard>
+                    );
+                  })}
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ marginBottom: "1.5rem" }}>
+                  <h2 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 900 }}>Top Up Kredit Dinamis</h2>
+                </div>
+                
+                {topups.length > 0 && (
+                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(280px, 1fr))", gap: "1rem" }}>
+                    {topups.map((item) => {
+                      const isSelected = selectedOrder?.type === "topup" && selectedOrder.item.slug === item.slug;
+                      return (
+                        <ChoiceCard key={item.slug} title={item.name} subtitle={item.description} badge={item.badgeText} selected={isSelected} disabled={false} accent={item.accent} onClick={() => { clearMessages(); setSelectedTarget({ type: "topup", id: item.slug }); }}>
+                          <div style={{ padding: "0.9rem", borderRadius: 14, backgroundColor: "var(--surface-hover)" }}>
+                            <p style={{ margin: 0, fontSize: "0.65rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 700 }}>Total Kredit</p>
+                            <p style={{ margin: "0.3rem 0 0", fontSize: "1.45rem", fontWeight: 900 }}>{getTotalCreditsFromTopup(item).toLocaleString("id-ID")}</p>
+                          </div>
+                          <div style={{ marginTop: "0.85rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Harga paket</span>
+                            <span style={{ fontSize: "0.95rem", fontWeight: 900 }}>{formatRupiah(item.price)}</span>
+                          </div>
+                        </ChoiceCard>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}
@@ -821,7 +849,7 @@ export default function LanggananPage() {
         </div>
       </div>
 
-      <section style={{ marginTop: "4rem" }}>
+      <section style={{ marginTop: "4rem", padding: isMobile ? "0 1rem" : "0" }}>
         <div style={{ marginBottom: "1.5rem" }}>
           <h2 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 900 }}>Riwayat Permintaan Anda</h2>
         </div>
@@ -831,10 +859,59 @@ export default function LanggananPage() {
             <p style={{ margin: 0, fontWeight: 800 }}>Belum ada request pembayaran.</p>
           </div>
         ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "1rem" }}>
-            {latestRequests.map((item) => (
-              <OrderHistoryCard key={item.id} item={item} />
-            ))}
+          <div style={{ overflowX: "auto", backgroundColor: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "600px" }}>
+              <thead>
+                <tr style={{ backgroundColor: "var(--surface-hover)", borderBottom: "1px solid var(--border)", textAlign: "left", fontSize: "0.85rem", color: "var(--text-muted)" }}>
+                  <th style={{ padding: "1rem" }}>Status</th>
+                  <th style={{ padding: "1rem" }}>Produk</th>
+                  <th style={{ padding: "1rem" }}>Metode / Waktu</th>
+                  <th style={{ padding: "1rem", textAlign: "right" }}>Nilai</th>
+                </tr>
+              </thead>
+              <tbody>
+                {latestRequests.map((item) => {
+                  const isPlan = item.requestType === "plan";
+                  return (
+                    <tr key={item.id} style={{ borderBottom: "1px solid var(--border)", fontSize: "0.9rem" }}>
+                      <td style={{ padding: "1rem" }}>
+                        <StatusBadge status={item.status} />
+                      </td>
+                      <td style={{ padding: "1rem" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                          <span style={{ padding: "0.2rem 0.5rem", borderRadius: 999, backgroundColor: isPlan ? "rgba(79,70,229,0.1)" : "rgba(16,185,129,0.1)", color: isPlan ? "var(--primary)" : "#059669", fontSize: "0.65rem", fontWeight: 800, textTransform: "uppercase" }}>
+                            {isPlan ? "Plan" : "Kredit"}
+                          </span>
+                          <span style={{ fontWeight: 800 }}>{getBillingRequestSummary(item)}</span>
+                        </div>
+                        {item.promoCode && (
+                          <div style={{ marginTop: "0.4rem", fontSize: "0.75rem", color: "#059669" }}>
+                            Promo: <strong>{item.promoCode}</strong>
+                          </div>
+                        )}
+                        {item.rejectedReason && (
+                          <div style={{ marginTop: "0.4rem", fontSize: "0.75rem", color: "#DC2626" }}>
+                            Catatan: {item.rejectedReason}
+                          </div>
+                        )}
+                      </td>
+                      <td style={{ padding: "1rem", color: "var(--text-muted)" }}>
+                        <div>{item.paymentChannelLabel || item.paymentMethodLabel}</div>
+                        <div style={{ fontSize: "0.75rem", marginTop: "0.2rem" }}>{formatDate(item.timestamp)}</div>
+                      </td>
+                      <td style={{ padding: "1rem", textAlign: "right", fontWeight: 800 }}>
+                        {formatRupiah(item.finalPrice || item.basePrice || 0)}
+                        {!isPlan && item.amount > 0 && (
+                          <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.2rem", fontWeight: 600 }}>
+                            +{Number(item.amount).toLocaleString("id-ID")} Kredit
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </section>

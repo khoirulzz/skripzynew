@@ -26,9 +26,9 @@ export function Header({ onMenuClick = null, isMobile = false }) {
         display: "flex",
         justifyContent: "space-between",
         alignItems: "center",
-        padding: "0.875rem 1.5rem",
+        padding: isMobile ? "0.4rem 0.6rem" : "0.875rem 1.5rem",
         borderBottom: "1px solid rgba(79,70,229,0.12)",
-        gap: "0.75rem",
+        gap: "0.5rem",
         flexShrink: 0,
         position: "sticky",
         top: 0,
@@ -84,18 +84,18 @@ export function Header({ onMenuClick = null, isMobile = false }) {
           style={{
             display: "flex",
             alignItems: "center",
-            gap: "0.4rem",
-            padding: "0.45rem 0.8rem",
+            gap: "0.3rem",
+            padding: isMobile ? "0.35rem 0.6rem" : "0.45rem 0.8rem",
             background: "linear-gradient(135deg, rgba(79,70,229,0.1), rgba(59,130,246,0.1))",
             borderRadius: 999,
-            fontSize: "0.8rem",
+            fontSize: isMobile ? "0.75rem" : "0.8rem",
             fontWeight: 800,
             color: "var(--primary)",
             border: "1px solid rgba(79,70,229,0.2)",
             boxShadow: "0 4px 12px rgba(79,70,229,0.08)",
           }}
         >
-          <PremiumIcon name="coins" size={15} style={{ color: "var(--primary)" }} />
+          <PremiumIcon name="coins" size={isMobile ? 13 : 15} style={{ color: "var(--primary)" }} />
           <span>{userData?.credits || 0}{!isMobile && " Credits"}</span>
           <Link
             href="/dashboard/langganan"
@@ -104,9 +104,10 @@ export function Header({ onMenuClick = null, isMobile = false }) {
             style={{
               padding: "0.2rem 0.45rem",
               fontSize: "0.7rem",
-              marginLeft: "0.2rem",
+              marginLeft: "0.1rem",
               borderRadius: "50%",
               minWidth: "auto",
+              height: isMobile ? "20px" : "auto",
               lineHeight: 1,
               display: "inline-flex",
               alignItems: "center",

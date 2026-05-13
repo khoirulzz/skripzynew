@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import ReactMarkdown from "react-markdown";
 import { callGemini } from "@/lib/callWorker";
@@ -66,6 +66,14 @@ export default function CekGrammarPage() {
   const [error, setError]       = useState("");
   const [copiedFix, setCopiedFix] = useState(false);
   const [activeTab, setActiveTab] = useState("kesalahan"); // 'kesalahan' | 'perbaikan'
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   const creditCost = toolMap["cek-grammar"]?.creditCost ?? CREDIT_COST;
   const credits   = userData?.credits ?? 0;
@@ -114,15 +122,17 @@ export default function CekGrammarPage() {
   };
 
   return (
-    <div className="animate-fade-in" style={{ maxWidth: "960px", margin: "0 auto" }}>
+    <div className="animate-fade-in" style={{ maxWidth: "960px", margin: "0 auto", paddingBottom: isMobile ? "2rem" : 0 }}>
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "2rem" }}>
-        <Link href="/dashboard" style={{ color: "var(--text-muted)" }}><PremiumIcon name="arrowLeft" size={20} /></Link>
-        <div>
-          <h1 style={{ fontSize: "1.5rem", margin: 0 }}>Cek Grammar</h1>
-          <p style={{ margin: 0, fontSize: "0.875rem" }}>Deteksi & perbaiki kesalahan tata bahasa secara otomatis</p>
+      <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: isMobile ? "flex-start" : "center", gap: isMobile ? "0.75rem" : "1rem", marginBottom: isMobile ? "1.5rem" : "2rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+          <Link href="/dashboard" style={{ color: "var(--text-muted)" }}><PremiumIcon name="arrowLeft" size={isMobile ? 18 : 20} /></Link>
+          <div>
+            <h1 style={{ fontSize: isMobile ? "1rem" : "1.5rem", margin: 0 }}>Cek Grammar</h1>
+            <p style={{ margin: "0.1rem 0 0 0", fontSize: isMobile ? "0.65rem" : "0.75rem", color: "var(--text-muted)" }}>Deteksi & perbaiki tata bahasa otomatis</p>
+          </div>
         </div>
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.4rem 0.85rem", backgroundColor: "var(--surface-hover)", borderRadius: "var(--radius-lg)", fontSize: "0.8rem", fontWeight: 600 }}>
+        <div style={{ marginLeft: isMobile ? 0 : "auto", display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.4rem 0.85rem", backgroundColor: "var(--surface-hover)", borderRadius: "var(--radius-lg)", fontSize: "0.75rem", fontWeight: 600 }}>
           <PremiumIcon name="zap" size={14} className="text-primary" />
           <span>{creditCost} credit / cek</span>
         </div>
@@ -134,14 +144,14 @@ export default function CekGrammarPage() {
         </div>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem" }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: isMobile ? "1rem" : "1.5rem" }}>
 
         {/* Left: Input */}
         <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-          <div className="glass-panel p-6">
+          <div className="glass-panel" style={{ padding: isMobile ? "1rem" : "1.5rem" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
-              <label style={{ fontSize: "0.85rem", fontWeight: 600 }}>Teks yang ingin dicek</label>
-              <span style={{ fontSize: "0.72rem", color: input.length > CHAR_LIMIT ? "var(--danger)" : "var(--text-muted)", fontWeight: 600 }}>
+              <label style={{ fontSize: isMobile ? "0.75rem" : "0.85rem", fontWeight: 600 }}>Teks yang ingin dicek</label>
+              <span style={{ fontSize: isMobile ? "0.65rem" : "0.72rem", color: input.length > CHAR_LIMIT ? "var(--danger)" : "var(--text-muted)", fontWeight: 600 }}>
                 {input.length} / {CHAR_LIMIT}
               </span>
             </div>
@@ -150,10 +160,11 @@ export default function CekGrammarPage() {
               onChange={e => setInput(e.target.value)}
               placeholder="Tempel atau ketik teks yang ingin Anda cek tata bahasanya di sini..."
               className="form-input"
-              style={{ minHeight: "280px", resize: "vertical", fontFamily: "inherit", lineHeight: 1.8 }}
+              style={{ minHeight: isMobile ? "40vh" : "280px", resize: "vertical", fontFamily: "inherit", lineHeight: 1.6, fontSize: isMobile ? "0.8rem" : "0.95rem", border: isMobile ? "none" : "1px solid var(--border)", padding: isMobile ? "0.5rem 0" : "0.75rem 1rem", backgroundColor: isMobile ? "transparent" : "var(--background)" }}
               maxLength={CHAR_LIMIT}
             />
-            <div style={{ display: "flex", gap: "0.75rem", marginTop: "1rem" }}>
+            {!isMobile && (
+              <div style={{ display: "flex", gap: "0.75rem", marginTop: "1rem" }}>
               <button
                 className="btn btn-primary"
                 style={{ flex: 1, padding: "0.65rem" }}
@@ -167,15 +178,16 @@ export default function CekGrammarPage() {
                 )}
               </button>
             </div>
+            )}
           </div>
         </div>
 
         {/* Right: Result */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: isMobile ? "0.75rem" : "1rem", marginBottom: isMobile ? "5rem" : 0 }}>
           {loading && (
-            <div className="glass-panel p-6 text-center" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem", minHeight: "200px", justifyContent: "center" }}>
+            <div className="glass-panel" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem", padding: isMobile ? "1.5rem" : "2rem", minHeight: isMobile ? "150px" : "200px", justifyContent: "center" }}>
               <PremiumIcon name="zap" size={36} className="text-primary animate-pulse" />
-              <p className="text-muted" style={{ margin: 0 }}>AI sedang membaca teks Anda...</p>
+              <p className="text-muted" style={{ margin: 0, fontSize: isMobile ? "0.8rem" : "1rem" }}>AI sedang membaca teks Anda...</p>
             </div>
           )}
 
@@ -184,7 +196,7 @@ export default function CekGrammarPage() {
               {/* Score */}
               <div className="glass-panel">
                 <ScoreGauge skor={result.skor ?? 0} />
-                <p style={{ textAlign: "center", fontSize: "0.82rem", padding: "0 1.5rem 1.25rem", margin: 0 }}>{result.ringkasan}</p>
+                <p style={{ textAlign: "center", fontSize: isMobile ? "0.75rem" : "0.82rem", padding: isMobile ? "0 1rem 1rem" : "0 1.5rem 1.25rem", margin: 0 }}>{result.ringkasan}</p>
               </div>
 
               {/* Tabs */}
@@ -247,15 +259,24 @@ export default function CekGrammarPage() {
           )}
 
           {!loading && !result && (
-            <div className="glass-panel p-6" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem", textAlign: "center", minHeight: "200px", justifyContent: "center" }}>
-              <div style={{ width: "52px", height: "52px", borderRadius: "50%", backgroundColor: "rgba(16,185,129,0.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <PremiumIcon name="check" size={24} style={{ color: "var(--success)" }} />
+            <div className="glass-panel" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem", textAlign: "center", minHeight: isMobile ? "150px" : "200px", padding: isMobile ? "1.5rem" : "2rem", justifyContent: "center" }}>
+              <div style={{ width: "48px", height: "48px", borderRadius: "50%", backgroundColor: "rgba(16,185,129,0.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <PremiumIcon name="check" size={20} style={{ color: "var(--success)" }} />
               </div>
-              <p className="text-muted" style={{ margin: 0, fontSize: "0.85rem" }}>Masukkan teks di kiri, lalu klik &quot;Cek Grammar&quot; untuk melihat hasilnya di sini.</p>
+              <p className="text-muted" style={{ margin: 0, fontSize: isMobile ? "0.75rem" : "0.85rem" }}>Masukkan teks di kiri, lalu klik "Cek Grammar" untuk melihat hasilnya di sini.</p>
             </div>
           )}
         </div>
       </div>
+
+      {/* ── Mobile Sticky Bottom Bar ────────────── */}
+      {isMobile && (
+        <div style={{ position: "fixed", bottom: "1.5rem", left: "1rem", right: "1rem", zIndex: 50, display: "flex", pointerEvents: "none" }}>
+          <button className="btn btn-primary" style={{ flex: 1, padding: "0.6rem", fontSize: "0.85rem", fontWeight: 600, borderRadius: "24px", display: "flex", justifyContent: "center", alignItems: "center", gap: "0.4rem", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", pointerEvents: "auto" }} onClick={handleCheck} disabled={loading || !canAfford || !input.trim()}>
+            {loading ? <><PremiumIcon name="zap" size={14} className="animate-pulse" /> Menganalisis...</> : <><PremiumIcon name="check" size={14} /> Cek Grammar</>}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

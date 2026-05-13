@@ -47,7 +47,11 @@ export function Sidebar({ isCollapsed = false, toggleCollapse, isMobile = false 
         key={item.path}
         href={item.path}
         title={isCollapsed ? item.name : undefined}
-        onClick={toggleCollapse && isCollapsed === false ? undefined : undefined}
+        onClick={() => {
+          if (isMobile && toggleCollapse) {
+            toggleCollapse();
+          }
+        }}
         className={`btn btn-ghost ${isActive ? "active-nav" : ""}`}
         style={{
           display: "flex",
@@ -61,15 +65,15 @@ export function Sidebar({ isCollapsed = false, toggleCollapse, isMobile = false 
           boxShadow: isActive ? "0 4px 12px rgba(79,70,229,0.06)" : "none",
           color: isActive ? "var(--primary)" : "var(--text-muted)",
           fontWeight: isActive ? 700 : 600,
-          fontSize: "0.9rem",
-          gap: "0.75rem",
+          fontSize: isMobile ? "0.8rem" : "0.9rem",
+          gap: isMobile ? "0.5rem" : "0.75rem",
           transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
         }}
       >
         <span style={{ flexShrink: 0 }}>
           <PremiumIcon
             name={item.icon}
-            size={20}
+            size={isMobile ? 18 : 20}
             style={iconColorOverride ? { color: iconColorOverride } : undefined}
           />
         </span>
@@ -167,13 +171,16 @@ export function Sidebar({ isCollapsed = false, toggleCollapse, isMobile = false 
             alignItems: "center",
             justifyContent: isCollapsed ? "center" : "flex-start",
             width: "100%",
-            padding: isCollapsed ? "0.75rem 0" : "0.75rem 1rem",
-            gap: "0.75rem",
-            fontSize: "0.9rem",
+            padding: isCollapsed ? "0.75rem 0" : (isMobile ? "0.6rem 0.8rem" : "0.75rem 1rem"),
+            gap: isMobile ? "0.5rem" : "0.75rem",
+            fontSize: isMobile ? "0.8rem" : "0.9rem",
             borderRadius: "var(--radius-sm)",
           }}
+          onClick={() => {
+            if (isMobile && toggleCollapse) toggleCollapse();
+          }}
         >
-          <PremiumIcon name="settings" size={20} />
+          <PremiumIcon name="settings" size={isMobile ? 18 : 20} />
           {!isCollapsed && <span>Pengaturan</span>}
         </Link>
 
@@ -181,8 +188,11 @@ export function Sidebar({ isCollapsed = false, toggleCollapse, isMobile = false 
         {isMobile && (
           <div style={{ marginTop: "0.5rem", borderTop: "1px solid rgba(79,70,229,0.12)", paddingTop: "1rem", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", overflow: "hidden" }}>
-              <div style={{ width: "32px", height: "32px", borderRadius: "50%", backgroundColor: "var(--primary-light)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--primary)", fontWeight: 700, fontSize: "0.85rem", flexShrink: 0 }}>
-                {userData?.namaLengkap?.charAt(0) || "U"}
+              <div style={{ width: "32px", height: "32px", borderRadius: "50%", backgroundColor: "var(--primary-light)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--primary)", fontWeight: 700, fontSize: "0.85rem", flexShrink: 0, overflow: "hidden" }}>
+                {userData?.photoUrl
+                  ? <img src={userData.photoUrl} alt="Profil" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  : (userData?.namaLengkap?.charAt(0) || "U")
+                }
               </div>
               <div style={{ flex: 1, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis", fontSize: "0.85rem", fontWeight: 600, color: "var(--text-main)" }}>
                 {userData?.namaLengkap || "Peneliti"}

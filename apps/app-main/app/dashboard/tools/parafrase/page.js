@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import ReactMarkdown from "react-markdown";
 import { callGeminiStream } from "@/lib/callWorker";
@@ -129,6 +129,15 @@ export default function ParafrasePage() {
   const [copied, setCopied]           = useState(false);
   const [expandedGaya, setExpandedGaya] = useState(false);
   const [expandedCreativity, setExpandedCreativity] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   const selectedGaya  = GAYA_LIST.find(g => g.id === gaYa);
   const selectedLevel = CREATIVITY_LEVELS.find(l => l.value === creativity);
@@ -173,18 +182,31 @@ export default function ParafrasePage() {
   };
 
   return (
-    <div className="animate-fade-in" style={{ maxWidth: "1200px", margin: "0 auto", paddingBottom: "2rem" }}>
+    <div className="animate-fade-in" style={{ maxWidth: "1200px", margin: "0 auto", paddingBottom: isMobile ? "2rem" : 0 }}>
 
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "flex-start", gap: "1rem", marginBottom: "2rem", flexWrap: "wrap" }}>
-        <Link href="/dashboard" style={{ color: "var(--text-muted)", padding: "0.5rem", marginTop: "0.25rem" }} title="Kembali">
-          <PremiumIcon name="arrowLeft" size={20} />
-        </Link>
-        <div style={{ flex: 1 }}>
-          <h1 style={{ fontSize: "1.5rem", margin: 0, fontWeight: 700 }}>Parafrase AI</h1>
-          <p style={{ margin: "0.4rem 0 0 0", fontSize: "0.875rem", color: "var(--text-muted)" }}>Tulis ulang teks dengan gaya dan tingkat kreativitas sesuai pilihan Anda</p>
+      <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: isMobile ? "flex-start" : "center", gap: isMobile ? "0.75rem" : "1rem", marginBottom: isMobile ? "1.5rem" : "2rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+          <Link href="/dashboard" style={{ color: "var(--text-muted)" }} title="Kembali">
+            <PremiumIcon name="arrowLeft" size={isMobile ? 18 : 20} />
+          </Link>
+          <div>
+            <h1 style={{ fontSize: isMobile ? "1rem" : "1.5rem", margin: 0, fontWeight: 700 }}>Parafrase AI</h1>
+            <p style={{ margin: "0.1rem 0 0 0", fontSize: isMobile ? "0.65rem" : "0.75rem", color: "var(--text-muted)" }}>Tulis ulang teks dengan gaya sesuai pilihan Anda</p>
+          </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.5rem 1rem", backgroundColor: "var(--surface-hover)", borderRadius: "var(--radius-lg)", fontSize: "0.8rem", fontWeight: 600, whiteSpace: "nowrap" }}>
+        <div style={{ 
+          marginLeft: isMobile ? 0 : "auto", 
+          display: "flex", 
+          alignItems: "center", 
+          gap: "0.5rem", 
+          padding: "0.4rem 0.85rem", 
+          backgroundColor: "var(--surface-hover)", 
+          borderRadius: "var(--radius-lg)", 
+          fontSize: "0.75rem", 
+          fontWeight: 600, 
+          whiteSpace: "nowrap" 
+        }}>
           <PremiumIcon name="zap" size={14} className="text-primary" />
           <span>{creditCost} credit</span>
         </div>
@@ -198,16 +220,16 @@ export default function ParafrasePage() {
         </div>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: "1.75rem", alignItems: "start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 300px", gap: isMobile ? "1rem" : "1.75rem", alignItems: "start" }}>
 
         {/* ── Left: Input + Output ───────────── */}
         <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
 
           {/* Input textarea */}
-          <div className="glass-panel p-6">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-              <label style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-main)" }}>Teks untuk Diparafrase</label>
-              <span style={{ fontSize: "0.72rem", color: input.length > charLimit ? "var(--danger)" : "var(--text-muted)", fontWeight: 600 }}>
+          <div className="glass-panel" style={{ padding: isMobile ? "1rem" : "1.5rem" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+              <label style={{ fontSize: isMobile ? "0.75rem" : "0.85rem", fontWeight: 600, color: "var(--text-main)" }}>Teks untuk Diparafrase</label>
+              <span style={{ fontSize: isMobile ? "0.65rem" : "0.72rem", color: input.length > charLimit ? "var(--danger)" : "var(--text-muted)", fontWeight: 600 }}>
                 {input.length.toLocaleString('id-ID')} / {charLimit.toLocaleString('id-ID')}
               </span>
             </div>
@@ -216,7 +238,7 @@ export default function ParafrasePage() {
               onChange={e => setInput(e.target.value)}
               placeholder="Tempel atau ketik teks yang ingin Anda parafrase di sini..."
               className="form-textarea"
-              style={{ minHeight: "240px", resize: "vertical", fontFamily: "'Outfit', sans-serif", lineHeight: 1.7 }}
+              style={{ minHeight: isMobile ? "40vh" : "240px", resize: "vertical", fontFamily: "'Outfit', sans-serif", lineHeight: 1.6, fontSize: isMobile ? "0.8rem" : "0.95rem", border: isMobile ? "none" : "1px solid var(--border)", padding: isMobile ? "0.5rem 0" : "0.75rem 1rem", backgroundColor: isMobile ? "transparent" : "var(--background)" }}
               maxLength={charLimit}
             />
             {plan === "free" && (
@@ -229,9 +251,9 @@ export default function ParafrasePage() {
 
           {/* Output */}
           {(loading || output) && (
-            <div className="glass-panel p-6">
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-                <label style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-main)" }}>
+            <div className="glass-panel" style={{ padding: isMobile ? "1rem" : "1.5rem" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+                <label style={{ fontSize: isMobile ? "0.75rem" : "0.85rem", fontWeight: 600, color: "var(--text-main)" }}>
                   Hasil Parafrase
                   {!loading && output && (
                     <span style={{ marginLeft: "0.75rem", fontSize: "0.75rem", color: "var(--text-muted)", fontWeight: 400 }}>
@@ -254,8 +276,8 @@ export default function ParafrasePage() {
                   ))}
                 </div>
               ) : (
-                <div style={{ backgroundColor: "var(--background)", padding: "1rem", borderRadius: "8px", minHeight: "180px" }}>
-                  <div className="markdown-body">
+                <div style={{ backgroundColor: isMobile ? "var(--surface-hover)" : "var(--background)", padding: isMobile ? "0.75rem" : "1rem", borderRadius: "8px", minHeight: isMobile ? "auto" : "180px" }}>
+                  <div className="markdown-body" style={{ fontSize: isMobile ? "0.8rem" : "0.95rem", lineHeight: 1.6 }}>
                     <ReactMarkdown>{output}</ReactMarkdown>
                   </div>
                 </div>
@@ -265,10 +287,11 @@ export default function ParafrasePage() {
         </div>
 
         {/* ── Right: Controls ──────────────────── */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+        {!isMobile && (
+        <div style={{ display: "flex", flexDirection: "column", gap: isMobile ? "0.75rem" : "1.5rem" }}>
 
           {/* Gaya Parafrase */}
-          <div className="glass-panel p-5">
+          <div className={isMobile ? "native-card" : "glass-panel p-5"} style={{ margin: isMobile ? "0 -0.75rem" : 0 }}>
             <button 
               onClick={() => setExpandedGaya(!expandedGaya)}
               style={{
@@ -306,7 +329,7 @@ export default function ParafrasePage() {
           </div>
 
           {/* Creativity Slider */}
-          <div className="glass-panel p-5">
+          <div className={isMobile ? "native-card" : "glass-panel p-5"} style={{ margin: isMobile ? "0 -0.75rem" : 0 }}>
             <button 
               onClick={() => setExpandedCreativity(!expandedCreativity)}
               style={{
@@ -334,7 +357,7 @@ export default function ParafrasePage() {
           </div>
 
           {/* Credit status + CTA */}
-          <div className="glass-panel p-5" style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          <div className={isMobile ? "native-card" : "glass-panel p-5"} style={{ margin: isMobile ? "0 -0.75rem" : 0, borderBottom: isMobile ? "none" : "1px solid var(--border)" }}>
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", marginBottom: "0.5rem" }}>
                 <span className="text-muted">Kredit Anda</span>
@@ -368,7 +391,47 @@ export default function ParafrasePage() {
             )}
           </div>
         </div>
+        )}
       </div>
+
+      {/* ── Mobile Bottom Sheet (Settings) ──────── */}
+      {isMobile && showSettings && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 100, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", flexDirection: "column", justifyContent: "flex-end", backdropFilter: "blur(4px)" }} onClick={() => setShowSettings(false)}>
+          <div style={{ backgroundColor: "var(--background)", borderTopLeftRadius: "24px", borderTopRightRadius: "24px", padding: "1.5rem", paddingBottom: "5rem", maxHeight: "85vh", overflowY: "auto", transition: "transform 0.3s ease-out" }} onClick={e => e.stopPropagation()}>
+            <div style={{ width: "40px", height: "5px", borderRadius: "3px", backgroundColor: "var(--border)", margin: "0 auto 1.5rem" }} />
+            <h3 style={{ margin: "0 0 1.25rem", fontSize: "1.1rem" }}>Pengaturan Parafrase</h3>
+            
+            <div style={{ marginBottom: "1.5rem" }}>
+              <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-main)", marginBottom: "0.85rem" }}>✍️ Gaya Parafrase</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+                {GAYA_LIST.map(g => (
+                  <GayaCard key={g.id} gaya={g} active={gaYa === g.id} disabled={loading} onClick={() => setGaYa(g.id)} />
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-main)", marginBottom: "0.85rem" }}>⚡ Tingkat Kreativitas</div>
+              <CreativitySlider value={creativity} onChange={setCreativity} disabled={loading} />
+            </div>
+            
+            <button className="btn btn-primary w-full" style={{ marginTop: "2rem", padding: "0.85rem", fontWeight: 600 }} onClick={() => setShowSettings(false)}>Tutup Pengaturan</button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Mobile Sticky Bottom Bar ────────────── */}
+      {isMobile && (
+        <div style={{ position: "fixed", bottom: "1.5rem", left: "1rem", right: "1rem", zIndex: 50, display: "flex", gap: "0.6rem", pointerEvents: "none" }}>
+          <button className="btn btn-outline" onClick={() => setShowSettings(true)} style={{ padding: "0.5rem", borderRadius: "50%", aspectRatio: "1", width: "44px", height: "44px", backgroundColor: "var(--background)", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", pointerEvents: "auto", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <PremiumIcon name="settings" size={20} />
+          </button>
+          <button className="btn btn-primary" style={{ flex: 1, padding: "0.6rem", fontSize: "0.85rem", fontWeight: 600, borderRadius: "24px", display: "flex", justifyContent: "center", alignItems: "center", gap: "0.4rem", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", pointerEvents: "auto" }} onClick={handleParafrase} disabled={loading || !canAfford || !input.trim()}>
+            {loading ? <><PremiumIcon name="zap" size={14} className="animate-pulse" /> Proses...</> : <><PremiumIcon name="wand" size={14} /> Parafrase</>}
+          </button>
+        </div>
+      )}
+
     </div>
   );
 }

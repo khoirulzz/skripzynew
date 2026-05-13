@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import ReactMarkdown from "react-markdown";
 import { callGeminiStream } from "@/lib/callWorker";
@@ -64,6 +64,15 @@ export default function HumanizerPage() {
   const [copied, setCopied]         = useState(false);
   const [expandedIntensitas, setExpandedIntensitas] = useState(false);
   const [expandedStyle, setExpandedStyle] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   const creditCost = toolMap["humanizer"]?.creditCost ?? CREDIT_COST;
   const credits   = userData?.credits ?? 0;
@@ -107,16 +116,29 @@ export default function HumanizerPage() {
   };
 
   return (
-    <div className="animate-fade-in" style={{ maxWidth: "1100px", margin: "0 auto" }}>
+    <div className="animate-fade-in" style={{ maxWidth: "1100px", margin: "0 auto", paddingBottom: isMobile ? "2rem" : 0 }}>
 
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "2rem" }}>
-        <Link href="/dashboard" style={{ color: "var(--text-muted)" }}><PremiumIcon name="arrowLeft" size={20} /></Link>
-        <div>
-          <h1 style={{ fontSize: "1.5rem", margin: 0 }}>Humanizer AI</h1>
-          <p style={{ margin: 0, fontSize: "0.875rem" }}>Buat tulisan AI terdengar natural & manusiawi sepenuhnya</p>
+      <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: isMobile ? "flex-start" : "center", gap: isMobile ? "0.75rem" : "1rem", marginBottom: isMobile ? "1.5rem" : "2rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+          <Link href="/dashboard" style={{ color: "var(--text-muted)", display: isMobile ? "none" : "block" }}><PremiumIcon name="arrowLeft" size={isMobile ? 18 : 20} /></Link>
+          <div>
+            <h1 style={{ fontSize: isMobile ? "1rem" : "1.5rem", margin: 0, fontWeight: 700 }}>Humanizer AI</h1>
+            <p style={{ margin: "0.1rem 0 0 0", fontSize: isMobile ? "0.65rem" : "0.75rem", color: "var(--text-muted)" }}>Buat tulisan AI terdengar natural & manusiawi</p>
+          </div>
         </div>
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.4rem 0.85rem", backgroundColor: "rgba(245,158,11,0.1)", borderRadius: "var(--radius-lg)", fontSize: "0.8rem", fontWeight: 600, color: "#D97706" }}>
+        <div style={{ 
+          marginLeft: isMobile ? 0 : "auto", 
+          display: "flex", 
+          alignItems: "center", 
+          gap: "0.5rem", 
+          padding: "0.4rem 0.85rem", 
+          backgroundColor: "rgba(245,158,11,0.1)", 
+          borderRadius: "var(--radius-lg)", 
+          fontSize: "0.75rem", 
+          fontWeight: 600, 
+          color: "#D97706" 
+        }}>
           <PremiumIcon name="sparkles" size={14} />
           <span>{creditCost} credit / humanize</span>
           <span style={{ padding: "1px 6px", background: "linear-gradient(135deg, #6366F1, #8B5CF6)", color: "white", borderRadius: "8px", fontSize: "0.6rem", fontWeight: 800 }}>PRO</span>
@@ -140,16 +162,16 @@ export default function HumanizerPage() {
         </div>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: "1.5rem" }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 300px", gap: isMobile ? "1rem" : "1.5rem" }}>
 
         {/* Left: Input + Output */}
         <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
 
           {/* Input */}
-          <div className="glass-panel p-6">
+          <div className="glass-panel" style={{ padding: isMobile ? "1rem" : "1.5rem" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
-              <label style={{ fontSize: "0.85rem", fontWeight: 600 }}>Teks AI yang ingin dihumanisasi</label>
-              <span style={{ fontSize: "0.72rem", color: input.length > charLimit ? "var(--danger)" : "var(--text-muted)", fontWeight: 600 }}>
+              <label style={{ fontSize: isMobile ? "0.75rem" : "0.85rem", fontWeight: 600 }}>Teks AI yang ingin dihumanisasi</label>
+              <span style={{ fontSize: isMobile ? "0.65rem" : "0.72rem", color: input.length > charLimit ? "var(--danger)" : "var(--text-muted)", fontWeight: 600 }}>
                 {input.length} / {charLimit}
               </span>
             </div>
@@ -158,7 +180,7 @@ export default function HumanizerPage() {
               onChange={e => setInput(e.target.value)}
               placeholder="Tempel teks yang dibuat oleh AI (ChatGPT, Gemini, dll.) di sini..."
               className="form-input"
-              style={{ minHeight: "200px", resize: "vertical", fontFamily: "inherit", lineHeight: 1.8 }}
+              style={{ minHeight: isMobile ? "40vh" : "200px", resize: "vertical", fontFamily: "inherit", lineHeight: 1.6, fontSize: isMobile ? "0.8rem" : "0.95rem", border: isMobile ? "none" : "1px solid var(--border)", padding: isMobile ? "0.5rem 0" : "0.75rem 1rem", backgroundColor: isMobile ? "transparent" : "var(--background)" }}
               maxLength={charLimit}
               disabled={plan === "free"}
             />
@@ -166,9 +188,9 @@ export default function HumanizerPage() {
 
           {/* Output */}
           {(loading || output) && (
-            <div className="glass-panel p-6">
+            <div className="glass-panel" style={{ padding: isMobile ? "1rem" : "1.5rem" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
-                <label style={{ fontSize: "0.85rem", fontWeight: 600 }}>
+                <label style={{ fontSize: isMobile ? "0.75rem" : "0.85rem", fontWeight: 600 }}>
                   Versi Manusiawi
                   {!loading && output && (
                     <span style={{ marginLeft: "0.5rem", fontSize: "0.72rem", color: "var(--text-muted)", fontWeight: 400 }}>
@@ -190,7 +212,7 @@ export default function HumanizerPage() {
                   ))}
                 </div>
               ) : (
-                <div className="markdown-body">
+                <div className="markdown-body" style={{ backgroundColor: isMobile ? "var(--surface-hover)" : "transparent", padding: isMobile ? "0.75rem" : "0", borderRadius: "8px", fontSize: isMobile ? "0.8rem" : "0.95rem", lineHeight: 1.6 }}>
                   <ReactMarkdown>{output}</ReactMarkdown>
                 </div>
               )}
@@ -199,10 +221,11 @@ export default function HumanizerPage() {
         </div>
 
         {/* Right: Settings */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+        {!isMobile && (
+        <div style={{ display: "flex", flexDirection: "column", gap: isMobile ? "0.75rem" : "1.25rem" }}>
 
           {/* Intensitas */}
-          <div className="glass-panel p-5">
+          <div className={isMobile ? "native-card" : "glass-panel p-5"} style={{ margin: isMobile ? "0 -0.75rem" : 0 }}>
             <button 
               onClick={() => setExpandedIntensitas(!expandedIntensitas)}
               style={{
@@ -243,7 +266,7 @@ export default function HumanizerPage() {
           </div>
 
           {/* Style Penulisan */}
-          <div className="glass-panel p-5">
+          <div className={isMobile ? "native-card" : "glass-panel p-5"} style={{ margin: isMobile ? "0 -0.75rem" : 0 }}>
             <button 
               onClick={() => setExpandedStyle(!expandedStyle)}
               style={{
@@ -284,7 +307,7 @@ export default function HumanizerPage() {
           </div>
 
           {/* CTA */}
-          <div className="glass-panel p-5" style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+          <div className={isMobile ? "native-card" : "glass-panel p-5"} style={{ margin: isMobile ? "0 -0.75rem" : 0, borderBottom: isMobile ? "none" : "1px solid var(--border)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem" }}>
               <span className="text-muted">Kredit Anda</span>
               <span style={{ fontWeight: 700, color: canAfford ? "var(--text-main)" : "var(--danger)" }}>{credits}</span>
@@ -308,7 +331,69 @@ export default function HumanizerPage() {
             )}
           </div>
         </div>
+        )}
       </div>
+
+      {/* ── Mobile Bottom Sheet (Settings) ──────── */}
+      {isMobile && showSettings && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 100, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", flexDirection: "column", justifyContent: "flex-end", backdropFilter: "blur(4px)" }} onClick={() => setShowSettings(false)}>
+          <div style={{ backgroundColor: "var(--background)", borderTopLeftRadius: "24px", borderTopRightRadius: "24px", padding: "1.5rem", paddingBottom: "5rem", maxHeight: "85vh", overflowY: "auto", transition: "transform 0.3s ease-out" }} onClick={e => e.stopPropagation()}>
+            <div style={{ width: "40px", height: "5px", borderRadius: "3px", backgroundColor: "var(--border)", margin: "0 auto 1.5rem" }} />
+            <h3 style={{ margin: "0 0 1.25rem", fontSize: "1.1rem" }}>Pengaturan Humanizer</h3>
+            
+            <div style={{ marginBottom: "1.5rem" }}>
+              <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-main)", marginBottom: "0.85rem" }}>🔥 Intensitas Humanisasi</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                {INTENSITAS_LIST.map(item => (
+                  <button key={item.id} onClick={() => setIntensitas(item.id)} disabled={loading || plan === "free"} style={{
+                    textAlign: "left", padding: "0.7rem 0.9rem",
+                    border: `1.5px solid ${intensitas === item.id ? "#F59E0B" : "var(--border)"}`,
+                    borderRadius: "var(--radius-sm)", cursor: plan === "free" ? "not-allowed" : "pointer",
+                    backgroundColor: intensitas === item.id ? "rgba(245,158,11,0.08)" : "transparent",
+                    fontFamily: "inherit", opacity: plan === "free" ? 0.5 : 1,
+                  }}>
+                    <div style={{ fontSize: "0.82rem", fontWeight: 700, color: intensitas === item.id ? "#D97706" : "var(--text-main)", marginBottom: "0.15rem" }}>{item.label}</div>
+                    <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", lineHeight: 1.4 }}>{item.desc}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-main)", marginBottom: "0.85rem" }}>✍️ Gaya Penulisan</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                {STYLE_LIST.map(s => (
+                  <button key={s.id} onClick={() => setStyle(s.id)} disabled={loading || plan === "free"} style={{
+                    textAlign: "left", padding: "0.6rem 0.9rem",
+                    border: `1.5px solid ${style === s.id ? "var(--primary)" : "var(--border)"}`,
+                    borderRadius: "var(--radius-sm)", cursor: plan === "free" ? "not-allowed" : "pointer",
+                    backgroundColor: style === s.id ? "var(--primary-light)" : "transparent",
+                    fontFamily: "inherit", opacity: plan === "free" ? 0.5 : 1,
+                  }}>
+                    <div style={{ fontSize: "0.82rem", fontWeight: 700, color: style === s.id ? "var(--primary)" : "var(--text-main)", marginBottom: "0.15rem" }}>{s.label}</div>
+                    <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", lineHeight: 1.4 }}>{s.desc}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            <button className="btn btn-primary w-full" style={{ marginTop: "2rem", padding: "0.85rem", fontWeight: 600 }} onClick={() => setShowSettings(false)}>Tutup Pengaturan</button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Mobile Sticky Bottom Bar ────────────── */}
+      {isMobile && (
+        <div style={{ position: "fixed", bottom: "1.5rem", left: "1rem", right: "1rem", zIndex: 50, display: "flex", gap: "0.6rem", pointerEvents: "none" }}>
+          <button className="btn btn-outline" onClick={() => setShowSettings(true)} style={{ padding: "0.5rem", borderRadius: "50%", aspectRatio: "1", width: "44px", height: "44px", backgroundColor: "var(--background)", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", pointerEvents: "auto", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <PremiumIcon name="settings" size={20} />
+          </button>
+          <button className="btn btn-primary" style={{ flex: 1, padding: "0.6rem", fontSize: "0.85rem", fontWeight: 600, borderRadius: "24px", display: "flex", justifyContent: "center", alignItems: "center", gap: "0.4rem", background: "linear-gradient(135deg, #F59E0B, #D97706)", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", pointerEvents: "auto" }} onClick={handleHumanize} disabled={loading || !canAfford || !input.trim() || plan === "free"}>
+            {loading ? <><PremiumIcon name="sparkles" size={14} className="animate-pulse" /> Proses...</> : <><PremiumIcon name="sparkles" size={14} /> Humanize</>}
+          </button>
+        </div>
+      )}
+
     </div>
   );
 }

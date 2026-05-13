@@ -42,6 +42,14 @@ export default function ChatDosenAIPage() {
   const [searching, setSearching] = useState(false); // UI indicator saat API sedang bekerja
   const [webSearchActive, setWebSearchActive] = useState(false); // State pemicu manual
   const [expandedThinking, setExpandedThinking] = useState({}); // Track which thinking blocks are expanded
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
   const chatEndRef = useRef(null);
 
   const [callActive, setCallActive] = useState(false);
@@ -462,7 +470,7 @@ export default function ChatDosenAIPage() {
   }, []);
 
   return (
-    <div id="chat-container" className="animate-fade-in" style={{ width: "100%", maxWidth: "980px", margin: "0 auto", minHeight: "calc(100vh - 120px)", display: "flex", flexDirection: "column", padding: "0 1rem" }}>
+    <div id="chat-container" className="animate-fade-in" style={{ width: "100%", maxWidth: "980px", margin: "0 auto", height: isMobile ? "calc(100vh - 70px)" : "calc(100vh - 120px)", display: "flex", flexDirection: "column", padding: isMobile ? "0" : "0 1rem", position: "relative" }}>
 
       {/* Inject Keyframes Animasi Soundwave */}
       <style dangerouslySetInnerHTML={{
@@ -501,11 +509,11 @@ export default function ChatDosenAIPage() {
           font-weight: 700;
         }
         @media (max-width: 768px) {
-          #chat-container { padding: 0 0.4rem !important; }
-          #chat-header { flex-direction: column; align-items: flex-start; gap: 0.5rem; margin-top: 0.5rem; }
+          #chat-container { padding: 0 !important; }
+          #chat-header { flex-direction: row; align-items: center; gap: 0.5rem; margin-top: 0; padding: 0.75rem !important; border-bottom: 1px solid var(--border); background: var(--background); z-index: 10; }
           #chat-bubble-wrapper { max-width: 95% !important; margin: 0; }
-          #chat-form { padding: 0.5rem 0.4rem !important; gap: 0.4rem !important; }
-          #chat-input { padding: 0.6rem 0.85rem !important; font-size: 0.85rem !important; }
+          #chat-form { padding: 0.5rem 0.5rem !important; gap: 0.4rem !important; position: fixed; bottom: 0; left: 0; right: 0; z-index: 50; background: var(--background); border-top: 1px solid var(--border); }
+          #chat-input { padding: 0.6rem 0.85rem !important; font-size: 0.9rem !important; }
           #chat-send-btn { width: 38px; height: 38px; }
           .chat-bubble-content { padding: 0.6rem 0.85rem !important; }
           .chat-avatar { width: 28px !important; height: 28px !important; }
@@ -515,31 +523,30 @@ export default function ChatDosenAIPage() {
       `}} />
 
       {/* Header UI */}
-      <div id="chat-header" style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1rem", marginTop: "1rem", flexShrink: 0, flexWrap: "wrap" }}>
-        <div style={{ width: "44px", height: "44px", borderRadius: "50%", background: "linear-gradient(135deg, #6366F1, #8B5CF6)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: "0 2px 8px rgba(99,102,241,0.2)" }}>
-          <PremiumIcon name="messageSquare" size={22} style={{ color: "white" }} />
+      <div id="chat-header" style={{ display: "flex", alignItems: "center", gap: isMobile ? "0.5rem" : "0.75rem", marginBottom: isMobile ? "0.75rem" : "1rem", marginTop: isMobile ? "0.5rem" : "1rem", padding: isMobile ? "0 0.75rem" : 0, flexShrink: 0, flexWrap: "nowrap" }}>
+        <div style={{ width: isMobile ? "36px" : "44px", height: isMobile ? "36px" : "44px", borderRadius: "50%", background: "linear-gradient(135deg, #6366F1, #8B5CF6)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: "0 2px 8px rgba(99,102,241,0.2)" }}>
+          <PremiumIcon name="messageSquare" size={isMobile ? 18 : 22} style={{ color: "white" }} />
         </div>
-        <div style={{ flex: 1 }}>
-          <h1 style={{ fontSize: "1.25rem", margin: 0, fontWeight: 700 }}>Chat Dosen AI</h1>
-          <p style={{ margin: 0, fontSize: "0.7rem", color: "var(--text-muted)", marginTop: "0.2rem" }}>
-            Tanya metodologi, penulisan & analisis
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <h1 style={{ fontSize: isMobile ? "1rem" : "1.25rem", margin: 0, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Chat Dosen AI</h1>
+          <p style={{ margin: 0, fontSize: "0.65rem", color: "var(--text-muted)", marginTop: "0.1rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            Tanya metodologi & penulisan
           </p>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.85rem", color: "var(--text-main)", padding: "0.5rem 0.85rem", backgroundColor: "var(--surface-hover)", borderRadius: "24px", flexShrink: 0, fontWeight: 600 }}>
-          <PremiumIcon name="coins" size={14} style={{ color: "#F59E0B" }} />
-          <span className="hide-mobile">{credits} kredit</span>
-          <span className="show-mobile">{credits}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontSize: isMobile ? "0.75rem" : "0.85rem", color: "var(--text-main)", padding: isMobile ? "0.35rem 0.65rem" : "0.5rem 0.85rem", backgroundColor: "var(--surface-hover)", borderRadius: "24px", flexShrink: 0, fontWeight: 600 }}>
+          <PremiumIcon name="coins" size={isMobile ? 12 : 14} style={{ color: "#F59E0B" }} />
+          <span>{credits}</span>
         </div>
       </div>
 
       {/* Mode Toggle UI */}
       {!callActive && (
-        <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem", padding: "0.4rem", backgroundColor: "var(--surface-hover)", borderRadius: "var(--radius-lg)", flexShrink: 0 }}>
+        <div style={{ display: "flex", gap: "0.4rem", marginBottom: isMobile ? "0.75rem" : "1rem", padding: "0.3rem", backgroundColor: "var(--surface-hover)", borderRadius: "var(--radius-lg)", flexShrink: 0, margin: isMobile ? "0 0.75rem" : 0 }}>
           <button
             onClick={() => setMode("chat")}
             style={{
-              flex: 1, padding: "0.65rem 0.85rem", borderRadius: "var(--radius-md)", border: "none", cursor: "pointer",
-              fontWeight: 600, fontSize: "0.85rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.4rem",
+              flex: 1, padding: isMobile ? "0.5rem" : "0.65rem 0.85rem", borderRadius: "var(--radius-md)", border: "none", cursor: "pointer",
+              fontWeight: 600, fontSize: isMobile ? "0.8rem" : "0.85rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.4rem",
               backgroundColor: mode === "chat" ? "var(--surface)" : "transparent",
               color: mode === "chat" ? "var(--primary)" : "var(--text-muted)",
               boxShadow: mode === "chat" ? "var(--shadow-sm)" : "none",
@@ -547,13 +554,13 @@ export default function ChatDosenAIPage() {
             }}
           >
             <PremiumIcon name="messageSquare" size={16} />
-            <span className="hide-mobile">Chat</span>
+            <span>Chat</span>
           </button>
           <button
             onClick={() => setMode("call")}
             style={{
-              flex: 1, padding: "0.65rem 0.85rem", borderRadius: "var(--radius-md)", border: "none", cursor: "pointer",
-              fontWeight: 600, fontSize: "0.85rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.4rem",
+              flex: 1, padding: isMobile ? "0.5rem" : "0.65rem 0.85rem", borderRadius: "var(--radius-md)", border: "none", cursor: "pointer",
+              fontWeight: 600, fontSize: isMobile ? "0.8rem" : "0.85rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.4rem",
               backgroundColor: mode === "call" ? "var(--surface)" : "transparent",
               color: mode === "call" ? "#10B981" : "var(--text-muted)",
               boxShadow: mode === "call" ? "var(--shadow-sm)" : "none",
@@ -561,15 +568,15 @@ export default function ChatDosenAIPage() {
             }}
           >
             <PremiumIcon name="mic" size={16} />
-            <span className="hide-mobile">Voice</span>
+            <span>Voice</span>
           </button>
         </div>
       )}
 
       {/* CHAT MODE */}
       {mode === "chat" && (
-        <div className="glass-panel" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-          <div style={{ flex: 1, overflowY: "auto", padding: "1.25rem 1rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
+        <div className={isMobile ? "" : "glass-panel"} style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden", margin: 0 }}>
+          <div style={{ flex: 1, overflowY: "auto", padding: isMobile ? "1rem 0.5rem 5rem 0.5rem" : "1.25rem 1rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
             {messages.length === 0 && (
               <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "1rem", color: "var(--text-muted)" }}>
                 <div style={{ width: "64px", height: "64px", borderRadius: "50%", background: "linear-gradient(135deg, rgba(99,102,241,0.1), rgba(139,92,246,0.1))", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 8px rgba(99,102,241,0.1)" }}>
@@ -591,7 +598,7 @@ export default function ChatDosenAIPage() {
               const isExpanded = expandedThinking[`msg-${idx}`];
 
               return (
-                <div key={idx} id="chat-bubble-wrapper" style={{ alignSelf: isUser ? "flex-end" : "flex-start", maxWidth: "85%" }}>
+                <div key={idx} style={{ alignSelf: isUser ? "flex-end" : "flex-start", maxWidth: isMobile ? "90%" : "85%" }}>
                   <div className="chat-gap" style={{
                     display: "flex", gap: "0.5rem",
                     flexDirection: isUser ? "row-reverse" : "row"
@@ -613,7 +620,8 @@ export default function ChatDosenAIPage() {
                       backgroundColor: isUser ? "var(--primary)" : "var(--surface-hover)",
                       color: isUser ? "white" : "var(--text-main)",
                       boxShadow: isUser ? "0 1px 3px rgba(99,102,241,0.15)" : "none",
-                      wordBreak: "break-word"
+                      wordBreak: "break-word",
+                      fontSize: isMobile ? "0.875rem" : "0.9rem"
                     }}>
                       <div className="markdown-body">
                         {isUser ? (
@@ -688,13 +696,13 @@ export default function ChatDosenAIPage() {
             <div ref={chatEndRef} />
           </div>
 
-          <form id="chat-form" onSubmit={handleSendChat} style={{ padding: "0.85rem 1rem", borderTop: "1px solid var(--border)", display: "flex", gap: "0.6rem", backgroundColor: "var(--surface)", alignItems: "center" }}>
+          <form id="chat-form" onSubmit={handleSendChat} style={{ padding: isMobile ? "0.6rem 0.5rem" : "0.85rem 1rem", borderTop: "1px solid var(--border)", display: "flex", gap: "0.5rem", backgroundColor: isMobile ? "var(--background)" : "var(--surface)", alignItems: "center", position: isMobile ? "fixed" : "static", bottom: isMobile ? "0" : "auto", left: isMobile ? "0" : "auto", right: isMobile ? "0" : "auto", zIndex: 100, width: "100%", boxShadow: isMobile ? "0 -4px 20px rgba(0,0,0,0.05)" : "none", paddingBottom: isMobile ? "env(safe-area-inset-bottom, 0.6rem)" : "0.85rem" }}>
             <button
               type="button"
               onClick={() => setWebSearchActive(!webSearchActive)}
               title={webSearchActive ? "Matikan Pencarian Web" : "Aktifkan Pencarian Web"}
               style={{
-                width: "40px", height: "40px", borderRadius: "50%",
+                width: isMobile ? "38px" : "40px", height: isMobile ? "38px" : "40px", borderRadius: "50%",
                 border: webSearchActive ? "2px solid #4B5563" : "1px solid var(--border)",
                 backgroundColor: webSearchActive ? "#4B5563" : "var(--surface-hover)",
                 color: webSearchActive ? "white" : "#9CA3AF",
@@ -702,28 +710,28 @@ export default function ChatDosenAIPage() {
                 boxShadow: webSearchActive ? "0 0 10px rgba(75, 85, 99, 0.3)" : "none"
               }}
             >
-              <PremiumIcon name="globe" size={20} />
+              <PremiumIcon name="globe" size={isMobile ? 18 : 20} />
             </button>
 
             <input
               id="chat-input"
               type="text" value={input} onChange={e => setInput(e.target.value)}
-              placeholder={webSearchActive ? "Cari informasi di internet..." : "Ketik pertanyaan..."}
+              placeholder={webSearchActive ? (isMobile ? "Cari..." : "Cari di internet...") : "Ketik pesan..."}
               style={{
-                flex: 1, padding: "0.7rem 1rem", borderRadius: "24px",
-                border: "1px solid var(--border)", backgroundColor: "var(--surface-hover)", outline: "none", fontSize: "0.9rem", color: "var(--text-main)"
+                flex: 1, padding: isMobile ? "0.6rem 1rem" : "0.7rem 1rem", borderRadius: "24px",
+                border: "1px solid var(--border)", backgroundColor: "var(--surface-hover)", outline: "none", fontSize: isMobile ? "0.9rem" : "0.9rem", color: "var(--text-main)"
               }}
             />
             <button
               id="chat-send-btn"
               type="submit" disabled={!input.trim() || loading}
               style={{
-                width: "40px", height: "40px", borderRadius: "50%", border: "none", cursor: input.trim() ? "pointer" : "not-allowed",
+                width: isMobile ? "38px" : "40px", height: isMobile ? "38px" : "40px", borderRadius: "50%", border: "none", cursor: input.trim() ? "pointer" : "not-allowed",
                 backgroundColor: input.trim() ? "var(--primary)" : "var(--surface-hover)", color: input.trim() ? "white" : "var(--text-muted)",
                 display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: input.trim() ? "0 2px 8px rgba(99,102,241,0.2)" : "none", transition: "all 0.2s"
               }}
             >
-              <PremiumIcon name="send" size={18} />
+              <PremiumIcon name="send" size={isMobile ? 18 : 18} />
             </button>
           </form>
         </div>

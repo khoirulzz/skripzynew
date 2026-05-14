@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cek List Model Gemini</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --panel: #111827;
+            --panel-2: #1f2937;
+            --text: #e5e7eb;
+            --muted: #94a3b8;
+            --accent: #22c55e;
+            --accent-2: #38bdf8;
+            --border: #334155;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, Helvetica, sans-serif;
+            background: linear-gradient(180deg, #0b1220, #111827);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 24px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: rgba(17, 24, 39, 0.92);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, .35);
+        }
+
+        h1 {
+            margin: 0 0 8px;
+            font-size: 24px;
+        }
+
+        .desc {
+            margin: 0 0 18px;
+            color: var(--muted);
+            line-height: 1.5;
+        }
+
+        .row {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .key-wrap {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        label {
+            font-size: 14px;
+            color: #cbd5e1;
+        }
+
+        input[type="password"],
+        input[type="text"] {
+            width: 100%;
+            padding: 12px 14px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background: #0b1220;
+            color: var(--text);
+            outline: none;
+        }
+
+        input[type="password"]:focus,
+        input[type="text"]:focus {
+            border-color: var(--accent-2);
+            box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
+        }
+
+        .controls {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin: 10px 0 16px;
+        }
+
+        .checkbox {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #cbd5e1;
+            user-select: none;
+        }
+
+        button {
+            border: 0;
+            border-radius: 12px;
+            padding: 12px 16px;
+            background: linear-gradient(135deg, var(--accent), #16a34a);
+            color: white;
+            cursor: pointer;
+            font-weight: 700;
+            transition: transform .08s ease, opacity .2s ease;
+        }
+
+        button:hover {
+            opacity: .95;
+        }
+
+        button:active {
+            transform: translateY(1px);
+        }
+
+        .secondary {
+            background: linear-gradient(135deg, var(--accent-2), #0284c7);
+        }
+
+        .status {
+            padding: 12px 14px;
+            border-radius: 12px;
+            margin: 14px 0;
+            background: #0b1220;
+            border: 1px solid var(--border);
+            color: var(--muted);
+            line-height: 1.5;
+            white-space: pre-wrap;
+        }
+
+        .status.error {
+            border-color: rgba(239, 68, 68, .4);
+            color: #fecaca;
+        }
+
+        .status.ok {
+            border-color: rgba(34, 197, 94, .35);
+            color: #bbf7d0;
+        }
+
+        .meta {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 14px;
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: #0b1220;
+            border: 1px solid var(--border);
+        }
+
+        .list {
+            display: grid;
+            gap: 10px;
+        }
+
+        .card {
+            background: rgba(15, 23, 42, .8);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 14px;
+        }
+
+        .card-top {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: start;
+            flex-wrap: wrap;
+        }
+
+        .model-name {
+            font-size: 16px;
+            font-weight: 700;
+            margin: 0 0 6px;
+            word-break: break-word;
+        }
+
+        .display-name {
+            margin: 0;
+            color: var(--muted);
+            font-size: 14px;
+            line-height: 1.45;
+        }
+
+        .tag-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+
+        .tag {
+            font-size: 12px;
+            padding: 5px 8px;
+            border-radius: 999px;
+            background: #0b1220;
+            border: 1px solid var(--border);
+            color: #cbd5e1;
+        }
+
+        .tag.green {
+            border-color: rgba(34, 197, 94, .35);
+            color: #bbf7d0;
+        }
+
+        .tag.blue {
+            border-color: rgba(56, 189, 248, .35);
+            color: #bae6fd;
+        }
+
+        .tag.yellow {
+            border-color: rgba(245, 158, 11, .35);
+            color: #fde68a;
+        }
+
+        .footer-note {
+            margin-top: 14px;
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        code {
+            background: #0b1220;
+            padding: 2px 6px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            color: #cbd5e1;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Cek List Model Gemini</h1>
+        <p class="desc">
+            Masukkan API key Gemini kamu lalu klik <b>Get List</b>.
+            Kalau kolom API key dibiarkan kosong, halaman ini akan menampilkan fallback default lokal sebagai referensi.
+        </p>
+
+        <div class="row">
+            <div class="key-wrap">
+                <label for="apiKey">API Key Gemini</label>
+                <input id="apiKey" type="password" placeholder="Masukkan API key kamu di sini" autocomplete="off" />
+            </div>
+            <div style="display:flex;align-items:end;">
+                <button id="btnGetList">Get List</button>
+            </div>
+        </div>
+
+        <div class="controls">
+            <label class="checkbox">
+                <input id="onlyGenerate" type="checkbox" checked />
+                Hanya model yang mendukung <code>generateContent</code>
+            </label>
+
+            <button id="btnUseDefault" class="secondary" type="button">Tampilkan Default</button>
+        </div>
+
+        <div id="status" class="status">Siap.</div>
+
+        <div class="meta" id="meta"></div>
+        <div class="list" id="result"></div>
+
+        <p class="footer-note">
+            Endpoint yang dipakai adalah <code>GET /v1beta/models</code>.
+            Respons Gemini API bersifat paginated, jadi script ini juga mengambil <code>nextPageToken</code> sampai
+            habis.
+            Model object punya field <code>supportedGenerationMethods</code>, yang bisa dipakai untuk melihat apakah
+            model mendukung <code>generateContent</code>.
+        </p>
+    </div>
+
+    <script>
+        const DEFAULT_MODELS = [
+            {
+                name: "models/gemini-2.5-flash",
+                displayName: "Gemini 2.5 Flash",
+                description: "Contoh model stabil yang umum dipakai untuk tugas cepat dan reasoning ringan.",
+                supportedGenerationMethods: ["generateContent"]
+            },
+            {
+                name: "models/gemini-2.5-flash-lite",
+                displayName: "Gemini 2.5 Flash-Lite",
+                description: "Contoh model ringan untuk biaya lebih hemat dan latensi rendah.",
+                supportedGenerationMethods: ["generateContent"]
+            },
+            {
+                name: "models/gemini-2.5-pro",
+                displayName: "Gemini 2.5 Pro",
+                description: "Contoh model untuk tugas yang lebih kompleks.",
+                supportedGenerationMethods: ["generateContent"]
+            },
+            {
+                name: "models/gemini-2.5-flash-preview-09-2025",
+                displayName: "Gemini 2.5 Flash Preview",
+                description: "Contoh model preview dari dokumentasi model Gemini.",
+                supportedGenerationMethods: ["generateContent"]
+            },
+            {
+                name: "models/gemini-2.5-flash-live-preview",
+                displayName: "Gemini 2.5 Flash Live Preview",
+                description: "Contoh model live/audio untuk interaksi real-time.",
+                supportedGenerationMethods: ["generateContent"]
+            },
+            {
+                name: "models/gemini-2.5-flash-tts-preview",
+                displayName: "Gemini 2.5 Flash TTS Preview",
+                description: "Contoh model text-to-speech preview.",
+                supportedGenerationMethods: ["generateContent"]
+            }
+        ];
+
+        const apiKeyEl = document.getElementById("apiKey");
+        const onlyGenerateEl = document.getElementById("onlyGenerate");
+        const btnGetList = document.getElementById("btnGetList");
+        const btnUseDefault = document.getElementById("btnUseDefault");
+        const statusEl = document.getElementById("status");
+        const resultEl = document.getElementById("result");
+        const metaEl = document.getElementById("meta");
+
+        function setStatus(message, type = "") {
+            statusEl.className = "status" + (type ? " " + type : "");
+            statusEl.textContent = message;
+        }
+
+        function normalizeModels(models) {
+            return models.map(m => ({
+                name: m.name || "",
+                displayName: m.displayName || m.name?.replace(/^models\//, "") || "(tanpa nama)",
+                description: m.description || "",
+                supportedGenerationMethods: m.supportedGenerationMethods || []
+            }));
+        }
+
+        function filterModels(models) {
+            if (!onlyGenerateEl.checked) return models;
+            return models.filter(m =>
+                Array.isArray(m.supportedGenerationMethods) &&
+                m.supportedGenerationMethods.includes("generateContent")
+            );
+        }
+
+        function renderMeta(source, count, extra = "") {
+            metaEl.innerHTML = `
+        <span class="pill">Sumber: <b>${source}</b></span>
+        <span class="pill">Total: <b>${count}</b></span>
+        ${extra ? `<span class="pill">${extra}</span>` : ""}
+      `;
+        }
+
+        function renderList(models) {
+            if (!models.length) {
+                resultEl.innerHTML = `<div class="card">Tidak ada model yang cocok dengan filter saat ini.</div>`;
+                return;
+            }
+
+            resultEl.innerHTML = models.map(m => {
+                const methods = (m.supportedGenerationMethods || []).length
+                    ? m.supportedGenerationMethods.join(", ")
+                    : "Tidak ada data";
+
+                const methodTagClass = m.supportedGenerationMethods.includes("generateContent") ? "green" : "yellow";
+
+                return `
+          <div class="card">
+            <div class="card-top">
+              <div>
+                <p class="model-name">${escapeHtml(m.name)}</p>
+                <p class="display-name"><b>${escapeHtml(m.displayName)}</b>${m.description ? " — " + escapeHtml(m.description) : ""}</p>
+              </div>
+            </div>
+            <div class="tag-row">
+              <span class="tag blue">display: ${escapeHtml(m.displayName)}</span>
+              <span class="tag ${methodTagClass}">methods: ${escapeHtml(methods)}</span>
+            </div>
+          </div>
+        `;
+            }).join("");
+        }
+
+        function escapeHtml(str) {
+            return String(str)
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;")
+                .replaceAll('"', "&quot;")
+                .replaceAll("'", "&#39;");
+        }
+
+        async function fetchAllModels(apiKey) {
+            const all = [];
+            let pageToken = "";
+            const pageSize = 1000;
+
+            while (true) {
+                const url = new URL("https://generativelanguage.googleapis.com/v1beta/models");
+                url.searchParams.set("pageSize", String(pageSize));
+                if (pageToken) url.searchParams.set("pageToken", pageToken);
+                url.searchParams.set("key", apiKey);
+
+                const res = await fetch(url.toString(), {
+                    method: "GET",
+                    headers: { "Accept": "application/json" }
+                });
+
+                const text = await res.text();
+                let data = {};
+                try {
+                    data = text ? JSON.parse(text) : {};
+                } catch (e) {
+                    throw new Error("Respons bukan JSON valid.");
+                }
+
+                if (!res.ok) {
+                    const apiMessage = data?.error?.message || text || `HTTP ${res.status}`;
+                    throw new Error(apiMessage);
+                }
+
+                if (Array.isArray(data.models)) {
+                    all.push(...data.models);
+                }
+
+                pageToken = data.nextPageToken || "";
+                if (!pageToken) break;
+            }
+
+            return all;
+        }
+
+        async function loadModels(useApi = true) {
+            resultEl.innerHTML = "";
+            renderMeta("—", 0);
+
+            const apiKey = apiKeyEl.value.trim();
+            const onlyGenerate = onlyGenerateEl.checked;
+
+            try {
+                if (!useApi || !apiKey) {
+                    const defaultModels = normalizeModels(DEFAULT_MODELS);
+                    const filtered = filterModels(defaultModels);
+
+                    setStatus(
+                        apiKey
+                            ? "API key kosong, jadi menampilkan default lokal."
+                            : "Tidak ada API key. Menampilkan default lokal sebagai referensi.",
+                        "ok"
+                    );
+
+                    renderMeta("Default lokal", filtered.length, onlyGenerate ? "filter: generateContent" : "filter: semua");
+                    renderList(filtered);
+                    return;
+                }
+
+                setStatus("Mengambil daftar model dari Gemini API...", "");
+                const rawModels = await fetchAllModels(apiKey);
+                const models = filterModels(normalizeModels(rawModels));
+
+                setStatus(`Berhasil. Model ditemukan: ${models.length}`, "ok");
+                renderMeta("Gemini API", models.length, onlyGenerate ? "filter: generateContent" : "filter: semua");
+                renderList(models);
+            } catch (err) {
+                const msg = err?.message || String(err);
+                setStatus(
+                    "Gagal mengambil model dari Gemini API.\n\n" +
+                    "Detail:\n" +
+                    msg +
+                    "\n\nSaya akan menampilkan default lokal.",
+                    "error"
+                );
+
+                const defaultModels = normalizeModels(DEFAULT_MODELS);
+                const filtered = filterModels(defaultModels);
+                renderMeta("Default lokal (fallback)", filtered.length, onlyGenerate ? "filter: generateContent" : "filter: semua");
+                renderList(filtered);
+            }
+        }
+
+        btnGetList.addEventListener("click", () => loadModels(true));
+        btnUseDefault.addEventListener("click", () => {
+            apiKeyEl.value = "";
+            loadModels(false);
+        });
+
+        onlyGenerateEl.addEventListener("change", () => {
+            const currentStatus = statusEl.textContent || "";
+            if (currentStatus.includes("Gemini API")) {
+                loadModels(true);
+            } else {
+                loadModels(false);
+            }
+        });
+
+        // Render awal
+        loadModels(false);
+    </script>
+</body>
+
+</html>

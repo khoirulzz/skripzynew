@@ -97,6 +97,14 @@ export function ReferenceManager({ workspaceId, currentChapterKey = null, onClos
   const [expandedNoteIds, setExpandedNoteIds] = useState([]);
   const [noteDrafts, setNoteDrafts] = useState({});
   const [previewReference, setPreviewReference] = useState(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   // Credit cost configuration (default 1 credit per search)
   const REFERENCE_SEARCH_COST = toolMap["referensi-ringkas"]?.creditCost ?? 1;
@@ -461,12 +469,23 @@ export function ReferenceManager({ workspaceId, currentChapterKey = null, onClos
               Cari jurnal, tambah referensi manual, upload PDF, dan tandai referensi untuk tiap bab.
             </p>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", justifyContent: "flex-end" }}>
             {!compact ? (
-              <button className={`btn ${manualOpen ? "btn-primary" : "btn-outline"}`} onClick={() => setManualOpen((current) => !current)}>
-                <PremiumIcon name={manualOpen ? "x" : "plus"} size={14} />
-                {manualOpen ? "Tutup Manual" : "Tambah Manual"}
-              </button>
+              <>
+                <button className="btn btn-outline" onClick={handleExportBibtex} disabled={!selectedIds.length} title="Ekspor BibTeX">
+                  <PremiumIcon name="download" size={14} />
+                  <span className="hide-mobile">BibTeX</span>
+                </button>
+                <button className="btn btn-outline" onClick={handleExportApa} disabled={!selectedIds.length} title="Ekspor APA">
+                  <PremiumIcon name="downloadCloud" size={14} />
+                  <span className="hide-mobile">APA</span>
+                </button>
+                <div style={{ width: "1px", height: "20px", backgroundColor: "var(--border)", margin: "0 0.25rem" }} className="hide-mobile" />
+                <button className={`btn ${manualOpen ? "btn-primary" : "btn-outline"}`} onClick={() => setManualOpen((current) => !current)}>
+                  <PremiumIcon name={manualOpen ? "x" : "plus"} size={14} />
+                  {manualOpen ? (isMobile ? "Batal" : "Tutup Manual") : (isMobile ? "Manual" : "Tambah Manual")}
+                </button>
+              </>
             ) : null}
             {onClose ? (
               <button className="btn btn-ghost" onClick={onClose}>
@@ -476,7 +495,7 @@ export function ReferenceManager({ workspaceId, currentChapterKey = null, onClos
           </div>
         </div>
 
-        <form onSubmit={handleSearch} style={{ display: "grid", gridTemplateColumns: compact ? "1fr" : "minmax(0,1fr) 160px auto", gap: "0.65rem" }}>
+        <form onSubmit={handleSearch} style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : (compact ? "1fr" : "minmax(0,1fr) 160px auto"), gap: "0.65rem" }}>
           <input
             type="text"
             className="form-input"
@@ -484,7 +503,7 @@ export function ReferenceManager({ workspaceId, currentChapterKey = null, onClos
             onChange={(event) => setSearchTerm(event.target.value)}
             placeholder="Cari referensi ilmiah..."
           />
-          {!compact ? (
+          {!compact && !isMobile ? (
             <select className="form-input" value={yearRange} onChange={(event) => setYearRange(event.target.value)}>
               <option value="3">3 tahun</option>
               <option value="5">5 tahun</option>
@@ -492,7 +511,7 @@ export function ReferenceManager({ workspaceId, currentChapterKey = null, onClos
               <option value="all">Semua</option>
             </select>
           ) : null}
-          <button className="btn btn-primary" type="submit" disabled={searching}>
+          <button className="btn btn-primary" type="submit" disabled={searching} style={{ width: isMobile ? "100%" : "auto" }}>
             <PremiumIcon name="search" size={14} />
             {searching ? "Mencari..." : "Cari"}
           </button>
@@ -550,7 +569,24 @@ export function ReferenceManager({ workspaceId, currentChapterKey = null, onClos
         ) : null}
 
         {searchResults.length ? (
-          <div className="workspace-scroll" style={{ marginTop: "1rem", display: "flex", flexDirection: "column", gap: "0.65rem", maxHeight: compact ? "220px" : "320px", paddingRight: "0.15rem" }}>
+          <div className="workspace-scroll" style={{ 
+            marginTop: "1rem", 
+            display: "flex", 
+            flexDirection: "column", 
+            gap: "0.65rem", 
+            maxHeight: isMobile ? "200px" : (compact ? "220px" : "320px"), 
+            paddingRight: "0.15rem", 
+            border: "2px solid var(--primary-light)", 
+            borderRadius: "12px", 
+            padding: "0.75rem",
+            backgroundColor: "rgba(79, 70, 229, 0.03)"
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+              <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--primary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>HASIL PENCARIAN:</div>
+              <button className="btn btn-ghost" onClick={() => setSearchResults([])} style={{ padding: "0.2rem 0.5rem", fontSize: "0.7rem", color: "var(--text-muted)" }}>
+                <PremiumIcon name="x" size={12} /> Tutup
+              </button>
+            </div>
             {searchResults.map((paper) => {
               const importedReference = findExistingReference(paper);
 
@@ -560,12 +596,12 @@ export function ReferenceManager({ workspaceId, currentChapterKey = null, onClos
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontSize: "0.9rem", fontWeight: 600, color: "var(--text-main)" }}>{paper.title}</div>
                       <div style={{ fontSize: "0.76rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
-                        {paper.authorString} | {paper.year || "Tanpa tahun"} {paper.venue ? `| ${paper.venue}` : ""}
+                        {paper.authorString} | {paper.year || "Tanpa tahun"}
                       </div>
                     </div>
-                    <button className={`btn ${importedReference ? "btn-outline" : "btn-primary"}`} onClick={() => void handleImportReference(paper)} disabled={!!importedReference}>
+                    <button className={`btn ${importedReference ? "btn-outline" : "btn-primary"}`} onClick={() => void handleImportReference(paper)} disabled={!!importedReference} style={{ padding: "0.4rem 0.6rem", fontSize: "0.75rem" }}>
                       <PremiumIcon name={importedReference ? "checkCircle" : "plus"} size={14} />
-                      {importedReference ? "Sudah Diimpor" : "Import"}
+                      {importedReference ? "Ada" : "Import"}
                     </button>
                   </div>
                 </div>
@@ -575,28 +611,7 @@ export function ReferenceManager({ workspaceId, currentChapterKey = null, onClos
         ) : null}
       </div>
 
-      {!compact ? (
-        <div className="glass-panel" style={{ padding: "1rem", backgroundColor: "var(--surface)" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", marginBottom: "0.85rem" }}>
-            <div>
-              <h3 style={{ fontSize: "1rem", margin: 0 }}>Referensi Workspace</h3>
-              <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.8rem" }}>
-                Pilih referensi untuk ekspor BibTeX atau APA, lalu kelola file dan catatan per sumber.
-              </p>
-            </div>
-            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-              <button className="btn btn-outline" onClick={handleExportBibtex} disabled={!selectedIds.length}>
-                <PremiumIcon name="download" size={14} />
-                BibTeX
-              </button>
-              <button className="btn btn-outline" onClick={handleExportApa} disabled={!selectedIds.length}>
-                <PremiumIcon name="downloadCloud" size={14} />
-                APA
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+
 
       <div className="workspace-scroll" style={{ display: "flex", flexDirection: "column", gap: "0.85rem", overflowY: "auto", paddingRight: "0.15rem", flex: 1, minHeight: 0, maxHeight: compact ? "360px" : "calc(100vh - 300px)" }}>
         {displayedReferences.length === 0 ? (

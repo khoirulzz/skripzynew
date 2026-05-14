@@ -608,9 +608,17 @@ const [isMobile, setIsMobile] = useState(false);
         <div style={{ display: "flex", flexDirection: isXs ? "column" : "row", flexWrap: "wrap", justifyContent: "space-between", gap: isXs ? "0.6rem" : "0.9rem", alignItems: isXs ? "stretch" : "center" }}>
           <div style={{ minWidth: 0, flex: isSm ? "auto" : "1 1 360px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: isXs ? "0.3rem" : "0.65rem", flexWrap: isSm ? "nowrap" : "wrap" }}>
-              <Link href="/dashboard/skripsi" style={{ display: "inline-flex", color: "var(--text-muted)", flexShrink: 0 }}>
+              <button 
+                onClick={() => {
+                  if (saveState === "dirty") {
+                    if (!window.confirm("Ada perubahan yang belum disimpan. Anda yakin ingin keluar?")) return;
+                  }
+                  window.location.href = "/dashboard/skripsi";
+                }} 
+                style={{ display: "inline-flex", color: "var(--text-muted)", flexShrink: 0, background: "none", border: "none", padding: 0, cursor: "pointer" }}
+              >
                 <PremiumIcon name="arrowLeft" size={isSm ? 14 : 18} />
-              </Link>
+              </button>
               <h1 style={{ fontSize: isSm ? "0.85rem" : "1.05rem", margin: 0, whiteSpace: isSm ? "normal" : "nowrap", overflow: "hidden", textOverflow: isSm ? "clip" : "ellipsis", lineHeight: isSm ? 1.3 : 1, minWidth: 0, flex: 1, wordBreak: "break-word" }}>
                 {workspace.title || "Tanpa Judul"}
               </h1>
@@ -969,7 +977,7 @@ const [isMobile, setIsMobile] = useState(false);
             className="workspace-scroll"
             style={{
               position: "fixed",
-              top: isMobile ? "0.75rem" : contextPreviewReference ? "104px" : "84px",
+              top: isMobile ? "2.5rem" : contextPreviewReference ? "104px" : "84px",
               right: "0.75rem",
               bottom: "0.75rem",
               width: contextPanelWidth,

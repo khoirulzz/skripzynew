@@ -182,7 +182,7 @@ export default function ParafrasePage() {
   };
 
   return (
-    <div className="animate-fade-in" style={{ maxWidth: "1200px", margin: "0 auto", paddingBottom: isMobile ? "2rem" : 0 }}>
+    <div className="animate-fade-in" style={{ maxWidth: "1100px", margin: "0 auto", paddingBottom: isMobile ? "2rem" : 0 }}>
 
       {/* Header */}
       <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: isMobile ? "flex-start" : "center", gap: isMobile ? "0.75rem" : "1rem", marginBottom: isMobile ? "1.5rem" : "2rem" }}>
@@ -220,7 +220,7 @@ export default function ParafrasePage() {
         </div>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 300px", gap: isMobile ? "1rem" : "1.75rem", alignItems: "start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 300px", gap: isMobile ? "1rem" : "1.5rem", alignItems: "start" }}>
 
         {/* ── Left: Input + Output ───────────── */}
         <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
@@ -238,7 +238,7 @@ export default function ParafrasePage() {
               onChange={e => setInput(e.target.value)}
               placeholder="Tempel atau ketik teks yang ingin Anda parafrase di sini..."
               className="form-textarea"
-              style={{ minHeight: isMobile ? "40vh" : "240px", resize: "vertical", fontFamily: "'Outfit', sans-serif", lineHeight: 1.6, fontSize: isMobile ? "0.8rem" : "0.95rem", border: isMobile ? "none" : "1px solid var(--border)", padding: isMobile ? "0.5rem 0" : "0.75rem 1rem", backgroundColor: isMobile ? "transparent" : "var(--background)" }}
+              style={{ minHeight: isMobile ? "40vh" : "200px", resize: "vertical", fontFamily: "'Outfit', sans-serif", lineHeight: 1.6, fontSize: isMobile ? "0.8rem" : "0.95rem", border: isMobile ? "none" : "1px solid var(--border)", padding: isMobile ? "0.5rem 0" : "0.75rem 1rem", backgroundColor: isMobile ? "transparent" : "var(--background)" }}
               maxLength={charLimit}
             />
             {plan === "free" && (

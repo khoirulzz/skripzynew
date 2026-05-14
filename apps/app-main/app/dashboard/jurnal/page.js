@@ -12,6 +12,14 @@ export default function JurnalListPage() {
   const [workspaces, setWorkspaces] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   useEffect(() => {
     async function fetchWorkspaces() {
@@ -62,8 +70,8 @@ export default function JurnalListPage() {
     <div className="animate-fade-in">
       <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", marginBottom: "2rem", gap: "1rem" }}>
         <div>
-          <h1 style={{ fontSize: "1.75rem", margin: 0 }}>Proyek Jurnal Akademik</h1>
-          <p className="text-muted" style={{ margin: 0 }}>Kelola draf manuskrip jurnal Anda</p>
+          <h1 style={{ fontSize: isMobile ? "1.25rem" : "1.75rem", margin: 0 }}>Proyek Jurnal Akademik</h1>
+          <p className="text-muted" style={{ margin: "0.2rem 0 0 0", fontSize: isMobile ? "0.75rem" : "1rem" }}>Kelola draf manuskrip jurnal Anda</p>
         </div>
         <Link href="/dashboard/jurnal/create" className="btn btn-primary">
           <PremiumIcon name="fileText" size={18} />
@@ -102,10 +110,10 @@ export default function JurnalListPage() {
                     {ws.status || "Draft"}
                   </span>
                 </div>
-                <h3 style={{ fontSize: "1.1rem", margin: "0 0 0.5rem 0", color: "var(--text-main)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
+                <h3 style={{ fontSize: isMobile ? "0.95rem" : "1.1rem", margin: "0 0 0.5rem 0", color: "var(--text-main)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
                   {ws.title || "Tanpa Judul"}
                 </h3>
-                <p style={{ fontSize: "0.875rem", margin: 0, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", height: "2.6rem", wordWrap: "break-word" }}>
+                <p style={{ fontSize: isMobile ? "0.75rem" : "0.875rem", margin: 0, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", height: isMobile ? "2.2rem" : "2.6rem", wordWrap: "break-word" }}>
                   {ws.topic || "Belum ada topik..."}
                 </p>
                 <div style={{ marginTop: "1.5rem", fontSize: "0.75rem", color: "var(--text-muted)" }}>

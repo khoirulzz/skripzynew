@@ -243,7 +243,7 @@ ${instruction || "Tidak ada arahan tambahan."}
               </div>
               <h4 style={{ fontSize: "0.98rem", margin: "0.2rem 0 0 0" }}>{config.title}</h4>
             </div>
-            <button className="btn btn-ghost" onClick={() => setIsOpen(false)} style={{ padding: "0.3rem", flexShrink: 0 }}>
+            <button className="btn btn-ghost" onClick={() => setIsOpen(false)} style={{ padding: "0.3rem", flexShrink: 0 }} disabled={isGenerating}>
               <PremiumIcon name="x" size={14} />
             </button>
           </div>
@@ -276,6 +276,8 @@ ${instruction || "Tidak ada arahan tambahan."}
             placeholder="Tambahkan instruksi khusus, misalnya fokuskan pada research gap, gaya penulisan, atau struktur subbab tertentu..."
             value={instruction}
             onChange={(event) => setInstruction(event.target.value)}
+            disabled={isGenerating}
+            style={{ opacity: isGenerating ? 0.6 : 1, cursor: isGenerating ? "not-allowed" : "text" }}
           />
 
           {status ? (

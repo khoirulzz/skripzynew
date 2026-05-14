@@ -102,10 +102,10 @@ export default function SkripsiListPage() {
                   {ws.status || "Draft"}
                 </span>
               </div>
-              <h3 style={{ fontSize: "1.1rem", margin: "0 0 0.5rem 0", color: "var(--text-main)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
+              <h3 style={{ fontSize: isMobile ? "0.95rem" : "1.1rem", margin: "0 0 0.5rem 0", color: "var(--text-main)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
                 {ws.title || "Tanpa Judul"}
               </h3>
-              <p style={{ fontSize: "0.875rem", margin: 0, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", height: "2.6rem", wordWrap: "break-word" }}>
+              <p style={{ fontSize: isMobile ? "0.75rem" : "0.875rem", margin: 0, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", height: isMobile ? "2.2rem" : "2.6rem", wordWrap: "break-word" }}>
                 {ws.topic || "Belum ada topik..."}
               </p>
               <div style={{ marginTop: "1.5rem", fontSize: "0.75rem", color: "var(--text-muted)" }}>

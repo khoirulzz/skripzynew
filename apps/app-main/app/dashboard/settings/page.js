@@ -26,9 +26,9 @@ async function uploadProfilePhotoToCloudinary(file) {
 
   const sigRes = await fetch(`${WORKER_URL}/api/cloudinary-sign`, {
     method: "POST",
-    headers: { 
+    headers: {
       "Content-Type": "application/json",
-      "x-skripzy-secret": WORKER_SECRET 
+      "x-skripzy-secret": WORKER_SECRET
     },
     body: JSON.stringify({ folder: "Skripzy/Profil" }),
   });
@@ -323,8 +323,8 @@ export default function SettingsPage() {
 
         {/* ── Bantuan Section ── */}
         <Section title="Bantuan & Dukungan">
-          <Row icon="messageCircle" label="Hubungi Admin" value="WhatsApp / Bantuan" onClick={() => window.open("https://wa.me/6281234567890", "_blank")} />
-          <Row icon="helpCircle" label="Syarat & Ketentuan" value="app.skripzy.id/terms" onClick={() => window.open("/terms", "_blank")} />
+          <Row icon="messageCircle" label="Hubungi Admin" value="WhatsApp / Bantuan" onClick={() => window.open("https://wa.me/6285771298582", "_blank")} />
+          <Row icon="helpCircle" label="Syarat & Ketentuan" value="skripzy.id/privacy-policy" onClick={() => window.open("/terms", "_blank")} />
         </Section>
 
         {/* ── Keluar Section ── */}
@@ -333,7 +333,7 @@ export default function SettingsPage() {
         </Section>
 
         <p style={{ textAlign: "center", fontSize: "0.68rem", color: "var(--text-muted)", marginTop: "1rem" }}>
-          Skripzy v2.0 · Dibuat dengan ❤️ untuk peneliti Indonesia
+          Skripzy v2.1 Workspace Research © 2026
         </p>
       </div>
     </div>

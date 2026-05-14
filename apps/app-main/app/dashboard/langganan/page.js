@@ -54,7 +54,7 @@ function StatusBadge({ status }) {
   );
 }
 
-function ChoiceCard({ title, subtitle, badge, selected, disabled, accent, onClick, children }) {
+function ChoiceCard({ title, subtitle, badge, selected, disabled, accent, onClick, children, price }) {
   const [expanded, setExpanded] = useState(false);
   const isExpanded = selected || expanded;
 
@@ -85,6 +85,11 @@ function ChoiceCard({ title, subtitle, badge, selected, disabled, accent, onClic
             )}
           </div>
           {subtitle && <p style={{ margin: "0.4rem 0 0", fontSize: "0.78rem", color: "var(--text-muted)", lineHeight: 1.4 }}>{subtitle}</p>}
+          {price && !isExpanded && (
+            <div style={{ marginTop: "0.5rem", display: "flex", alignItems: "baseline", gap: "0.2rem" }}>
+              <span style={{ fontSize: "0.95rem", fontWeight: 900, color: "var(--text-main)" }}>{price}</span>
+            </div>
+          )}
         </div>
         <button
           onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
@@ -211,6 +216,8 @@ export default function LanggananPage() {
   const [referenceNumber, setReferenceNumber] = useState("");
   const [proofFile, setProofFile] = useState(null);
   const [uploadPreview, setUploadPreview] = useState("");
+  const [activeManualGroup, setActiveManualGroup] = useState(null); // Default to null so nothing is expanded initially
+
 
   const [submitting, setSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
@@ -573,7 +580,7 @@ export default function LanggananPage() {
                     const isSelected = selectedOrder?.type === "plan" && selectedOrder.item.planId === plan.planId;
                     const isCurrent = currentPlan === plan.planId;
                     return (
-                      <ChoiceCard key={plan.planId} title={plan.name} subtitle={plan.description} badge={plan.popular ? "Paling Dipilih" : isCurrent ? "Aktif" : null} selected={isSelected} disabled={false} accent={plan.accent} onClick={() => { clearMessages(); setSelectedTarget({ type: "plan", id: plan.planId }); }}>
+                      <ChoiceCard key={plan.planId} title={plan.name} subtitle={plan.description} badge={plan.popular ? "Paling Dipilih" : isCurrent ? "Aktif" : null} selected={isSelected} disabled={false} accent={plan.accent} onClick={() => { clearMessages(); setSelectedTarget({ type: "plan", id: plan.planId }); }} price={formatRupiah(calculatePeriodPrice(plan.price || 0, billingPeriodId).finalPrice)}>
                         <div style={{ display: "flex", alignItems: "baseline", gap: "0.3rem", marginBottom: "0.8rem", flexWrap: "wrap" }}>
                           <span style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>Rp</span>
                           <span style={{ fontSize: "1.75rem", fontWeight: 900 }}>{Number(calculatePeriodPrice(plan.price || 0, billingPeriodId).finalPrice).toLocaleString("id-ID")}</span>
@@ -601,7 +608,7 @@ export default function LanggananPage() {
                     {topups.map((item) => {
                       const isSelected = selectedOrder?.type === "topup" && selectedOrder.item.slug === item.slug;
                       return (
-                        <ChoiceCard key={item.slug} title={item.name} subtitle={item.description} badge={item.badgeText} selected={isSelected} disabled={false} accent={item.accent} onClick={() => { clearMessages(); setSelectedTarget({ type: "topup", id: item.slug }); }}>
+                        <ChoiceCard key={item.slug} title={item.name} subtitle={item.description} badge={item.badgeText} selected={isSelected} disabled={false} accent={item.accent} onClick={() => { clearMessages(); setSelectedTarget({ type: "topup", id: item.slug }); }} price={formatRupiah(item.price)}>
                           <div style={{ padding: "0.9rem", borderRadius: 14, backgroundColor: "var(--surface-hover)" }}>
                             <p style={{ margin: 0, fontSize: "0.65rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 700 }}>Total Kredit</p>
                             <p style={{ margin: "0.3rem 0 0", fontSize: "1.45rem", fontWeight: 900 }}>{getTotalCreditsFromTopup(item).toLocaleString("id-ID")}</p>
@@ -630,7 +637,7 @@ export default function LanggananPage() {
               {PAYMENT_METHODS.map((item) => {
                 const isSelected = paymentMethodId === item.id;
                 return (
-                  <ChoiceCard key={item.id} title={item.label} subtitle={item.description} badge={item.badgeText} selected={isSelected} disabled={false} accent={item.accent} onClick={() => { setPaymentMethodId(item.id); clearMessages(); }}>
+                  <ChoiceCard key={item.id} title={item.label} subtitle={item.description} badge={item.badgeText} selected={isSelected} disabled={false} accent={item.accent} onClick={() => { setPaymentMethodId(item.id); if(item.id !== 'manual') setActiveManualGroup(null); clearMessages(); }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", padding: "0.8rem 0.9rem", borderRadius: 14, backgroundColor: item.id === "automatic" ? "rgba(59,130,246,0.08)" : "rgba(16,185,129,0.08)", color: item.id === "automatic" ? "#2563EB" : "#047857", fontSize: "0.8rem", fontWeight: 700 }}>
                       <PremiumIcon name={item.id === "automatic" ? "sparkles" : "checkCircle"} size={16} />
                       {item.id === "automatic" ? "Checkout otomatis via DOKU" : "Verifikasi manual oleh admin"}
@@ -642,11 +649,49 @@ export default function LanggananPage() {
 
             {paymentMethodId === "manual" && (
               <div className="animate-fade-in">
-                {[ { key: "bank", title: "Bank Transfer" }, { key: "qris", title: "QRIS" }, { key: "ewallet", title: "E-Wallet" } ].map((group) => (
-                  <div key={group.key} style={{ marginBottom: "1.5rem" }}>
-                    <p style={{ margin: "0 0 0.7rem", fontSize: "0.8rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 800 }}>{group.title}</p>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "0.8rem", marginBottom: "1.5rem" }}>
+                  {[ 
+                    { key: "bank", title: "Bank Transfer", icon: "creditCard" }, 
+                    { key: "qris", title: "QRIS", icon: "sparkles" }, 
+                    { key: "ewallet", title: "E-Wallet", icon: "wallet" } 
+                  ].map((group) => {
+                    const isActive = activeManualGroup === group.key;
+                    return (
+                      <div 
+                        key={group.key}
+                        onClick={() => setActiveManualGroup(isActive ? null : group.key)}
+                        style={{
+                          padding: "1rem",
+                          borderRadius: 20,
+                          backgroundColor: isActive ? "var(--primary)" : "var(--surface)",
+                          color: isActive ? "white" : "var(--text-main)",
+                          border: `1.5px solid ${isActive ? "var(--primary)" : "var(--border)"}`,
+                          cursor: "pointer",
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: "0.6rem",
+                          transition: "all 0.3s ease",
+                          boxShadow: isActive ? "0 8px 16px rgba(79,70,229,0.2)" : "var(--shadow-sm)"
+                        }}
+                      >
+                        <div style={{ width: 44, height: 44, borderRadius: "50%", backgroundColor: isActive ? "rgba(255,255,255,0.2)" : "var(--surface-hover)", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.3s ease" }}>
+                          <PremiumIcon name={group.icon} size={22} style={{ color: isActive ? "white" : "var(--text-muted)" }} />
+                        </div>
+                        <span style={{ fontSize: "0.8rem", fontWeight: 800 }}>{group.title}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {activeManualGroup && (
+                  <div className="animate-fade-in" style={{ borderTop: "1px dashed var(--border)", paddingTop: "1.5rem" }}>
+                    <p style={{ margin: "0 0 1rem", fontSize: "0.75rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 800 }}>
+                      Pilih Channel {activeManualGroup === 'bank' ? 'Bank' : activeManualGroup === 'qris' ? 'QRIS' : 'E-Wallet'}
+                    </p>
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: "0.8rem" }}>
-                      {groupedChannels[group.key].map((channel) => (
+                      {groupedChannels[activeManualGroup].map((channel) => (
                         <ChoiceCard key={channel.id} title={channel.label} subtitle={channel.helper} badge={paymentChannelId === channel.id ? "Dipilih" : null} selected={paymentChannelId === channel.id} disabled={false} accent={channel.accent} onClick={() => setPaymentChannelId(channel.id)}>
                           <div style={{ padding: "0.75rem 0.9rem", borderRadius: 14, backgroundColor: "var(--surface-hover)", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem" }}>
                             <div>
@@ -663,7 +708,7 @@ export default function LanggananPage() {
                       ))}
                     </div>
                   </div>
-                ))}
+                )}
               </div>
             )}
           </div>

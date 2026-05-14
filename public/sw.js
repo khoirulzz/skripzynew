@@ -169,8 +169,11 @@ async function staleWhileRevalidate(request) {
   // Start fetching in the background
   const fetchPromise = fetch(request.clone()).then((response) => {
     if (response.ok) {
-      const cache = caches.open(API_CACHE);
-      cache.then((c) => c.put(request, response.clone()));
+      // Clone the response immediately while it's still fresh
+      const responseToCache = response.clone();
+      caches.open(API_CACHE).then((cache) => {
+        cache.put(request, responseToCache);
+      });
     }
     return response;
   });

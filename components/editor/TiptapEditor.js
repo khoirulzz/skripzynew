@@ -4,7 +4,6 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import { BubbleMenu } from "@tiptap/react/menus";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
-import Underline from "@tiptap/extension-underline";
 import TextAlign from "@tiptap/extension-text-align";
 import { Highlight } from "@tiptap/extension-highlight";
 import { Subscript } from "@tiptap/extension-subscript";
@@ -342,7 +341,6 @@ export function TiptapEditor({
     extensions: [
       StarterKit.configure({ bulletList: { keepMarks: true }, orderedList: { keepMarks: true } }),
       Placeholder.configure({ placeholder, emptyNodeClass: "tiptap-placeholder" }),
-      Underline,
       TextAlign.configure({ types: ["heading", "paragraph"] }),
       Highlight.configure({ multicolor: true }),
       Subscript,

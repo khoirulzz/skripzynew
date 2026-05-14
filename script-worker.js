@@ -378,7 +378,8 @@ async function executeGeminiWithRotation(env, ctx, groupsToTry, urlModel, isStre
                     : isEmbedding
                         ? `/v1beta/models/${model}:embedContent`
                         : `/v1beta/models/${model}:generateContent`;
-                const destinationURL = `https://gateway.ai.cloudflare.com/v1/094df8c8c682a53ca0a27d87735baa51/skripzy-ai/google-ai-studio${path}&key=${keyObj.key}`;
+                const separator = path.includes("?") ? "&" : "?";
+                const destinationURL = `https://gateway.ai.cloudflare.com/v1/094df8c8c682a53ca0a27d87735baa51/skripzy-ai/google-ai-studio${path}${separator}key=${keyObj.key}`;
 
                 const apiResponse = await fetch(destinationURL, {
                     method: "POST",
@@ -1164,6 +1165,7 @@ const worker = {
             try {
                 const result = await proxyGeminiGeneration({
                     env,
+                    ctx,
                     body: payload,
                     groupHeader: payload.group || "group_3",
                     model: payload.model || "gemini-2.5-flash",

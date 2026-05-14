@@ -7,7 +7,7 @@ import { useBillingCatalog } from "@/lib/useBillingCatalog";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import ReactMarkdown from "react-markdown";
-import { callGeminiStream, MODELS } from "@/lib/callWorker";
+import { callGeminiStream, callGemini, MODELS } from "@/lib/callWorker";
 import { deductCredits } from "@/lib/credits";
 import { indexDocument, searchSimilarChunks } from "@/lib/ragService";
 import { d1Request } from "@/lib/d1Client";
@@ -106,6 +106,9 @@ export default function NotebookDetailPage() {
           id: data.id || data.document_id,
           title: data.document_title,
           url: data.cloudinary_url,
+          author: data.author || "",
+          year: data.year || "",
+          summary: data.summary || "",
           createdAt: new Date(data.created_at || Date.now())
         }));
         docsArray.sort((a, b) => b.createdAt - a.createdAt);
@@ -339,28 +342,84 @@ export default function NotebookDetailPage() {
 
     try {
       console.log(`Searching for chunks with ${selectedDocs.length} selected documents...`);
-      // 1. Cari chunk relevan (tingkatkan limit dari 5 ke 12 agar konteks lebih kaya)
-      const chunks = await searchSimilarChunks(user.uid, input, selectedDocs, 12);
-      console.log(`Found ${chunks.length} relevant chunks`);
-
-      // 2. Rakit context
-      const context = chunks.map((c, i) =>
-        `[Document ID: ${c.document_id} | Judul: ${c.document_title} | Hal: ${c.page_number}]:\n${c.text_content}`
-      ).join("\n\n");
-      console.log(`Context length: ${context.length} characters`);
-
-      const systemInstruction = `Kamu adalah Asisten Notebook Skripzy. Tugasmu adalah menjawab pertanyaan pengguna HANYA berdasarkan referensi yang diberikan di bawah ini.
       
+      // OPTIMASI: Ekstrak kata kunci dari pertanyaan panjang agar Vectorize tidak bingung dengan instruksi format
+      let searchInput = input;
+      if (input.split(" ").length > 3) {
+        try {
+          const searchKeywordSystem = `Kamu adalah mesin ekstraksi kata kunci Semantic Search.
+Tugas: Ekstrak kata kunci inti dari pertanyaan terbaru user dengan mempertimbangkan konteks percakapan terakhir.
+ATURAN:
+1. Abaikan instruksi format (misal: "ringkaskan", "buat tabel").
+2. Fokus pada topik, subjek, atau variabel penelitian.
+3. HANYA keluarkan kata kunci (maks 6 kata), tanpa penjelasan.
+4. Jika pertanyaan user merujuk ke pesan sebelumnya (misal: "apa dampaknya?"), gabungkan konteksnya menjadi kata kunci lengkap (misal: "dampak digitalisasi UMKM").
+
+KONTEKS TERAKHIR:
+${messages.slice(-3).map(m => `${m.role}: ${m.text}`).join("\n")}
+
+PERTANYAAN USER: "${input}"`;
+          
+          const extracted = await callGemini({
+            prompt: input,
+            systemInstruction: searchKeywordSystem,
+            model: MODELS.lite || MODELS.primary,
+            group: "group_3"
+          });
+          
+          if (extracted && extracted.trim() && extracted.length < 60) {
+            searchInput = extracted.trim();
+            console.log(`[RAG] Query transformed: "${input}" -> "${searchInput}"`);
+          }
+        } catch (extractErr) {
+          console.warn("[RAG] Keyword extraction failed, fallback to original:", extractErr);
+        }
+      }
+
+      // ── GUARANTEED CONTEXT: Selalu sertakan AI summary dari setiap dokumen terpilih ──
+      // Ini memastikan pertanyaan umum ("apa abstrak?", "siapa penulisnya?") selalu terjawab
+      // tanpa bergantung pada kecocokan vector search.
+      const summaryContext = selectedDocs
+        .map(docId => {
+          const doc = documents.find(d => d.id === docId);
+          if (!doc?.summary) return null;
+          return `[PROFIL DOKUMEN — ID: ${docId} | Judul: ${doc.title}]:\n${doc.summary}`;
+        })
+        .filter(Boolean)
+        .join("\n\n");
+
+      // ── VECTOR CONTEXT: Cari chunk detail yang relevan dengan pertanyaan ──
+      const vectorChunks = await searchSimilarChunks(user.uid, searchInput, selectedDocs, 10);
+      console.log(`Found ${vectorChunks.length} relevant chunks from vector search`);
+
+      const vectorContext = vectorChunks.map(c => {
+        const docInfo = documents.find(d => d.id === c.document_id);
+        const author = docInfo?.author || "";
+        const year = docInfo?.year || "";
+        let header = `[Document ID: ${c.document_id} | Judul: ${c.document_title}`;
+        if (author) header += ` | Penulis: ${author}`;
+        if (year) header += ` | Tahun: ${year}`;
+        header += ` | Hal: ${c.page_number}]:`;
+        return `${header}\n${c.text_content}`;
+      }).join("\n\n");
+
+      // Gabungkan: summary (selalu ada) + vector chunks (jika ada)
+      const context = [summaryContext, vectorContext].filter(Boolean).join("\n\n---\n\n") 
+        || "TIDAK ADA REFERENSI DITEMUKAN.";
+      console.log(`Context: ${summaryContext.length} chars summary + ${vectorContext.length} chars vector`);
+
+      const systemInstruction = `Kamu adalah Asisten Notebook Skripzy. Tugasmu menjawab pertanyaan HANYA berdasarkan referensi berikut.
+
 REFERENSI:
 ${context}
 
 ATURAN:
-1. Jawab dalam bahasa Indonesia yang profesional namun mudah dimengerti.
-2. Jika jawaban tidak ada di referensi, katakan "Maaf, informasi tersebut tidak ditemukan dalam referensi yang Anda pilih."
-3. WAJIB memberikan sitasi di akhir setiap poin atau paragraf menggunakan format Markdown Link.
-   Contoh format yang BENAR: \`[Nama Penulis/Judul, Hal X](#doc_12345)\`
-   Pastikan kamu mengambil \`Document ID\` dan \`Hal\` dari bagian referensi di atas untuk mengisi link dan teks.
-4. Fokus pada fakta yang ada di teks.`;
+1. Jawab dalam bahasa Indonesia yang profesional dan mudah dipahami.
+2. Jika konteks berisi PROFIL DOKUMEN, gunakan data tersebut untuk menjawab pertanyaan umum tentang dokumen (abstrak, penulis, tahun, metode, dll).
+3. JANGAN mengarang informasi yang tidak ada di referensi.
+4. WAJIB berikan sitasi format: \`[(Penulis, Tahun), Hal X](#doc_ID)\` di setiap poin.
+   Gunakan Document ID yang ada di referensi. Untuk pertanyaan dari PROFIL DOKUMEN, gunakan halaman 1.
+5. Fokus HANYA pada fakta dari teks referensi.`;
 
       const aiMessage = { role: "assistant", text: "" };
       setMessages(prev => [...prev, aiMessage]);
@@ -688,10 +747,19 @@ ATURAN:
                                   const docId = props.href.substring(1);
                                   const doc = documents.find(d => d.id === docId);
                                   if (doc) {
-                                    // Parse page if possible e.g. [Hal 5](#doc_123)
-                                    const pageMatch = props.children[0]?.match(/Hal\.?\s*(\d+)/i);
+                                    // Parse page if possible e.g. [(Penulis, Tahun), Hal 5](#doc_123)
+                                    let linkText = "";
+                                    try {
+                                      linkText = typeof props.children === 'string' ? props.children : JSON.stringify(props.children);
+                                    } catch(e) {
+                                      linkText = String(props.children);
+                                    }
+                                    
+                                    const pageMatch = linkText.match(/Hal\.?\s*(\d+)/i) || linkText.match(/Halaman\s*(\d+)/i) || linkText.match(/p\.?\s*(\d+)/i);
                                     openPdfViewer(doc);
-                                    if (pageMatch) setViewerPage(parseInt(pageMatch[1]));
+                                    if (pageMatch) {
+                                      setTimeout(() => setViewerPage(parseInt(pageMatch[1])), 100);
+                                    }
                                   }
                                 }}
                                 style={{
@@ -828,22 +896,40 @@ ATURAN:
         <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: isMobile ? 0 : "1rem" }}>
           <div style={{ backgroundColor: "var(--background)", border: isMobile ? "none" : "1px solid var(--border)", borderRadius: isMobile ? 0 : "var(--radius-md)", boxShadow: "var(--shadow-lg)", maxWidth: "56rem", width: "100%", maxHeight: "100vh", display: "flex", flexDirection: "column", height: isMobile ? "100vh" : "85vh" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "1rem", borderBottom: "1px solid var(--border)" }}>
-              <h3 style={{ fontWeight: 600, fontSize: "0.875rem", margin: 0 }}>{selectedDocForViewer.title}</h3>
-              <button
-                onClick={closePdfViewer}
-                style={{ padding: "0.25rem", background: "transparent", border: "none", cursor: "pointer", borderRadius: "var(--radius-sm)", color: "var(--text-main)" }}
-                onMouseOver={(e) => e.currentTarget.style.backgroundColor = "var(--surface-hover)"}
-                onMouseOut={(e) => e.currentTarget.style.backgroundColor = "transparent"}
-              >
-                <PremiumIcon name="x" size={18} />
-              </button>
+              <h3 style={{ fontWeight: 600, fontSize: "0.875rem", margin: 0, flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", paddingRight: "1rem" }}>{selectedDocForViewer.title}</h3>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <a 
+                  href={selectedDocForViewer.url} 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  style={{ padding: "0.3rem 0.6rem", fontSize: "0.75rem", display: "flex", alignItems: "center", gap: "0.25rem", textDecoration: "none", color: "var(--primary)", border: "1px solid var(--primary)", borderRadius: "var(--radius-sm)", fontWeight: 600 }}
+                >
+                  <PremiumIcon name="externalLink" size={12} /> Buka Penuh
+                </a>
+                <button
+                  onClick={closePdfViewer}
+                  style={{ padding: "0.25rem", background: "transparent", border: "none", cursor: "pointer", borderRadius: "var(--radius-sm)", color: "var(--text-main)" }}
+                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = "var(--surface-hover)"}
+                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = "transparent"}
+                >
+                  <PremiumIcon name="x" size={18} />
+                </button>
+              </div>
             </div>
             <div style={{ flex: 1, padding: "1rem", minHeight: 0 }}>
-              <iframe
-                src={`${selectedDocForViewer.url}#page=${viewerPage}`}
-                style={{ width: "100%", height: "100%", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)" }}
-                title={selectedDocForViewer.title}
-              />
+              {isMobile ? (
+                <iframe
+                  src={`https://docs.google.com/gview?url=${encodeURIComponent(selectedDocForViewer.url)}&embedded=true`}
+                  style={{ width: "100%", height: "100%", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)" }}
+                  title={selectedDocForViewer.title}
+                />
+              ) : (
+                <iframe
+                  src={`${selectedDocForViewer.url}#page=${viewerPage}`}
+                  style={{ width: "100%", height: "100%", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)" }}
+                  title={selectedDocForViewer.title}
+                />
+              )}
             </div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", padding: "1rem", borderTop: "1px solid var(--border)" }}>
               <button

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, use } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { useBillingCatalog } from "@/lib/useBillingCatalog";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -809,7 +810,7 @@ ATURAN:
                 />
                 <div style={{ position: "absolute", right: "0.75rem", top: "50%", transform: "translateY(-50%)", display: "flex", alignItems: "center", gap: "0.5rem" }}>
                   {isQuerying ? (
-                    <div style={{ width: "20px", height: "20px", border: "2px solid var(--primary)", borderTopColor: "transparent", borderRadius: "50%" }} className="animate-spin-slow"></div>
+                    <LoadingSpinner size={20} className="text-primary" />
                   ) : (
                     <button
                       type="submit"

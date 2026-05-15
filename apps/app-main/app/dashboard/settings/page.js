@@ -6,6 +6,7 @@ import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { d1Request } from "@/lib/d1Client";
 import Link from "next/link";
 
@@ -232,7 +233,7 @@ export default function SettingsPage() {
             >
               {photoUploading ? (
                 <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.4)", borderRadius: "50%" }}>
-                  <PremiumIcon name="sparkles" size={24} style={{ color: "white" }} className="animate-pulse" />
+                  <LoadingSpinner size={24} className="text-white" />
                 </div>
               ) : photoUrl ? (
                 <img src={photoUrl} alt="Profil" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
@@ -283,7 +284,9 @@ export default function SettingsPage() {
                 onKeyDown={e => e.key === "Enter" && handleSaveName()}
               />
               <div style={{ display: "flex", gap: "0.5rem" }}>
-                <button className="btn btn-primary" style={{ flex: 1, padding: "0.55rem", fontSize: "0.8rem" }} onClick={handleSaveName} disabled={saving}>{saving ? "Menyimpan..." : "Simpan"}</button>
+                <button className="btn btn-primary" style={{ flex: 1, padding: "0.55rem", fontSize: "0.8rem", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }} onClick={handleSaveName} disabled={saving}>
+                  {saving ? <><LoadingSpinner size={14} className="text-white" /> Menyimpan...</> : "Simpan"}
+                </button>
                 <button className="btn btn-ghost" style={{ padding: "0.55rem 1rem", fontSize: "0.8rem" }} onClick={() => { setEditingName(false); setNamaValue(userData?.namaLengkap || ""); }}>Batal</button>
               </div>
             </div>
@@ -305,7 +308,9 @@ export default function SettingsPage() {
                 onKeyDown={e => e.key === "Enter" && handleSaveInstitusi()}
               />
               <div style={{ display: "flex", gap: "0.5rem" }}>
-                <button className="btn btn-primary" style={{ flex: 1, padding: "0.55rem", fontSize: "0.8rem" }} onClick={handleSaveInstitusi} disabled={saving}>{saving ? "Menyimpan..." : "Simpan"}</button>
+                <button className="btn btn-primary" style={{ flex: 1, padding: "0.55rem", fontSize: "0.8rem", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }} onClick={handleSaveInstitusi} disabled={saving}>
+                  {saving ? <><LoadingSpinner size={14} className="text-white" /> Menyimpan...</> : "Simpan"}
+                </button>
                 <button className="btn btn-ghost" style={{ padding: "0.55rem 1rem", fontSize: "0.8rem" }} onClick={() => { setEditingInstitusi(false); setInstitusiValue(userData?.asalInstitusi || ""); }}>Batal</button>
               </div>
             </div>

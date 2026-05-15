@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { deductCredits, refundCredits } from "@/lib/credits";
 import { useBillingCatalog } from "@/lib/useBillingCatalog";
@@ -295,7 +296,7 @@ ${instruction || "Tidak ada arahan tambahan."}
           ) : null}
 
           <button className="btn btn-primary" onClick={() => void handleGenerate()} disabled={isGenerating || !canGenerate}>
-            <PremiumIcon name={isGenerating ? "loader" : "sparkles"} size={15} className={isGenerating ? "animate-spin" : ""} />
+            {isGenerating ? <LoadingSpinner size={15} className="text-white mr-2" /> : <PremiumIcon name="sparkles" size={15} />}
             {isGenerating ? "Menyusun Draft..." : "Generate Draft"}
           </button>
         </div>

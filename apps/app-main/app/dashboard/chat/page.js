@@ -7,6 +7,7 @@ import { callGemini, callGeminiStream, MODELS, getGeminiLiveProxyUrl } from "@/l
 import { deductCredits } from "@/lib/credits";
 import { GeminiLiveClient, VOICE_OPTIONS } from "@/lib/geminiLiveClient";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { useBillingCatalog } from "@/lib/useBillingCatalog";
 
 // ── Constants ────────────────────────────────────────────────
@@ -689,18 +690,18 @@ export default function ChatDosenAIPage() {
             {loading && (
               <div style={{ alignSelf: "flex-start", display: "flex", gap: "0.8rem" }}>
                 <div style={{ width: "36px", height: "36px", borderRadius: "50%", backgroundColor: "rgba(99,102,241,0.1)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <PremiumIcon name={searching ? "globe" : "sparkles"} size={18} style={{ color: "var(--primary)" }} className={searching ? "animate-spin-slow" : ""} />
+                  {searching ? <LoadingSpinner size={18} className="text-primary" /> : <PremiumIcon name="sparkles" size={18} style={{ color: "var(--primary)" }} />}
                 </div>
                 <div style={{ padding: "0.85rem 1.1rem", borderRadius: "16px", borderTopLeftRadius: "4px", backgroundColor: "var(--surface-hover)", display: "flex", flexDirection: "column", gap: "8px" }}>
                   {searching && (
                     <div style={{ fontSize: "0.75rem", color: "var(--primary)", fontWeight: 600, display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.2rem" }}>
-                      <span className="animate-pulse">🌐 Mencari informasi di internet...</span>
+                      <LoadingSpinner size={12} className="text-primary" />
+                      <span>Mencari informasi di internet...</span>
                     </div>
                   )}
-                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                    <span className="animate-pulse" style={{ width: 7, height: 7, borderRadius: "50%", backgroundColor: "var(--text-muted)" }} />
-                    <span className="animate-pulse" style={{ width: 7, height: 7, borderRadius: "50%", backgroundColor: "var(--text-muted)", animationDelay: "0.15s" }} />
-                    <span className="animate-pulse" style={{ width: 7, height: 7, borderRadius: "50%", backgroundColor: "var(--text-muted)", animationDelay: "0.3s" }} />
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center", padding: "0.2rem 0" }}>
+                    <LoadingSpinner size={18} className="text-muted" />
+                    <span style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontWeight: 500 }}>AI sedang mengetik...</span>
                   </div>
                 </div>
               </div>

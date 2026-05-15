@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { d1Request } from "@/lib/d1Client";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createWorkspacePayload } from "@/lib/workspaceDefaults";
@@ -87,7 +88,7 @@ export default function ConvertPage() {
   if (loading) {
     return (
       <div style={{ display: "flex", justifyContent: "center", padding: "5rem" }}>
-        <PremiumIcon name="zap" className="text-primary animate-pulse" size={48} />
+        <LoadingSpinner size={48} className="text-primary" />
       </div>
     );
   }
@@ -96,7 +97,7 @@ export default function ConvertPage() {
     return (
       <div className="animate-fade-in" style={{ maxWidth: "600px", margin: "4rem auto", textAlign: "center" }}>
         <div className="glass-panel p-8">
-          <PremiumIcon name="brainCircuit" size={64} className="text-primary animate-bounce m-auto mb-6" />
+          <LoadingSpinner size={64} className="text-primary m-auto mb-6" />
           <h2 style={{ fontSize: "1.5rem", marginBottom: "0.5rem" }}>AI Sedang Mengonversi Skripsi...</h2>
           <p className="text-muted mb-8">Memindai Bab I hingga Bab V, menyesuaikan standar sitasi, dan merangkum narasi sesuai template Jurnal.</p>
           

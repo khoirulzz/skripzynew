@@ -8,6 +8,7 @@ import { deductCredits, refundCredits } from "@/lib/credits";
 import { searchPapersWithFallback } from "@/lib/referenceApis";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
 import { useBillingCatalog } from "@/lib/useBillingCatalog";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import Link from "next/link";
 
 const API_GROUP = "group_2"; // Group untuk Asisten AI
@@ -354,7 +355,7 @@ Berikan hasil murni dalam format Markdown yang rapi. Tanpa markdown block dan ka
           )}
           {activeTab === "judul" && loadingJudul && (
             <div style={{ padding: "1.5rem", backgroundColor: "rgba(79, 70, 229, 0.05)", border: "1px solid rgba(79, 70, 229, 0.2)", borderRadius: "var(--radius-md)", textAlign: "center" }} className="animate-pulse">
-              <PremiumIcon name="sparkles" size={24} style={{ color: "var(--primary)", margin: "0 auto 0.5rem" }} className="animate-spin-slow" />
+              <LoadingSpinner size={32} className="text-primary mx-auto mb-3" />
               <p style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--primary)", marginBottom: "0.5rem", margin: 0 }}>
                 {apiAttemptJudul === "" || apiAttemptJudul === "core" || apiAttemptJudul === "openalex" || apiAttemptJudul === "unpaywall" ? "Mencari referensi jurnal..." : "Menyusun ide dan rekomendasi..."}
               </p>
@@ -376,7 +377,7 @@ Berikan hasil murni dalam format Markdown yang rapi. Tanpa markdown block dan ka
           )}
           {activeTab === "latar_belakang" && loadingBg && (
             <div style={{ padding: "1.5rem", backgroundColor: "rgba(79, 70, 229, 0.05)", border: "1px solid rgba(79, 70, 229, 0.2)", borderRadius: "var(--radius-md)", textAlign: "center" }} className="animate-pulse">
-              <PremiumIcon name="sparkles" size={24} style={{ color: "var(--primary)", margin: "0 auto 0.5rem" }} className="animate-spin-slow" />
+              <LoadingSpinner size={32} className="text-primary mx-auto mb-3" />
               <p style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--primary)", marginBottom: "0.5rem", margin: 0 }}>
                 {apiAttemptBg === "" || apiAttemptBg === "core" || apiAttemptBg === "openalex" || apiAttemptBg === "unpaywall" ? "Mencari referensi yang relevan..." : "Menyusun draf latar belakang..."}
               </p>
@@ -399,12 +400,12 @@ Berikan hasil murni dalam format Markdown yang rapi. Tanpa markdown block dan ka
         <div style={{ position: "fixed", bottom: "1.5rem", left: "1rem", right: "1rem", zIndex: 50, display: "flex", pointerEvents: "none" }}>
           {activeTab === "judul" && (
             <button className="btn btn-primary" style={{ flex: 1, padding: "0.6rem", fontSize: "0.85rem", fontWeight: 600, borderRadius: "24px", display: "flex", justifyContent: "center", alignItems: "center", gap: "0.4rem", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", pointerEvents: "auto" }} onClick={handleGenerateJudul} disabled={loadingJudul || !topic.trim()}>
-              {loadingJudul ? <><PremiumIcon name="sparkles" size={14} className="animate-pulse" /> Menganalisis...</> : <><PremiumIcon name="sparkles" size={14} /> Generate Judul</>}
+              {loadingJudul ? <><LoadingSpinner size={14} className="text-white" /> Menganalisis...</> : <><PremiumIcon name="sparkles" size={14} /> Generate Judul</>}
             </button>
           )}
           {activeTab === "latar_belakang" && (
             <button className="btn btn-primary" style={{ flex: 1, padding: "0.6rem", fontSize: "0.85rem", fontWeight: 600, borderRadius: "24px", display: "flex", justifyContent: "center", alignItems: "center", gap: "0.4rem", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", pointerEvents: "auto" }} onClick={handleGenerateBg} disabled={loadingBg || !bgTitle.trim() || !bgPhenomenon.trim() || !bgProblem.trim()}>
-              {loadingBg ? <><PremiumIcon name="sparkles" size={14} className="animate-pulse" /> Menyusun Draf...</> : <><PremiumIcon name="sparkles" size={14} /> Buat Latar Belakang</>}
+              {loadingBg ? <><LoadingSpinner size={14} className="text-white" /> Menyusun Draf...</> : <><PremiumIcon name="sparkles" size={14} /> Buat Latar Belakang</>}
             </button>
           )}
         </div>

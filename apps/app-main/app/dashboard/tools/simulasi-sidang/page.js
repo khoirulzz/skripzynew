@@ -6,6 +6,7 @@ import ReactMarkdown from "react-markdown";
 import { callGemini, MODELS } from "@/lib/callWorker";
 import { deductCredits } from "@/lib/credits";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { useBillingCatalog } from "@/lib/useBillingCatalog";
 import Link from "next/link";
 import Script from "next/script";
@@ -584,8 +585,8 @@ Sajikan dengan gaya bahasa akademis namun membangun (konstruktif).`;
                   </>
                 ) : (
                   <>
-                    <PremiumIcon name={setupLoading ? "loader" : "uploadCloud"} size={28} className={setupLoading ? "animate-spin" : ""} style={{ color: "var(--text-muted)" }} />
-                    <span style={{ fontSize: "0.9rem", color: "var(--text-muted)" }}>{setupLoading ? "Memproses..." : "Drag & Drop File PDF/Word Kesini"}</span>
+                    {setupLoading ? <LoadingSpinner size={32} className="text-primary" /> : <PremiumIcon name="uploadCloud" size={28} style={{ color: "var(--text-muted)" }} />}
+                    <span style={{ fontSize: "0.9rem", color: "var(--text-muted)" }}>{setupLoading ? "Memproses Dokumen..." : "Drag & Drop File PDF/Word Kesini"}</span>
                     <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", opacity: 0.7 }}>Atau klik untuk memilih file (.pdf, .docx)</span>
                   </>
                 )}
@@ -594,8 +595,8 @@ Sajikan dengan gaya bahasa akademis namun membangun (konstruktif).`;
 
               {/* Dynamic Extraction Label */}
               {extractionStatus && (
-                <div style={{ marginTop: "0.5rem", padding: "0.5rem", textAlign: "center", backgroundColor: "rgba(79, 70, 229, 0.1)", borderRadius: "4px", fontSize: "0.75rem", color: "var(--primary)", fontWeight: 600 }} className="animate-pulse">
-                  <PremiumIcon name="sparkles" size={12} style={{ display: "inline-block", marginRight: "4px" }} />
+                <div style={{ marginTop: "0.5rem", padding: "0.5rem", textAlign: "center", backgroundColor: "rgba(79, 70, 229, 0.1)", borderRadius: "4px", fontSize: "0.75rem", color: "var(--primary)", fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: "0.4rem" }}>
+                  <LoadingSpinner size={12} className="text-primary" />
                   {extractionStatus}
                 </div>
               )}
@@ -603,7 +604,7 @@ Sajikan dengan gaya bahasa akademis namun membangun (konstruktif).`;
 
             <div style={{ display: "flex", justifyContent: "flex-end" }}>
               <button type="submit" className="btn btn-primary" style={{ background: "linear-gradient(135deg, #EC4899, #BE185D)" }} disabled={setupLoading || !skripsiTitle.trim() || plan === "free"}>
-                {setupLoading ? "Memuat..." : "Mulai Simulasi"}
+                {setupLoading ? <><LoadingSpinner size={18} className="text-white" /> Memuat...</> : "Mulai Simulasi"}
               </button>
             </div>
           </form>
@@ -654,12 +655,10 @@ Sajikan dengan gaya bahasa akademis namun membangun (konstruktif).`;
             {chatLoading && (
               <div style={{ alignSelf: "flex-start", display: "flex", gap: "0.75rem" }}>
                 <div style={{ width: "36px", height: "36px", borderRadius: "50%", backgroundColor: "var(--surface-hover)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <PremiumIcon name="mic" size={18} className="text-muted" />
+                  <LoadingSpinner size={20} className="text-primary" />
                 </div>
                 <div style={{ padding: "0.85rem 1.25rem", borderRadius: "16px", backgroundColor: "var(--surface-hover)", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                  <div className="animate-pulse" style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "var(--text-muted)" }} />
-                  <div className="animate-pulse" style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "var(--text-muted)", animationDelay: "150ms" }} />
-                  <div className="animate-pulse" style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "var(--text-muted)", animationDelay: "300ms" }} />
+                  <span style={{ fontSize: "0.85rem", color: "var(--text-muted)", fontStyle: "italic" }}>Dosen sedang mengetik...</span>
                 </div>
               </div>
             )}
@@ -669,7 +668,7 @@ Sajikan dengan gaya bahasa akademis namun membangun (konstruktif).`;
           {!isFinished && (
             <div style={{ padding: isMobile ? "0.75rem" : "1rem", borderTop: "1px solid var(--border)", display: "flex", gap: "0.5rem", alignItems: "flex-end" }}>
               <button onClick={() => { if (isRecording) { recognitionRef.current?.stop(); setIsRecording(false); } else { recognitionRef.current?.start(); setIsRecording(true); if (window.currentAudio) window.currentAudio.pause(); } }} style={{ width: isMobile ? "40px" : "48px", height: isMobile ? "40px" : "48px", borderRadius: "50%", border: "none", cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: isRecording ? "rgba(239,68,68,0.1)" : "var(--surface-hover)", color: isRecording ? "var(--danger)" : "var(--text-muted)", transition: "all 0.2s" }} title="Gunakan mikrofon">
-                <PremiumIcon name="mic" size={isMobile ? 20 : 24} className={isRecording ? "animate-pulse" : ""} />
+                {isRecording ? <LoadingSpinner size={isMobile ? 20 : 24} className="text-danger" /> : <PremiumIcon name="mic" size={isMobile ? 20 : 24} />}
               </button>
               <div style={{ flex: 1, backgroundColor: "var(--surface)", border: "1px solid var(--border)", borderRadius: "24px", padding: "0.4rem 1rem", display: "flex", alignItems: "center" }}>
                 <input type="text" value={currentInput} onChange={e => setCurrentInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter") handleSendMessage(); }} placeholder={isRecording ? "Sedang mendengarkan..." : "Jawab pertanyaan dosen..."} style={{ width: "100%", background: "transparent", border: "none", outline: "none", fontSize: isMobile ? "0.875rem" : "0.95rem" }} />

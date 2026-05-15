@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import LoadingSpinner from '../ui/LoadingSpinner';
 
 /**
  * Animated Loading Screen dengan Rotating Labels
@@ -39,31 +40,26 @@ export default function AnimatedLoadingScreen({
 
   return (
     <div className="animated-loading-overlay">
-      <div className="loading-container">
-        {/* Spinner dengan animasi pulsing */}
+      <div className="loading-container glass-panel">
         <div className="spinner-wrapper">
-          <div className="spinner">
-            <div className="spinner-circle"></div>
-          </div>
+          <LoadingSpinner size={60} className="text-primary" />
         </div>
 
-        {/* Main label dengan fade transition */}
         <div className="label-container">
           <h3 className="loading-label">
             {labels[currentLabelIndex]}
           </h3>
         </div>
 
-        {/* API Status Badge */}
         <div className="api-status">
           <span className="api-badge">
             {apiAttempt === 'core' && '🔍 Core API'}
             {apiAttempt === 'openalex' && '🔗 OpenAlex'}
             {apiAttempt === 'unpaywall' && '📄 Unpaywall'}
+            {apiAttempt === 'gemini' && '✨ Gemini AI'}
           </span>
         </div>
 
-        {/* Progress indicator (animating dots) */}
         <div className="progress-dots">
           <span className="dot dot-1"></span>
           <span className="dot dot-2"></span>
@@ -78,202 +74,120 @@ export default function AnimatedLoadingScreen({
           left: 0;
           right: 0;
           bottom: 0;
-          background: rgba(0, 0, 0, 0.5);
+          background: rgba(var(--background-rgb, 0), 0.6);
           display: flex;
           justify-content: center;
           align-items: center;
           z-index: 9999;
-          backdrop-filter: blur(4px);
+          backdrop-filter: blur(8px);
         }
 
         .loading-container {
-          background: white;
-          border-radius: 16px;
-          padding: 3rem 2.5rem;
-          box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+          background: var(--surface);
+          border-radius: 24px;
+          padding: 3.5rem 2.5rem;
+          box-shadow: var(--shadow-lg);
           text-align: center;
-          max-width: 400px;
+          max-width: 420px;
           width: 90%;
-          animation: slideUp 0.4s ease-out;
+          animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+          border: 1px solid var(--border);
         }
 
         @keyframes slideUp {
           from {
             opacity: 0;
-            transform: translateY(20px);
+            transform: translateY(30px) scale(0.95);
           }
           to {
             opacity: 1;
-            transform: translateY(0);
+            transform: translateY(0) scale(1);
           }
         }
 
-        /* Spinner */
         .spinner-wrapper {
-          margin-bottom: 2rem;
-          height: 60px;
+          margin-bottom: 2.5rem;
           display: flex;
           justify-content: center;
           align-items: center;
+          filter: drop-shadow(0 0 15px rgba(var(--primary-rgb), 0.3));
         }
 
-        .spinner {
-          position: relative;
-          width: 60px;
-          height: 60px;
-        }
-
-        .spinner-circle {
-          position: absolute;
-          width: 100%;
-          height: 100%;
-          border: 4px solid #f0f0f0;
-          border-top: 4px solid #6366f1;
-          border-radius: 50%;
-          animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-
-        /* Label container dengan fade transition */
         .label-container {
           min-height: 80px;
           display: flex;
           align-items: center;
           justify-content: center;
-          margin: 1.5rem 0;
+          margin: 1rem 0;
         }
 
         .loading-label {
-          color: #1f2937;
-          font-size: 1rem;
-          font-weight: 500;
+          color: var(--text-main);
+          font-size: 1.1rem;
+          font-weight: 600;
           margin: 0;
           animation: fadeInOut 2.5s ease-in-out infinite;
           line-height: 1.6;
+          letter-spacing: -0.01em;
         }
 
         @keyframes fadeInOut {
-          0% {
-            opacity: 0;
-          }
-          10% {
-            opacity: 1;
-          }
-          90% {
-            opacity: 1;
-          }
-          100% {
-            opacity: 0;
-          }
+          0%, 100% { opacity: 0; transform: translateY(5px); }
+          10%, 90% { opacity: 1; transform: translateY(0); }
         }
 
-        /* API Status Badge */
         .api-status {
           margin: 1.5rem 0;
         }
 
         .api-badge {
-          display: inline-block;
-          background: #f3f4f6;
-          color: #6b7280;
-          padding: 0.5rem 1rem;
-          border-radius: 20px;
-          font-size: 0.875rem;
-          font-weight: 500;
-          border: 1px solid #e5e7eb;
+          display: inline-flex;
+          align-items: center;
+          background: var(--primary-light);
+          color: var(--primary);
+          padding: 0.5rem 1.25rem;
+          border-radius: 999px;
+          font-size: 0.8rem;
+          font-weight: 700;
+          border: 1px solid rgba(var(--primary-rgb), 0.1);
+          letter-spacing: 0.02em;
+          text-transform: uppercase;
         }
 
-        /* Progress dots */
         .progress-dots {
           display: flex;
           justify-content: center;
-          gap: 0.5rem;
-          margin-top: 1.5rem;
+          gap: 0.6rem;
+          margin-top: 2rem;
         }
 
         .dot {
-          width: 8px;
-          height: 8px;
+          width: 6px;
+          height: 6px;
           border-radius: 50%;
-          background: #d1d5db;
+          background: var(--primary);
+          opacity: 0.3;
           animation: pulse 1.4s ease-in-out infinite;
         }
 
-        .dot-1 {
-          animation-delay: 0s;
-        }
-
-        .dot-2 {
-          animation-delay: 0.2s;
-        }
-
-        .dot-3 {
-          animation-delay: 0.4s;
-        }
+        .dot-1 { animation-delay: 0s; }
+        .dot-2 { animation-delay: 0.2s; }
+        .dot-3 { animation-delay: 0.4s; }
 
         @keyframes pulse {
-          0%, 100% {
-            opacity: 0.5;
-            transform: scale(1);
-          }
-          50% {
-            opacity: 1;
-            transform: scale(1.2);
-          }
+          0%, 100% { opacity: 0.3; transform: scale(1); }
+          50% { opacity: 1; transform: scale(1.3); }
         }
 
-        /* Dark mode support */
-        @media (prefers-color-scheme: dark) {
-          .loading-container {
-            background: #1f2937;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-          }
-
-          .spinner-circle {
-            border-color: #374151;
-            border-top-color: #818cf8;
-          }
-
-          .loading-label {
-            color: #f9fafb;
-          }
-
-          .api-badge {
-            background: #374151;
-            color: #d1d5db;
-            border-color: #4b5563;
-          }
-
-          .dot {
-            background: #6b7280;
-          }
-        }
-
-        /* Mobile responsiveness */
         @media (max-width: 640px) {
           .loading-container {
-            padding: 2rem 1.5rem;
+            padding: 2.5rem 1.5rem;
           }
-
           .loading-label {
-            font-size: 0.9rem;
+            font-size: 1rem;
           }
-
           .spinner-wrapper {
-            margin-bottom: 1.5rem;
-          }
-
-          .spinner {
-            width: 50px;
-            height: 50px;
-          }
-
-          .spinner-circle {
-            border-width: 3px;
+            margin-bottom: 2rem;
           }
         }
       `}</style>

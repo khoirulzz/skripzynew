@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { fetchPublicFormBySlug, submitPublicFormResponse } from "@/lib/workspacePublicApi";
 import { FormRenderer } from "@/components/workspace/FormRenderer";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { flattenFormQuestions, getQuestionLabelMap, isQuestionVisible } from "@/lib/workspaceDefaults";
 
 export default function PublicFormPageClient() {
@@ -114,8 +115,9 @@ export default function PublicFormPageClient() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: "var(--background)" }}>
-        <div style={{ textAlign: "center" }}>
-          <div className="animate-pulse" style={{ fontSize: "1rem", color: "var(--text-muted)" }}>Memuat formulir publik...</div>
+        <div style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}>
+          <LoadingSpinner size={48} className="text-primary" />
+          <div style={{ fontSize: "1rem", color: "var(--text-muted)", fontWeight: 600 }}>Memuat formulir publik...</div>
         </div>
       </div>
     );
@@ -170,8 +172,8 @@ export default function PublicFormPageClient() {
           <div style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>
             Field bertanda <span style={{ color: "var(--danger)", fontWeight: 700 }}>*</span> wajib diisi.
           </div>
-          <button type="submit" className="btn btn-primary" disabled={submitting}>
-            {submitting ? "Mengirim..." : "Kirim Tanggapan"}
+          <button type="submit" className="btn btn-primary" disabled={submitting} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            {submitting ? <><LoadingSpinner size={16} className="text-white" /> Mengirim...</> : "Kirim Tanggapan"}
           </button>
         </div>
       </form>

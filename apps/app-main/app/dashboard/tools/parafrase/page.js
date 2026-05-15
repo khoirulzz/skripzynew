@@ -6,6 +6,7 @@ import ReactMarkdown from "react-markdown";
 import { callGeminiStream } from "@/lib/callWorker";
 import { deductCredits, refundCredits, getCharLimit } from "@/lib/credits";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { useBillingCatalog } from "@/lib/useBillingCatalog";
 import Link from "next/link";
 
@@ -42,7 +43,7 @@ const GAYA_LIST = [
     id: "umum",
     label: "Umum",
     desc: "Natural & santai — seperti menjelaskan ke teman, informatif tanpa terlalu kaku.",
-    system: "Kamu adalah komunikator yang ramah. Tulis ulang teks berikut dengan gaya umum dan natural: gunakan bahasa sehari-hari yang santai namun tetap informatif, seolah-olah seseorang sedang bercerita kepada teman. Keluarkan HANYA hasil parafrasenya saja.",
+    system: "Kamu adalah komunikator yang ramah. Tulis ulang teks berikut dengan gaya umum and natural: gunakan bahasa sehari-hari yang santai namun tetap informatif, seolah-olah seseorang sedang bercerita kepada teman. Keluarkan HANYA hasil parafrasenya saja.",
   },
 ];
 
@@ -378,7 +379,7 @@ export default function ParafrasePage() {
               disabled={loading || !canAfford || !input.trim()}
             >
               {loading ? (
-                <><PremiumIcon name="zap" size={16} className="animate-pulse" /> Memproses...</>
+                <><LoadingSpinner size={20} className="text-white" /> Memproses...</>
               ) : (
                 <><PremiumIcon name="wand" size={16} /> Parafrase Sekarang</>
               )}
@@ -427,7 +428,7 @@ export default function ParafrasePage() {
             <PremiumIcon name="settings" size={20} />
           </button>
           <button className="btn btn-primary" style={{ flex: 1, padding: "0.6rem", fontSize: "0.85rem", fontWeight: 600, borderRadius: "24px", display: "flex", justifyContent: "center", alignItems: "center", gap: "0.4rem", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", pointerEvents: "auto" }} onClick={handleParafrase} disabled={loading || !canAfford || !input.trim()}>
-            {loading ? <><PremiumIcon name="zap" size={14} className="animate-pulse" /> Proses...</> : <><PremiumIcon name="wand" size={14} /> Parafrase</>}
+            {loading ? <><LoadingSpinner size={18} className="text-white" /> Proses...</> : <><PremiumIcon name="wand" size={14} /> Parafrase</>}
           </button>
         </div>
       )}

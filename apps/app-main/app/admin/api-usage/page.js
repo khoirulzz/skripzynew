@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { useAuth } from "@/components/providers/AuthProvider";
 
 const WORKER_URL = process.env.NEXT_PUBLIC_WORKER_URL || "https://apikey.skripzy-app.workers.dev";
@@ -96,7 +97,7 @@ export default function ApiUsagePage() {
       return (
         <tr>
           <td colSpan={5} style={{ textAlign: "center", padding: "2rem" }}>
-            <PremiumIcon name="loader" className="animate-spin" size={24} style={{ color: "var(--primary)" }} />
+            <LoadingSpinner size={32} className="text-primary mx-auto" />
             <p style={{ marginTop: "1rem", color: "var(--text-muted)", fontSize: "0.875rem" }}>Memuat data usage...</p>
           </td>
         </tr>
@@ -164,7 +165,7 @@ export default function ApiUsagePage() {
           className="btn btn-primary"
           style={{ padding: "0.6rem 1.25rem", borderRadius: "var(--radius-md)", display: "flex", alignItems: "center", gap: "0.5rem" }}
         >
-          <PremiumIcon name="refreshCw" size={16} className={loading ? "animate-spin" : ""} />
+          {loading ? <LoadingSpinner size={16} className="text-white" /> : <PremiumIcon name="refreshCw" size={16} />}
           Refresh Data
         </button>
       </div>

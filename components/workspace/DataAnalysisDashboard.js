@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { d1Request } from "@/lib/d1Client";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { computeFormAnalysis, buildAnalysisNarrative } from "@/lib/formAnalysis";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { deductCredits, refundCredits } from "@/lib/credits";
@@ -350,7 +351,7 @@ Kembangkan hasil analisis dan catatan peneliti tersebut menjadi narasi pembahasa
                 onClick={handleInterpretToBabIV}
                 disabled={isInterpreting || (!interpretationNotes && !narrative)}
               >
-                <PremiumIcon name={isInterpreting ? "loader" : "sparkles"} size={16} className={isInterpreting ? "animate-spin" : ""} />
+                {isInterpreting ? <LoadingSpinner size={16} className="text-white" /> : <PremiumIcon name="sparkles" size={16} />}
                 {isInterpreting ? "Menyusun Interpretasi..." : `Interpretasi ke Bab IV (Biaya: ${generationCost} kredit)`}
               </button>
             )}

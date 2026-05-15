@@ -5,6 +5,7 @@ import { d1Request } from "@/lib/d1Client";
 
 import { useAuth } from "@/components/providers/AuthProvider";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import Link from "next/link";
 
 export default function JurnalListPage() {
@@ -82,7 +83,7 @@ export default function JurnalListPage() {
 
       {loading ? (
         <div style={{ display: "flex", justifyContent: "center", padding: "3rem" }}>
-          <PremiumIcon name="zap" size={32} className="text-primary animate-pulse" />
+          <LoadingSpinner size={32} className="text-primary" />
         </div>
       ) : workspaces.length === 0 ? (
         <div className="glass-panel" style={{ padding: "4rem 2rem", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}>

@@ -12,6 +12,7 @@ import { TextStyle } from "@tiptap/extension-text-style";
 import { Color } from "@tiptap/extension-color";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { generateWorkspaceChapter } from "@/lib/workspacePublicApi";
 import { deductCredits } from "@/lib/credits";
@@ -148,7 +149,7 @@ function AiActionButtons({ onAction, isProcessing, showCustomInstruction, onTogg
   if (isProcessing) {
     return (
       <div style={{ padding: "0.3rem 0.6rem", fontSize: "0.75rem", color: "var(--primary)", display: "flex", alignItems: "center", gap: "0.4rem" }}>
-        <PremiumIcon name="loader" size={iconSz} className="animate-spin" />
+        <LoadingSpinner size={iconSz} className="text-primary" />
         AI memproses...
       </div>
     );
@@ -554,7 +555,7 @@ export function TiptapEditor({
             <div style={{ padding: "0.75rem 1.25rem", backgroundColor: "var(--surface)", border: "1px solid var(--primary)", borderRadius: "var(--radius-full)", boxShadow: "0 0 15px rgba(99,102,241,0.3)", display: "flex", alignItems: "center", gap: "0.75rem", color: "var(--primary)", fontWeight: 600 }}>
               <PremiumIcon name="sparkles" size={18} className="animate-pulse" />
               AI sedang memperbaiki teks...
-              <PremiumIcon name="loader" size={16} className="animate-spin" />
+              <LoadingSpinner size={16} className="text-primary" />
             </div>
           </div>
         )}

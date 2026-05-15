@@ -8,6 +8,7 @@ import { callGemini, MODELS } from "@/lib/callWorker";
 import { deductCredits, refundCredits } from "@/lib/credits";
 import AnimatedLoadingScreen from "@/components/workspace/AnimatedLoadingScreen";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { useBillingCatalog } from "@/lib/useBillingCatalog";
 import Link from "next/link";
 
@@ -60,7 +61,11 @@ function PaperCard({ paper, onSummarize, hasSummary, isSummarizing, summaryCost,
             onClick={() => onSummarize(paper)}
             disabled={isSummarizing}
           >
-            {isSummarizing ? "Meringkas..." : `Ringkas dengan AI (-${summaryCost} Kredit)`}
+            {isSummarizing ? (
+              <><LoadingSpinner size={16} className="text-primary mr-2" /> Meringkas...</>
+            ) : (
+              `Ringkas dengan AI (-${summaryCost} Kredit)`
+            )}
           </button>
         </div>
       )}
@@ -249,7 +254,7 @@ export default function ReferensiCerdasPage() {
             </select>
           </div>
           <button type="submit" className="btn btn-primary" disabled={loading || !query.trim()} style={{ height: "42px", padding: isMobile ? "0.85rem" : "0 1.5rem", width: isMobile ? "100%" : "auto" }}>
-            {loading ? "Mencari..." : "Cari Jurnal"}
+            {loading ? <><LoadingSpinner size={18} className="text-white" /> Mencari...</> : "Cari Jurnal"}
           </button>
         </form>
       </div>

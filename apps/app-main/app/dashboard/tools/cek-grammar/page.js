@@ -6,6 +6,7 @@ import ReactMarkdown from "react-markdown";
 import { callGemini } from "@/lib/callWorker";
 import { deductCredits, refundCredits } from "@/lib/credits";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { useBillingCatalog } from "@/lib/useBillingCatalog";
 import Link from "next/link";
 
@@ -167,12 +168,12 @@ export default function CekGrammarPage() {
               <div style={{ display: "flex", gap: "0.75rem", marginTop: "1rem" }}>
               <button
                 className="btn btn-primary"
-                style={{ flex: 1, padding: "0.65rem" }}
+                style={{ flex: 1, padding: "0.65rem", display: "flex", justifyContent: "center", alignItems: "center", gap: "0.4rem" }}
                 onClick={handleCheck}
                 disabled={loading || !canAfford || !input.trim()}
               >
                 {loading ? (
-                  <><PremiumIcon name="zap" size={16} className="animate-pulse" /> Menganalisis...</>
+                  <><LoadingSpinner size={16} className="text-white" /> Menganalisis...</>
                 ) : (
                   <><PremiumIcon name="check" size={16} /> Cek Grammar</>
                 )}
@@ -186,7 +187,7 @@ export default function CekGrammarPage() {
         <div style={{ display: "flex", flexDirection: "column", gap: isMobile ? "0.75rem" : "1rem", marginBottom: isMobile ? "5rem" : 0 }}>
           {loading && (
             <div className="glass-panel" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem", padding: isMobile ? "1.5rem" : "2rem", minHeight: isMobile ? "150px" : "200px", justifyContent: "center" }}>
-              <PremiumIcon name="zap" size={36} className="text-primary animate-pulse" />
+              <LoadingSpinner size={36} className="text-primary" />
               <p className="text-muted" style={{ margin: 0, fontSize: isMobile ? "0.8rem" : "1rem" }}>AI sedang membaca teks Anda...</p>
             </div>
           )}
@@ -273,7 +274,7 @@ export default function CekGrammarPage() {
       {isMobile && (
         <div style={{ position: "fixed", bottom: "1.5rem", left: "1rem", right: "1rem", zIndex: 50, display: "flex", pointerEvents: "none" }}>
           <button className="btn btn-primary" style={{ flex: 1, padding: "0.6rem", fontSize: "0.85rem", fontWeight: 600, borderRadius: "24px", display: "flex", justifyContent: "center", alignItems: "center", gap: "0.4rem", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", pointerEvents: "auto" }} onClick={handleCheck} disabled={loading || !canAfford || !input.trim()}>
-            {loading ? <><PremiumIcon name="zap" size={14} className="animate-pulse" /> Menganalisis...</> : <><PremiumIcon name="check" size={14} /> Cek Grammar</>}
+            {loading ? <><LoadingSpinner size={14} className="text-white" /> Menganalisis...</> : <><PremiumIcon name="check" size={14} /> Cek Grammar</>}
           </button>
         </div>
       )}

@@ -8,6 +8,7 @@ import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { TiptapEditor } from "@/components/editor/TiptapEditor";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { ReferenceManager } from "@/components/workspace/ReferenceManager";
 import { JurnalChapterAiAssistant } from "@/components/workspace/JurnalChapterAiAssistant";
 import { DataHub } from "@/components/workspace/DataHub";
@@ -408,7 +409,7 @@ const [isMobile, setIsMobile] = useState(false);
   if (loading) {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "60vh", flexDirection: "column", gap: "1rem" }}>
-        <PremiumIcon name="loader" size={34} className="text-primary animate-spin" />
+        <LoadingSpinner size={48} className="text-primary" />
         <p className="text-muted">Memuat workspace penelitian...</p>
       </div>
     );
@@ -651,7 +652,8 @@ const [isMobile, setIsMobile] = useState(false);
                     transition: "all 0.2s"
                   }}
                  >
-                   <PremiumIcon name={saveState === "saving" ? "loader" : "save"} size={14} className={saveState === "saving" ? "animate-spin" : ""} />
+                                       {saveState === "saving" ? <LoadingSpinner size={14} className="text-primary" /> : <PremiumIcon name="save" size={14} />}
+
                    {saveState === "saving" ? "Menyimpan..." : saveState === "dirty" ? "Simpan Perubahan" : "Tersimpan"}
                  </button>
               </>

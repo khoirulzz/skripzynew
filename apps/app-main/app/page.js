@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useLayoutEffect } from "react";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
 
 export default function AppRootPage() {
   const router = useRouter();
@@ -12,7 +13,10 @@ export default function AppRootPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="animate-pulse text-muted-foreground">Redirecting to Skripzy...</div>
+      <div className="flex flex-col items-center gap-4">
+        <LoadingSpinner size={48} className="text-primary" />
+        <div className="text-muted-foreground animate-pulse">Redirecting to Skripzy...</div>
+      </div>
     </div>
   );
 }

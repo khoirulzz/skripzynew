@@ -6,6 +6,7 @@ import ReactMarkdown from "react-markdown";
 import { callGeminiStream } from "@/lib/callWorker";
 import { deductCredits, refundCredits, getCharLimit } from "@/lib/credits";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { useBillingCatalog } from "@/lib/useBillingCatalog";
 import Link from "next/link";
 
@@ -314,12 +315,12 @@ export default function HumanizerPage() {
             </div>
             <button
               className="btn btn-primary w-full"
-              style={{ padding: "0.75rem", fontSize: "0.95rem", background: "linear-gradient(135deg, #F59E0B, #D97706)" }}
+              style={{ padding: "0.75rem", fontSize: "0.95rem", background: "linear-gradient(135deg, #F59E0B, #D97706)", display: "flex", justifyContent: "center", alignItems: "center", gap: "0.4rem" }}
               onClick={handleHumanize}
               disabled={loading || !canAfford || !input.trim() || plan === "free"}
             >
               {loading ? (
-                <><PremiumIcon name="sparkles" size={16} className="animate-pulse" /> Memanusiakan...</>
+                <><LoadingSpinner size={16} className="text-white" /> Memanusiakan...</>
               ) : (
                 <><PremiumIcon name="sparkles" size={16} /> Humanize Sekarang</>
               )}
@@ -389,7 +390,7 @@ export default function HumanizerPage() {
             <PremiumIcon name="settings" size={20} />
           </button>
           <button className="btn btn-primary" style={{ flex: 1, padding: "0.6rem", fontSize: "0.85rem", fontWeight: 600, borderRadius: "24px", display: "flex", justifyContent: "center", alignItems: "center", gap: "0.4rem", background: "linear-gradient(135deg, #F59E0B, #D97706)", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", pointerEvents: "auto" }} onClick={handleHumanize} disabled={loading || !canAfford || !input.trim() || plan === "free"}>
-            {loading ? <><PremiumIcon name="sparkles" size={14} className="animate-pulse" /> Proses...</> : <><PremiumIcon name="sparkles" size={14} /> Humanize</>}
+            {loading ? <><LoadingSpinner size={14} className="text-white" /> Proses...</> : <><PremiumIcon name="sparkles" size={14} /> Humanize</>}
           </button>
         </div>
       )}

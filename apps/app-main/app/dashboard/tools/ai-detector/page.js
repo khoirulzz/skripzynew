@@ -6,6 +6,7 @@ import ReactMarkdown from "react-markdown";
 import { callGemini, MODELS } from "@/lib/callWorker";
 import { deductCredits, refundCredits, getCharLimit } from "@/lib/credits";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { useBillingCatalog } from "@/lib/useBillingCatalog";
 import Link from "next/link";
 
@@ -174,13 +175,13 @@ export default function AIDetectorPage() {
               <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap", marginTop: "1rem" }}>
                 <button
                   className="btn btn-primary"
-                  style={{ flex: 1, minWidth: "150px", padding: "0.8rem", fontWeight: 600 }}
+                  style={{ flex: 1, minWidth: "150px", padding: "0.8rem", fontWeight: 600, display: "flex", justifyContent: "center", alignItems: "center", gap: "0.4rem" }}
                   onClick={handleCheck}
                   disabled={loading || !canAfford || !input.trim() || plan === "free"}
                 >
                   {loading ? (
                     <>
-                      <PremiumIcon name="zap" size={16} />
+                      <LoadingSpinner size={16} className="text-white" />
                       Menganalisis...
                     </>
                   ) : (
@@ -200,7 +201,7 @@ export default function AIDetectorPage() {
           {loading && (
             <div className="glass-panel" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem", padding: isMobile ? "1.5rem" : "2rem", minHeight: isMobile ? "150px" : "200px", justifyContent: "center" }}>
               <div style={{ width: "48px", height: "48px", borderRadius: "50%", backgroundColor: "var(--primary-light)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <PremiumIcon name="zap" size={24} className="text-primary animate-pulse" />
+                <LoadingSpinner size={24} className="text-primary" />
               </div>
               <div style={{ textAlign: "center" }}>
                 <p className="text-muted" style={{ margin: 0, fontSize: isMobile ? "0.8rem" : "1rem" }}>Memeriksa pola linguistik...</p>
@@ -246,7 +247,7 @@ export default function AIDetectorPage() {
       {isMobile && (
         <div style={{ position: "fixed", bottom: "1.5rem", left: "1rem", right: "1rem", zIndex: 50, display: "flex", pointerEvents: "none" }}>
           <button className="btn btn-primary" style={{ flex: 1, padding: "0.6rem", fontSize: "0.85rem", fontWeight: 600, borderRadius: "24px", display: "flex", justifyContent: "center", alignItems: "center", gap: "0.4rem", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", pointerEvents: "auto" }} onClick={handleCheck} disabled={loading || !canAfford || !input.trim() || plan === "free"}>
-            {loading ? <><PremiumIcon name="zap" size={14} className="animate-pulse" /> Menganalisis...</> : <><PremiumIcon name="search" size={14} /> Cek Teks</>}
+            {loading ? <><LoadingSpinner size={14} className="text-white" /> Menganalisis...</> : <><PremiumIcon name="search" size={14} /> Cek Teks</>}
           </button>
         </div>
       )}

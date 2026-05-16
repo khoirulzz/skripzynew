@@ -35,6 +35,7 @@ export function LandingFooter() {
           <div>
             <h4 style={{ fontWeight: 800, marginBottom: "1.5rem", color: "var(--text-main)", fontSize: "0.95rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Legal</h4>
             <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+              <Link href="/terms" className="footer-link">Terms & Conditions</Link>
               <Link href="/privacy-policy" className="footer-link">Privacy Policy</Link>
               <Link href="/subscription-terms" className="footer-link">Subscription Terms</Link>
               <Link href="/refund-policy" className="footer-link">Refund Policy</Link>
@@ -49,6 +50,9 @@ export function LandingFooter() {
             <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
               <Link href="mailto:cs@skripzy.id" className="footer-link footer-contact-link">
                 <PremiumIcon name="inbox" size={16} /> cs@skripzy.id
+              </Link>
+              <Link href="https://wa.me/6285771298582" className="footer-link footer-contact-link">
+                <PremiumIcon name="messageCircle" size={16} /> +62 857-7129-8582
               </Link>
               <Link href="https://facebook.com" className="footer-link footer-contact-link">
                 <PremiumIcon name="facebook" size={16} /> Facebook
@@ -65,6 +69,7 @@ export function LandingFooter() {
           <div style={{ display: "flex", gap: "0.65rem", alignItems: "center" }}>
             <Link href="#" className="footer-social-link" aria-label="Instagram"><PremiumIcon name="instagram" size={16} /></Link>
             <Link href="#" className="footer-social-link" aria-label="Facebook"><PremiumIcon name="facebook" size={16} /></Link>
+            <Link href="https://wa.me/6285771298582" className="footer-social-link" aria-label="WhatsApp customer support"><PremiumIcon name="messageCircle" size={16} /></Link>
             <Link href="mailto:cs@skripzy.id" className="footer-social-link" aria-label="Email customer support"><PremiumIcon name="inbox" size={16} /></Link>
           </div>
         </div>

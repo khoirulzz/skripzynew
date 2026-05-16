@@ -18,7 +18,7 @@ import {
   PAYMENT_METHODS,
   BILLING_PERIODS,
   calculatePeriodPrice,
-  createDokuPayment,
+  createIpaymuPayment,
 } from "@/lib/billing";
 import {
   useActivePromos,
@@ -192,6 +192,10 @@ export default function LanggananPage() {
   const [selectedTarget, setSelectedTarget] = useState(null);
   const [paymentMethodId, setPaymentMethodId] = useState("manual");
   const [isMobile, setIsMobile] = useState(false);
+  const [initialPaymentStatus] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return new URLSearchParams(window.location.search).get("payment") || "";
+  });
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -220,29 +224,26 @@ export default function LanggananPage() {
 
 
   const [submitting, setSubmitting] = useState(false);
-  const [successMsg, setSuccessMsg] = useState("");
-  const [errorMsg, setErrorMsg] = useState("");
+  const [successMsg, setSuccessMsg] = useState(() =>
+    initialPaymentStatus === "success"
+      ? "Pembayaran berhasil diproses! Saldo atau paket Anda akan segera diperbarui."
+      : ""
+  );
+  const [errorMsg, setErrorMsg] = useState(() => {
+    if (initialPaymentStatus === "failed") return "Pembayaran gagal diproses. Silakan coba lagi.";
+    if (initialPaymentStatus === "cancelled") return "Pembayaran dibatalkan.";
+    return "";
+  });
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const searchParams = new URLSearchParams(window.location.search);
-      const paymentStatus = searchParams.get("payment");
-      if (paymentStatus === "success") {
-        setSuccessMsg("Pembayaran berhasil diproses! Saldo atau paket Anda akan segera diperbarui.");
-        if (typeof refreshUserData === "function") {
-          refreshUserData();
-        }
-      } else if (paymentStatus === "failed") {
-        setErrorMsg("Pembayaran gagal diproses. Silakan coba lagi.");
-      } else if (paymentStatus === "cancelled") {
-        setErrorMsg("Pembayaran dibatalkan.");
-      }
+    if (!initialPaymentStatus || typeof window === "undefined") return;
 
-      if (paymentStatus) {
-        window.history.replaceState({}, document.title, window.location.pathname);
-      }
+    if (initialPaymentStatus === "success" && typeof refreshUserData === "function") {
+      refreshUserData();
     }
-  }, []);
+
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }, [initialPaymentStatus, refreshUserData]);
 
   const defaultTarget = useMemo(() => {
     const recommendedPlan =
@@ -415,7 +416,7 @@ export default function LanggananPage() {
     setSubmitting(true);
     try {
       if (paymentMethodId === "automatic") {
-        const dokuRes = await createDokuPayment({
+        const ipaymuRes = await createIpaymuPayment({
           user, userData,
           requestType: selectedOrder.type,
           selectedItem: selectedOrder.item,
@@ -424,8 +425,8 @@ export default function LanggananPage() {
           billingPeriod: billingPeriodId,
         });
 
-        if (dokuRes.paymentUrl) {
-          window.location.href = dokuRes.paymentUrl;
+        if (ipaymuRes.paymentUrl) {
+          window.location.href = ipaymuRes.paymentUrl;
           return; 
         }
       } else {
@@ -640,7 +641,7 @@ export default function LanggananPage() {
                   <ChoiceCard key={item.id} title={item.label} subtitle={item.description} badge={item.badgeText} selected={isSelected} disabled={false} accent={item.accent} onClick={() => { setPaymentMethodId(item.id); if(item.id !== 'manual') setActiveManualGroup(null); clearMessages(); }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", padding: "0.8rem 0.9rem", borderRadius: 14, backgroundColor: item.id === "automatic" ? "rgba(59,130,246,0.08)" : "rgba(16,185,129,0.08)", color: item.id === "automatic" ? "#2563EB" : "#047857", fontSize: "0.8rem", fontWeight: 700 }}>
                       <PremiumIcon name={item.id === "automatic" ? "sparkles" : "checkCircle"} size={16} />
-                      {item.id === "automatic" ? "Checkout otomatis via DOKU" : "Verifikasi manual oleh admin"}
+                      {item.id === "automatic" ? "Checkout otomatis via iPaymu" : "Verifikasi manual oleh admin"}
                     </div>
                   </ChoiceCard>
                 );
@@ -789,7 +790,7 @@ export default function LanggananPage() {
              <h2 style={{ fontSize: "1.5rem", fontWeight: 900, marginBottom: "0.5rem" }}>Selesaikan Pembayaran</h2>
              <p style={{ color: "var(--text-muted)", fontSize: "0.95rem", maxWidth: 400, margin: "0 auto 2rem" }}>
                {paymentMethodId === "automatic" 
-                 ? "Anda akan diarahkan ke payment gateway DOKU untuk menyelesaikan pembayaran dengan aman."
+                 ? "Anda akan diarahkan ke payment gateway iPaymu untuk menyelesaikan pembayaran dengan aman."
                  : `Lanjutkan untuk melihat detail rekening dan mengunggah bukti transfer manual Anda ke ${selectedPaymentChannel?.label}.`}
              </p>
              
@@ -801,7 +802,7 @@ export default function LanggananPage() {
              <div>
               {paymentMethodId === "automatic" ? (
                 <button onClick={handleSubmitRequest} disabled={submitting} className="btn btn-primary" style={{ padding: "1rem 2rem", fontSize: "1.05rem", borderRadius: 999 }}>
-                  {submitting ? "Mengarahkan..." : "Bayar via DOKU Sekarang"}
+                  {submitting ? "Mengarahkan..." : "Bayar via iPaymu Sekarang"}
                 </button>
               ) : (
                 <button onClick={nextStep} className="btn btn-primary" style={{ padding: "1rem 2rem", fontSize: "1.05rem", borderRadius: 999 }}>

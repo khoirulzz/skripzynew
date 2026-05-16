@@ -30,6 +30,11 @@ DOKU_CALLBACK_URL = "https://app.skripzy.id/dashboard/langganan/"
 # GEMINI_API_KEY_1, GEMINI_API_KEY_2, etc.
 # CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET
 # CORE_API_KEY
+# IPAY_API_KEY (secret)
+# IPAY_VA (secret or encrypted environment variable)
+# Current iPaymu credentials in this Worker are accepted by production iPaymu.
+# Use IPAY_ENV=production or unset IPAY_ENV for live checkout.
+# Optional: IPAY_BASE_URL, IPAY_RETURN_URL, IPAY_CANCEL_URL, IPAY_NOTIFY_URL
 
 [[vectorize]]
 binding = "VECTOR_INDEX"

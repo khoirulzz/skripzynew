@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import LoadingSpinner from '../ui/LoadingSpinner';
+import DefaultSpinner from '../ui/DefaultSpinner';
 
 /**
  * Animated Loading Screen dengan Rotating Labels
@@ -42,7 +42,7 @@ export default function AnimatedLoadingScreen({
     <div className="animated-loading-overlay">
       <div className="loading-container glass-panel">
         <div className="spinner-wrapper">
-          <LoadingSpinner size={60} className="text-primary" />
+          <DefaultSpinner size="large" />
         </div>
 
         <div className="label-container">

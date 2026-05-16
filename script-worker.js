@@ -17,6 +17,24 @@ function getDokuConfig(env) {
     };
 }
 
+function getIpaymuConfig(env, requestUrl = "") {
+    const origin = requestUrl ? new URL(requestUrl).origin : "";
+    const appCallbackUrl = env.IPAY_CALLBACK_URL || env.IPAYMU_CALLBACK_URL || "https://app.skripzy.id/dashboard/langganan/";
+    const ipaymuEnv = String(env.IPAY_ENV || env.IPAYMU_ENV || "production").trim().toLowerCase();
+    const defaultBaseUrl = ipaymuEnv === "sandbox"
+        ? "https://sandbox.ipaymu.com/api/v2"
+        : "https://my.ipaymu.com/api/v2";
+
+    return {
+        apiKey: String(env.IPAY_API_KEY || env.IPAYMU_API_KEY || "").trim(),
+        va: String(env.IPAY_VA || env.IPAYMU_VA || env.IPAYMU_VA_NUMBER || "").trim(),
+        baseUrl: String(env.IPAY_BASE_URL || env.IPAYMU_BASE_URL || defaultBaseUrl).trim().replace(/\/+$/, ""),
+        returnUrl: String(env.IPAY_RETURN_URL || env.IPAYMU_RETURN_URL || appCallbackUrl).trim(),
+        cancelUrl: String(env.IPAY_CANCEL_URL || env.IPAYMU_CANCEL_URL || appCallbackUrl).trim(),
+        notifyUrl: String(env.IPAY_NOTIFY_URL || env.IPAYMU_NOTIFY_URL || `${origin}/api/ipaymu/notification`).trim(),
+    };
+}
+
 function generateRequestId() {
     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     let result = "";
@@ -41,6 +59,12 @@ async function arrayBufferToBase64(buffer) {
         binary += String.fromCharCode(bytes[i]);
     }
     return btoa(binary);
+}
+
+function arrayBufferToHex(buffer) {
+    return Array.from(new Uint8Array(buffer))
+        .map((byte) => byte.toString(16).padStart(2, "0"))
+        .join("");
 }
 
 async function generateDokuDigest(bodyString) {
@@ -98,6 +122,177 @@ async function verifyDokuNotificationSignature(headers, rawBody, clientId, secre
     } catch (error) {
         console.error("[DOKU] Signature verification error:", error.message);
         return false;
+    }
+}
+
+function getIpaymuTimestamp() {
+    const now = new Date(Date.now() + (7 * 60 * 60 * 1000));
+    const pad = (value) => String(value).padStart(2, "0");
+    return [
+        now.getUTCFullYear(),
+        pad(now.getUTCMonth() + 1),
+        pad(now.getUTCDate()),
+        pad(now.getUTCHours()),
+        pad(now.getUTCMinutes()),
+        pad(now.getUTCSeconds()),
+    ].join("");
+}
+
+function getMaskedValue(value = "") {
+    const text = String(value || "");
+    if (!text) return "";
+    if (text.length <= 8) return `${"*".repeat(Math.max(0, text.length - 2))}${text.slice(-2)}`;
+    return `${text.slice(0, 4)}...${text.slice(-4)}`;
+}
+
+async function generateIpaymuSignature(apiKey, va, bodyString, method = "POST") {
+    const encoder = new TextEncoder();
+    const bodyHashBuffer = await crypto.subtle.digest("SHA-256", encoder.encode(bodyString));
+    const bodyHash = arrayBufferToHex(bodyHashBuffer).toLowerCase();
+    const stringToSign = `${method.toUpperCase()}:${va}:${bodyHash}:${apiKey}`;
+    const cryptoKey = await crypto.subtle.importKey(
+        "raw",
+        encoder.encode(apiKey),
+        { name: "HMAC", hash: "SHA-256" },
+        false,
+        ["sign"]
+    );
+    const signatureBuffer = await crypto.subtle.sign("HMAC", cryptoKey, encoder.encode(stringToSign));
+    return arrayBufferToHex(signatureBuffer).toLowerCase();
+}
+
+function extractIpaymuPaymentUrl(data) {
+    return (
+        data?.Data?.Url ||
+        data?.Data?.url ||
+        data?.data?.Url ||
+        data?.data?.url ||
+        data?.Url ||
+        data?.url ||
+        null
+    );
+}
+
+function extractIpaymuSessionId(data) {
+    return (
+        data?.Data?.SessionID ||
+        data?.Data?.SessionId ||
+        data?.Data?.sessionID ||
+        data?.Data?.sessionId ||
+        data?.data?.SessionID ||
+        data?.data?.sessionID ||
+        data?.sessionID ||
+        data?.sessionId ||
+        null
+    );
+}
+
+function parseIpaymuNotificationBody(rawBody, contentType = "") {
+    if (!rawBody) return {};
+
+    if (contentType.includes("application/json") || rawBody.trim().startsWith("{")) {
+        return JSON.parse(rawBody);
+    }
+
+    const params = new URLSearchParams(rawBody);
+    const parsed = {};
+    for (const [key, value] of params.entries()) {
+        parsed[key] = value;
+    }
+    return parsed;
+}
+
+function getIpaymuNotificationReference(notifData = {}) {
+    return (
+        notifData.referenceId ||
+        notifData.reference_id ||
+        notifData.ReferenceID ||
+        notifData.ReferenceId ||
+        notifData.reference ||
+        notifData.invoiceNumber ||
+        notifData.invoice_number ||
+        notifData.sid ||
+        notifData.SessionID ||
+        notifData.sessionID ||
+        notifData.sessionId ||
+        ""
+    );
+}
+
+function getIpaymuNotificationStatus(notifData = {}) {
+    const rawStatus = (
+        notifData.status ||
+        notifData.Status ||
+        notifData.transactionStatus ||
+        notifData.TransactionStatus ||
+        notifData.paymentStatus ||
+        notifData.payment_status ||
+        notifData.result ||
+        ""
+    );
+    return String(rawStatus).trim().toLowerCase();
+}
+
+function isIpaymuPaidStatus(status) {
+    return ["berhasil", "success", "successful", "paid", "settlement", "settled", "completed", "1"].includes(status);
+}
+
+function isIpaymuFailedStatus(status) {
+    return ["gagal", "failed", "failure", "expired", "expire", "cancel", "cancelled", "canceled", "void", "refund", "refunded", "0"].includes(status);
+}
+
+function getIpaymuPaidAmount(notifData = {}) {
+    const rawAmount =
+        notifData.amount ||
+        notifData.Amount ||
+        notifData.total ||
+        notifData.Total ||
+        notifData.price ||
+        notifData.Price ||
+        notifData.paidAmount ||
+        notifData.paid_amount ||
+        null;
+
+    const numeric = Number(String(rawAmount || "").replace(/[^\d.-]/g, ""));
+    return Number.isFinite(numeric) ? numeric : 0;
+}
+
+async function applyApprovedBilling(env, docData, now, gatewayLabel = "Payment") {
+    const userId = docData.userId;
+    if (!userId || !env.DB) return;
+
+    const userStmt = env.DB.prepare(`SELECT * FROM users WHERE id = ?`).bind(userId);
+    const { results: userResults } = await userStmt.all();
+    const userData = userResults[0];
+
+    if (!userData) return;
+
+    const requestType = docData.requestType || "topup";
+
+    if (requestType === "plan") {
+        const planCredits = Number(docData.amount) || 0;
+        const currentCredits = Number(userData.credits) || 0;
+
+        await env.DB.prepare(`UPDATE users SET plan = ?, credits = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+            .bind(docData.planId || "pro", currentCredits + planCredits, userId)
+            .run();
+
+        console.log(`[${gatewayLabel}] Plan upgraded for user ${userId}: ${docData.planId}, +${planCredits} credits (D1)`);
+    } else {
+        const creditsToAdd = Number(docData.amount) || 0;
+        const currentCredits = Number(userData.credits) || 0;
+
+        await env.DB.prepare(`UPDATE users SET credits = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+            .bind(currentCredits + Math.max(0, creditsToAdd), userId)
+            .run();
+
+        console.log(`[${gatewayLabel}] Credits added for user ${userId}: +${creditsToAdd} (D1)`);
+    }
+
+    if (docData.promoId) {
+        await env.DB.prepare(`UPDATE promos SET usedCount = usedCount + 1, updatedAt = ? WHERE id = ?`)
+            .bind(now, docData.promoId)
+            .run();
     }
 }
 
@@ -640,6 +835,342 @@ const worker = {
         const isWorkspaceAiEndpoint = url.pathname === "/workspace/ai/chapter-generate";
         const isDokuCreatePayment = url.pathname === "/api/doku/create-payment";
         const isDokuNotification = url.pathname === "/api/doku/notification";
+        const isIpaymuCreatePayment = url.pathname === "/api/ipaymu/create-payment";
+        const isIpaymuNotification = url.pathname === "/api/ipaymu/notification";
+        const isIpaymuTest = url.pathname === "/api/ipaymu/test-connection";
+
+        // ──── ENDPOINT: IPAYMU CREATE PAYMENT ────
+        if (isIpaymuTest && request.method === "POST") {
+            const providedSecret = request.headers.get("x-skripzy-secret") || "";
+            const expectedSecret = env.WORKER_SECRET || "";
+            if (expectedSecret && providedSecret !== expectedSecret) {
+                return new Response(JSON.stringify({ error: "Unauthorized" }), {
+                    status: 401,
+                    headers: createCorsHeaders(),
+                });
+            }
+
+            const ipaymu = getIpaymuConfig(env, request.url);
+            if (!ipaymu.apiKey || !ipaymu.va) {
+                return new Response(JSON.stringify({
+                    ok: false,
+                    error: "iPaymu env belum lengkap.",
+                    config: {
+                        env: String(env.IPAY_ENV || env.IPAYMU_ENV || "production").trim().toLowerCase(),
+                        baseUrl: ipaymu.baseUrl,
+                        vaConfigured: Boolean(ipaymu.va),
+                        apiKeyConfigured: Boolean(ipaymu.apiKey),
+                        vaMasked: getMaskedValue(ipaymu.va),
+                        apiKeyMasked: getMaskedValue(ipaymu.apiKey),
+                    },
+                }), {
+                    status: 500,
+                    headers: createCorsHeaders(),
+                });
+            }
+
+            const bodyString = JSON.stringify({ account: ipaymu.va });
+            const timestamp = getIpaymuTimestamp();
+            const testBaseUrls = [
+                ipaymu.baseUrl,
+                "https://sandbox.ipaymu.com/api/v2",
+                "https://my.ipaymu.com/api/v2",
+            ].filter((item, index, arr) => item && arr.indexOf(item) === index);
+
+            const checks = [];
+            for (const baseUrl of testBaseUrls) {
+                const signature = await generateIpaymuSignature(ipaymu.apiKey, ipaymu.va, bodyString, "POST");
+                const response = await fetch(`${baseUrl}/balance`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        va: ipaymu.va,
+                        signature,
+                        timestamp,
+                    },
+                    body: bodyString,
+                });
+                const data = await response.json().catch(() => ({}));
+                checks.push({
+                    baseUrl,
+                    ok: response.ok && Number(data?.Status ?? data?.status ?? 0) === 200,
+                    upstreamOk: response.ok,
+                    upstreamStatus: response.status,
+                    response: data,
+                });
+            }
+
+            const configuredCheck = checks[0] || {};
+
+            return new Response(JSON.stringify({
+                ok: Boolean(configuredCheck.ok),
+                upstreamOk: Boolean(configuredCheck.upstreamOk),
+                upstreamStatus: configuredCheck.upstreamStatus || 0,
+                config: {
+                    env: String(env.IPAY_ENV || env.IPAYMU_ENV || "production").trim().toLowerCase(),
+                    baseUrl: ipaymu.baseUrl,
+                    vaConfigured: Boolean(ipaymu.va),
+                    apiKeyConfigured: Boolean(ipaymu.apiKey),
+                    vaMasked: getMaskedValue(ipaymu.va),
+                    apiKeyMasked: getMaskedValue(ipaymu.apiKey),
+                    timestamp,
+                },
+                response: configuredCheck.response || null,
+                checks,
+            }), {
+                status: 200,
+                headers: createCorsHeaders(),
+            });
+        }
+
+        if (isIpaymuCreatePayment && request.method === "POST") {
+            const authToken = extractBearerToken(request);
+            const session = await verifyFirebaseToken(authToken, env);
+            if (!session) {
+                return new Response(JSON.stringify({ error: "Sesi tidak valid. Silakan login ulang." }), {
+                    status: 401,
+                    headers: createCorsHeaders(),
+                });
+            }
+
+            const payload = await request.json().catch(() => null);
+            if (!payload || !payload.amount || payload.amount <= 0) {
+                return new Response(JSON.stringify({ error: "Data pembayaran tidak valid." }), {
+                    status: 400,
+                    headers: createCorsHeaders(),
+                });
+            }
+
+            const ipaymu = getIpaymuConfig(env, request.url);
+            if (!ipaymu.apiKey || !ipaymu.va) {
+                return new Response(JSON.stringify({ error: "iPaymu belum dikonfigurasi di server. Pastikan IPAY_API_KEY dan IPAY_VA tersedia." }), {
+                    status: 500,
+                    headers: createCorsHeaders(),
+                });
+            }
+
+            try {
+                const invoiceNumber = generateInvoiceNumber("SKRZ-IPM");
+                const finalAmount = Math.round(payload.amount);
+                const productName = payload.productName || "Skripzy";
+                const customerName = payload.customerName || session.email || "Pengguna Skripzy";
+                const customerEmail = payload.customerEmail || session.email || "";
+                const returnUrl = `${ipaymu.returnUrl}${ipaymu.returnUrl.includes("?") ? "&" : "?"}payment=success&inv=${encodeURIComponent(invoiceNumber)}`;
+                const cancelUrl = `${ipaymu.cancelUrl}${ipaymu.cancelUrl.includes("?") ? "&" : "?"}payment=cancelled&inv=${encodeURIComponent(invoiceNumber)}`;
+
+                const ipaymuBody = {
+                    account: ipaymu.va,
+                    product: [productName],
+                    qty: [1],
+                    price: [finalAmount],
+                    description: [`${productName} - ${invoiceNumber}`],
+                    notifyUrl: ipaymu.notifyUrl,
+                    returnUrl,
+                    cancelUrl,
+                    name: customerName,
+                    email: customerEmail,
+                    phone: payload.customerPhone || "",
+                    buyerName: customerName,
+                    buyerEmail: customerEmail,
+                    buyerPhone: payload.customerPhone || "",
+                    referenceId: invoiceNumber,
+                    expired: payload.paymentDueHours || 24,
+                    expiredType: "hours",
+                };
+
+                const bodyString = JSON.stringify(ipaymuBody);
+                const signature = await generateIpaymuSignature(ipaymu.apiKey, ipaymu.va, bodyString, "POST");
+                const timestamp = getIpaymuTimestamp();
+
+                const ipaymuResponse = await fetch(`${ipaymu.baseUrl}/payment`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        va: ipaymu.va,
+                        signature,
+                        timestamp,
+                    },
+                    body: bodyString,
+                });
+
+                const ipaymuData = await ipaymuResponse.json().catch(() => ({}));
+                const ipaymuStatus = Number(ipaymuData?.Status ?? ipaymuData?.status ?? 0);
+
+                if (!ipaymuResponse.ok || (ipaymuStatus && ipaymuStatus !== 200)) {
+                    console.error("[IPAYMU] Create payment failed:", JSON.stringify(ipaymuData));
+                    const upstreamMessage = ipaymuData?.Message || ipaymuData?.message || "Gagal membuat pembayaran iPaymu.";
+                    const isUnauthorizedSignature = String(upstreamMessage).toLowerCase().includes("signature");
+                    return new Response(JSON.stringify({
+                        error: isUnauthorizedSignature
+                            ? "iPaymu menolak signature. Cek IPAY_API_KEY, IPAY_VA, dan IPAY_BASE_URL/IPAY_ENV di Cloudflare Worker."
+                            : upstreamMessage,
+                        details: ipaymuData,
+                        gateway: {
+                            baseUrl: ipaymu.baseUrl,
+                            vaConfigured: Boolean(ipaymu.va),
+                            apiKeyConfigured: Boolean(ipaymu.apiKey),
+                        },
+                    }), {
+                        status: ipaymuResponse.ok ? 502 : ipaymuResponse.status,
+                        headers: createCorsHeaders(),
+                    });
+                }
+
+                const paymentUrl = extractIpaymuPaymentUrl(ipaymuData);
+                const sessionId = extractIpaymuSessionId(ipaymuData);
+
+                if (!paymentUrl) {
+                    return new Response(JSON.stringify({
+                        error: "Tidak mendapatkan link pembayaran dari iPaymu.",
+                        details: ipaymuData,
+                    }), {
+                        status: 502,
+                        headers: createCorsHeaders(),
+                    });
+                }
+
+                const docId = invoiceNumber;
+                const timestampNow = new Date().toISOString();
+                const stmt = env.DB.prepare(`INSERT INTO topups (
+                    id, userId, userName, userEmail, status, requestType, productName,
+                    paymentMethodId, paymentMethodLabel, paymentChannelId, paymentChannelLabel,
+                    paymentChannelGroup, invoiceNumber, dokuRequestId, paymentUrl, promoId,
+                    promoCode, promoType, basePrice, discountAmount, finalPrice, customerNotes,
+                    timestamp, planId, planName, billingPeriod, topupSlug, creditsBase, bonusCredits, amount
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+                .bind(
+                    docId, session.uid, customerName,
+                    session.email || customerEmail || "", "waiting_payment",
+                    payload.requestType || "topup", productName, "automatic",
+                    "Pembayaran Otomatis (iPaymu)", "ipaymu-checkout", "iPaymu Checkout", "gateway",
+                    invoiceNumber, sessionId || "", paymentUrl || "", payload.promoId || null,
+                    payload.promoCode || null, payload.promoType || null,
+                    Math.round(payload.basePrice || payload.amount || 0), Math.round(payload.discountAmount || 0),
+                    finalAmount, "", timestampNow, payload.planId || null,
+                    payload.planName || null, payload.billingPeriod || "monthly", payload.topupSlug || null,
+                    payload.creditsBase || 0, payload.bonusCredits || 0, payload.creditsTotal || payload.amount || 0
+                );
+                await stmt.run();
+
+                console.log(`[IPAYMU] Payment created in D1: inv=${invoiceNumber}, session=${sessionId || "-"}, url=${paymentUrl}`);
+
+                return new Response(JSON.stringify({
+                    ok: true,
+                    payment_url: paymentUrl,
+                    invoice_number: invoiceNumber,
+                    doc_id: docId,
+                    session_id: sessionId,
+                }), {
+                    status: 200,
+                    headers: createCorsHeaders(),
+                });
+            } catch (error) {
+                console.error("[IPAYMU] Create payment error:", error.message);
+                return new Response(JSON.stringify({ error: error.message || "Gagal memproses pembayaran." }), {
+                    status: 500,
+                    headers: createCorsHeaders(),
+                });
+            }
+        }
+
+        if (isIpaymuNotification && request.method === "POST") {
+            const rawBody = await request.text();
+            let notifData;
+            try {
+                notifData = parseIpaymuNotificationBody(rawBody, request.headers.get("Content-Type") || "");
+            } catch {
+                return new Response(JSON.stringify({ error: "Invalid notification body" }), {
+                    status: 400,
+                    headers: createCorsHeaders(),
+                });
+            }
+
+            const referenceId = getIpaymuNotificationReference(notifData);
+            const transactionStatus = getIpaymuNotificationStatus(notifData);
+            const transactionAmount = getIpaymuPaidAmount(notifData);
+
+            console.log(`[IPAYMU] Notification: ref=${referenceId || "-"}, status=${transactionStatus || "-"}, amount=${transactionAmount || 0}`);
+
+            if (!referenceId) {
+                return new Response(JSON.stringify({ ok: true, message: "No reference id" }), {
+                    status: 200,
+                    headers: createCorsHeaders(),
+                });
+            }
+
+            try {
+                const stmt = env.DB.prepare(`SELECT * FROM topups WHERE invoiceNumber = ? OR dokuRequestId = ?`).bind(referenceId, referenceId);
+                const { results } = await stmt.all();
+                const docData = results[0];
+
+                if (!docData) {
+                    console.warn(`[IPAYMU] No topup doc found for reference: ${referenceId}`);
+                    return new Response(JSON.stringify({ ok: true, message: "Doc not found" }), {
+                        status: 200,
+                        headers: createCorsHeaders(),
+                    });
+                }
+
+                if (docData.status === "approved" || docData.status === "rejected") {
+                    console.log(`[IPAYMU] Reference ${referenceId} already processed as ${docData.status}`);
+                    return new Response(JSON.stringify({ ok: true, message: "Already processed" }), {
+                        status: 200,
+                        headers: createCorsHeaders(),
+                    });
+                }
+
+                const now = new Date().toISOString();
+                const expectedAmount = Number(docData.finalPrice) || 0;
+
+                if (isIpaymuPaidStatus(transactionStatus)) {
+                    if (transactionAmount > 0 && expectedAmount > 0 && transactionAmount < expectedAmount) {
+                        await env.DB.prepare(`UPDATE topups SET status = ?, rejectedAt = ?, rejectedReason = ?, dokuTransactionStatus = ?, dokuRawNotification = ? WHERE id = ?`)
+                            .bind("rejected", now, `Pembayaran iPaymu kurang dari tagihan: ${transactionAmount}`, transactionStatus, JSON.stringify(notifData), docData.id)
+                            .run();
+
+                        return new Response(JSON.stringify({ ok: true, message: "Amount mismatch" }), {
+                            status: 200,
+                            headers: createCorsHeaders(),
+                        });
+                    }
+
+                    await env.DB.prepare(`UPDATE topups SET status = ?, approvedAt = ?, dokuTransactionStatus = ?, dokuRawNotification = ? WHERE id = ?`)
+                        .bind("approved", now, transactionStatus || "success", JSON.stringify(notifData), docData.id)
+                        .run();
+
+                    try {
+                        await applyApprovedBilling(env, docData, now, "IPAYMU");
+                    } catch (e) {
+                        console.error("[IPAYMU] Failed to update user in D1:", e.message);
+                    }
+
+                    console.log(`[IPAYMU] Payment SUCCESS processed for reference: ${referenceId}`);
+                } else if (isIpaymuFailedStatus(transactionStatus)) {
+                    await env.DB.prepare(`UPDATE topups SET status = ?, rejectedAt = ?, rejectedReason = ?, dokuTransactionStatus = ?, dokuRawNotification = ? WHERE id = ?`)
+                        .bind("rejected", now, `Pembayaran iPaymu: ${transactionStatus}`, transactionStatus, JSON.stringify(notifData), docData.id)
+                        .run();
+
+                    console.log(`[IPAYMU] Payment ${transactionStatus} for reference: ${referenceId}`);
+                } else {
+                    await env.DB.prepare(`UPDATE topups SET dokuTransactionStatus = ?, dokuRawNotification = ? WHERE id = ?`)
+                        .bind(transactionStatus || "pending", JSON.stringify(notifData), docData.id)
+                        .run();
+
+                    console.log(`[IPAYMU] Pending/unknown status for reference: ${referenceId}`);
+                }
+
+                return new Response(JSON.stringify({ ok: true }), {
+                    status: 200,
+                    headers: createCorsHeaders(),
+                });
+            } catch (error) {
+                console.error("[IPAYMU] Notification processing error:", error.message);
+                return new Response(JSON.stringify({ ok: true, error: error.message }), {
+                    status: 200,
+                    headers: createCorsHeaders(),
+                });
+            }
+        }
 
         // ──── ENDPOINT: DOKU CREATE PAYMENT ────
         if (isDokuCreatePayment && request.method === "POST") {

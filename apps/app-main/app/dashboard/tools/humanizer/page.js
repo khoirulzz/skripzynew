@@ -213,7 +213,7 @@ export default function HumanizerPage() {
                   ))}
                 </div>
               ) : (
-                <div className="markdown-body" style={{ backgroundColor: isMobile ? "var(--surface-hover)" : "transparent", padding: isMobile ? "0.75rem" : "0", borderRadius: "8px", fontSize: isMobile ? "0.8rem" : "0.95rem", lineHeight: 1.6 }}>
+                <div className="markdown-body" style={{ backgroundColor: isMobile ? "var(--surface-hover)" : "transparent", padding: isMobile ? "0.75rem" : "0", borderRadius: "8px", minHeight: isMobile ? "auto" : "180px", fontSize: isMobile ? "0.8rem" : "0.95rem", lineHeight: 1.6 }}>
                   <ReactMarkdown>{output}</ReactMarkdown>
                 </div>
               )}

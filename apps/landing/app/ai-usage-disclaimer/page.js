@@ -94,10 +94,11 @@ export default function AIUsageDisclaimer() {
       <h1>11. Hubungi Kami</h1>
       <p><strong>Skripzy ID</strong></p>
       <ul>
-        <li>Email Bisnis: <a href="mailto:business@skripzy.id">business@skripzy.id</a></li>
         <li>Customer Support: <a href="mailto:cs@skripzy.id">cs@skripzy.id</a></li>
-        <li>Website: <a href="https://skripzy.id">https://skripzy.id</a></li>
-        <li>Lokasi Operasional: Pekalongan, Jawa Tengah, Indonesia</li>
+        <li>Email Bisnis: <a href="mailto:business@skripzy.id">business@skripzy.id</a></li>
+        <li>WhatsApp/Telepon: <a href="https://wa.me/6285771298582">+62 857-7129-8582</a></li>
+        <li>Website: <a href="https://www.skripzy.id">https://www.skripzy.id</a></li>
+        <li>Lokasi Operasional: Jalan Desa Lambanggelun RT 003 RW 001, Paninggaran Pekalongan, Jawa Tengah, Indonesia</li>
       </ul>
     </LegalLayout>
   );

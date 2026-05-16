@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { fetchPublicFormBySlug, submitPublicFormResponse } from "@/lib/workspacePublicApi";
 import { FormRenderer } from "@/components/workspace/FormRenderer";
-import LoadingSpinner from "@/components/ui/LoadingSpinner";
+import DefaultSpinner from "@/components/ui/DefaultSpinner";
 import { flattenFormQuestions, getQuestionLabelMap, isQuestionVisible } from "@/lib/workspaceDefaults";
 
 export default function PublicFormPageClient() {
@@ -116,7 +116,7 @@ export default function PublicFormPageClient() {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: "var(--background)" }}>
         <div style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}>
-          <LoadingSpinner size={48} className="text-primary" />
+          <DefaultSpinner size="large" />
           <div style={{ fontSize: "1rem", color: "var(--text-muted)", fontWeight: 600 }}>Memuat formulir publik...</div>
         </div>
       </div>

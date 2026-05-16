@@ -126,7 +126,7 @@ export default function FAQ() {
     },
     {
       question: "20. Bagaimana cara menghubungi Skripzy?",
-      answer: "Pengguna dapat menghubungi melalui email cs@skripzy.id (Customer Support), business@skripzy.id (Bisnis), atau melalui lokasi operasional kami di Pekalongan, Jawa Tengah."
+      answer: "Pengguna dapat menghubungi melalui email cs@skripzy.id (Customer Support), business@skripzy.id (Bisnis), WhatsApp/Telepon +62 857-7129-8582, atau melalui lokasi operasional kami di Pekalongan, Jawa Tengah."
     }
   ];
 
@@ -149,6 +149,7 @@ export default function FAQ() {
       <ul>
         <li>Customer Support: <a href="mailto:cs@skripzy.id">cs@skripzy.id</a></li>
         <li>Email Bisnis: <a href="mailto:business@skripzy.id">business@skripzy.id</a></li>
+        <li>WhatsApp/Telepon: <a href="https://wa.me/6285771298582">+62 857-7129-8582</a></li>
         <li>Website: <a href="https://skripzy.id">https://skripzy.id</a></li>
       </ul>
       <style jsx global>{`

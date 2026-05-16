@@ -3,15 +3,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import ReactMarkdown from "react-markdown";
-import { callGemini, MODELS } from "@/lib/callWorker";
+import { callGemini } from "@/lib/callWorker";
 import { deductCredits } from "@/lib/credits";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { useBillingCatalog } from "@/lib/useBillingCatalog";
 import Link from "next/link";
-import Script from "next/script";
 
 const SIDANG_MODEL = "gemini-flash-lite-latest";
+const ID_SPEECH_LANG = "id-ID";
 
 const DOSEN_PROFILES = [
   { id: "killer", label: "Dosen Killer", desc: "Sangat kritis, to the point, mencari kelemahan.", temp: 0.2 },
@@ -19,6 +19,53 @@ const DOSEN_PROFILES = [
   { id: "santai", label: "Dosen Sedang (Santai)", desc: "Ramah, namun tetap bertanya seputar esensi penelitian.", temp: 0.7 },
   { id: "suportif", label: "Dosen Suportif", desc: "Menggiring opini, membimbing memberikan saran perbaikan.", temp: 0.8 },
 ];
+
+const PROFILE_ACCENTS = {
+  killer: "#EF4444",
+  kritis: "#4F46E5",
+  santai: "#0EA5E9",
+  suportif: "#10B981",
+};
+
+const PROFILE_TTS = {
+  killer: { rate: 0.9, pitch: 0.82 },
+  kritis: { rate: 0.92, pitch: 0.96 },
+  santai: { rate: 0.94, pitch: 1.02 },
+  suportif: { rate: 0.93, pitch: 1.08 },
+};
+
+function combineTranscript(base, spoken, interim = "") {
+  return [base, spoken, interim].map(part => part.trim()).filter(Boolean).join(" ").replace(/\s+/g, " ");
+}
+
+function sanitizeSpeechText(text) {
+  return String(text || "")
+    .replace(/[#*_`>-]/g, " ")
+    .replace(/\[(.*?)\]\(.*?\)/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function scoreVoice(voice) {
+  const name = `${voice.name} ${voice.voiceURI}`.toLowerCase();
+  const lang = (voice.lang || "").toLowerCase();
+  let score = 0;
+
+  if (lang === "id-id") score += 100;
+  else if (lang.startsWith("id")) score += 80;
+  if (/natural|neural|online|premium/.test(name)) score += 28;
+  if (/google|microsoft|edge/.test(name)) score += 22;
+  if (/gadis|damayanti|ardi|indonesia|indonesian/.test(name)) score += 12;
+  if (voice.localService === false) score += 6;
+
+  return score;
+}
+
+function getBestIndonesianVoice(voices) {
+  return [...voices]
+    .filter(voice => (voice.lang || "").toLowerCase().startsWith("id"))
+    .sort((a, b) => scoreVoice(b) - scoreVoice(a))[0] || null;
+}
 
 function readPersistedSidangState() {
   const defaults = {
@@ -89,7 +136,15 @@ export default function SimulasiSidangPage() {
 
   // Speech State
   const [isRecording, setIsRecording] = useState(false);
+  const [speechSupported, setSpeechSupported] = useState(true);
+  const [availableVoices, setAvailableVoices] = useState([]);
+  const [selectedVoiceURI, setSelectedVoiceURI] = useState("");
   const recognitionRef = useRef(null);
+  const isRecordingRef = useRef(false);
+  const shouldKeepListeningRef = useRef(false);
+  const recordingBaseRef = useRef("");
+  const liveTranscriptRef = useRef("");
+  const restartTimerRef = useRef(null);
   const chatEndRef = useRef(null);
   const [isMobile, setIsMobile] = useState(false);
 
@@ -111,23 +166,84 @@ export default function SimulasiSidangPage() {
     }
   }, [isSessionActive, skripsiTitle, dosenProfile, sidangMode, sessionInsight, docName, questionCount, sanggahanCount, maxQuestions, maxSanggahan, isFinished, messages]);
 
+  useEffect(() => {
+    isRecordingRef.current = isRecording;
+  }, [isRecording]);
+
   // Init Speech Recognition
   useEffect(() => {
     if (typeof window !== "undefined") {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (SpeechRecognition) {
         recognitionRef.current = new SpeechRecognition();
-        recognitionRef.current.continuous = false;
-        recognitionRef.current.interimResults = false;
-        recognitionRef.current.lang = "id-ID";
+        recognitionRef.current.continuous = true;
+        recognitionRef.current.interimResults = true;
+        recognitionRef.current.lang = ID_SPEECH_LANG;
         recognitionRef.current.onresult = (event) => {
-          const transcript = event.results[0][0].transcript;
-          setCurrentInput(prev => prev + " " + transcript);
+          let finalText = "";
+          let interimText = "";
+
+          for (let i = event.resultIndex; i < event.results.length; i += 1) {
+            const transcript = event.results[i][0]?.transcript || "";
+            if (event.results[i].isFinal) finalText += ` ${transcript}`;
+            else interimText += ` ${transcript}`;
+          }
+
+          if (finalText.trim()) {
+            liveTranscriptRef.current = combineTranscript(liveTranscriptRef.current, finalText);
+          }
+
+          setCurrentInput(combineTranscript(recordingBaseRef.current, liveTranscriptRef.current, interimText));
         };
-        recognitionRef.current.onerror = () => setIsRecording(false);
-        recognitionRef.current.onend = () => setIsRecording(false);
+        recognitionRef.current.onerror = (event) => {
+          if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+            shouldKeepListeningRef.current = false;
+          }
+          setIsRecording(false);
+        };
+        recognitionRef.current.onend = () => {
+          if (shouldKeepListeningRef.current) {
+            restartTimerRef.current = window.setTimeout(() => {
+              try {
+                recognitionRef.current?.start();
+                setIsRecording(true);
+              } catch {
+                setIsRecording(false);
+              }
+            }, 250);
+            return;
+          }
+          setIsRecording(false);
+        };
+      } else {
+        window.setTimeout(() => setSpeechSupported(false), 0);
       }
     }
+
+    return () => {
+      shouldKeepListeningRef.current = false;
+      if (restartTimerRef.current) window.clearTimeout(restartTimerRef.current);
+      recognitionRef.current?.abort?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+
+    const syncVoices = () => {
+      const voices = window.speechSynthesis.getVoices();
+      setAvailableVoices(voices);
+      setSelectedVoiceURI(current => current || getBestIndonesianVoice(voices)?.voiceURI || "");
+    };
+
+    syncVoices();
+    window.speechSynthesis.onvoiceschanged = syncVoices;
+
+    return () => {
+      if (window.speechSynthesis.onvoiceschanged === syncVoices) {
+        window.speechSynthesis.onvoiceschanged = null;
+      }
+    };
   }, []);
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, chatLoading]);
@@ -144,16 +260,16 @@ export default function SimulasiSidangPage() {
       window.currentAudio.currentTime = 0;
     }
 
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = "id-ID";
-    utterance.rate = 1.0;
-    utterance.pitch = dosenProfile === "killer" ? 0.8 : dosenProfile === "suportif" ? 1.2 : 1.0;
+    const utterance = new SpeechSynthesisUtterance(sanitizeSpeechText(text));
+    const ttsProfile = PROFILE_TTS[dosenProfile] || PROFILE_TTS.kritis;
+    utterance.lang = ID_SPEECH_LANG;
+    utterance.rate = ttsProfile.rate;
+    utterance.pitch = ttsProfile.pitch;
+    utterance.volume = 1;
 
-    const voices = window.speechSynthesis.getVoices();
+    const voices = availableVoices.length ? availableVoices : window.speechSynthesis.getVoices();
     if (voices.length > 0) {
-      const idVoices = voices.filter(v => v.lang.includes("id"));
-      // Cari suara Google atau Online yang biasanya lebih natural
-      const bestVoice = idVoices.find(v => v.name.includes("Google") || v.name.includes("Premium") || v.name.includes("Online")) || idVoices[0];
+      const bestVoice = voices.find(v => v.voiceURI === selectedVoiceURI) || getBestIndonesianVoice(voices);
       if (bestVoice) {
         utterance.voice = bestVoice;
       }
@@ -349,13 +465,51 @@ Gunakan insight ini untuk bertanya spesifik.`;
     }
   };
 
+  const startListening = () => {
+    if (!recognitionRef.current || chatLoading || isFinished) return;
+
+    if (window.currentAudio) window.currentAudio.pause();
+    window.speechSynthesis?.cancel?.();
+
+    recordingBaseRef.current = currentInput.trim();
+    liveTranscriptRef.current = "";
+    shouldKeepListeningRef.current = true;
+
+    try {
+      recognitionRef.current.start();
+      setIsRecording(true);
+    } catch {
+      setIsRecording(true);
+    }
+  };
+
+  const stopListening = () => {
+    shouldKeepListeningRef.current = false;
+    if (restartTimerRef.current) {
+      window.clearTimeout(restartTimerRef.current);
+      restartTimerRef.current = null;
+    }
+    recognitionRef.current?.stop?.();
+    setIsRecording(false);
+  };
+
+  const handleInputChange = (value) => {
+    setCurrentInput(value);
+    if (isRecordingRef.current) {
+      recordingBaseRef.current = value.trim();
+      liveTranscriptRef.current = "";
+    }
+  };
+
   const handleSendMessage = async (e) => {
     e?.preventDefault();
     if (!currentInput.trim() || chatLoading || isFinished) return;
 
     const userMessage = currentInput.trim();
+    stopListening();
     setCurrentInput("");
     if (window.currentAudio) window.currentAudio.pause();
+    window.speechSynthesis?.cancel?.();
 
     const newHistory = [...messages, { role: "user", text: userMessage }];
     setMessages(newHistory);
@@ -421,7 +575,9 @@ Gunakan insight ini untuk bertanya spesifik.`;
   };
 
   const generateFinalScoring = async () => {
+    stopListening();
     if (window.currentAudio) window.currentAudio.pause();
+    window.speechSynthesis?.cancel?.();
     setChatLoading(true);
 
     try {
@@ -457,7 +613,9 @@ Sajikan dengan gaya bahasa akademis namun membangun (konstruktif).`;
 
   const confirmEndSession = () => {
     if (window.confirm("Apakah Anda yakin ingin mengakhiri sesi sidang ini? Riwayat obrolan akan dihapus setelah Anda keluar.")) {
+      stopListening();
       if (window.currentAudio) window.currentAudio.pause();
+      window.speechSynthesis?.cancel?.();
       sessionStorage.removeItem("simulasi_sidang_state");
       setIsSessionActive(false);
       setMessages([]);
@@ -482,8 +640,15 @@ Sajikan dengan gaya bahasa akademis namun membangun (konstruktif).`;
     }
   };
 
+  const activeProfile = DOSEN_PROFILES.find(p => p.id === dosenProfile) || DOSEN_PROFILES[1];
+  const accentColor = PROFILE_ACCENTS[dosenProfile] || "var(--primary)";
+  const idVoices = availableVoices.filter(voice => (voice.lang || "").toLowerCase().startsWith("id"));
+  const questionProgress = maxQuestions ? Math.min((questionCount / maxQuestions) * 100, 100) : 0;
+  const sanggahanProgress = maxSanggahan ? Math.min((sanggahanCount / maxSanggahan) * 100, 100) : 0;
+  const canStartSession = !setupLoading && Boolean(skripsiTitle.trim()) && plan !== "free";
+
   return (
-    <div className="animate-fade-in" style={{ maxWidth: "800px", margin: "0 auto", paddingBottom: isMobile ? "2rem" : 0 }}>
+    <div className="animate-fade-in" style={{ maxWidth: isSessionActive ? "1120px" : "920px", margin: "0 auto", paddingBottom: isMobile ? "2rem" : 0 }}>
       {/* Header */}
       <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: isMobile ? "flex-start" : "center", gap: isMobile ? "0.75rem" : "1rem", marginBottom: isMobile ? "1.5rem" : "2rem" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
@@ -520,9 +685,22 @@ Sajikan dengan gaya bahasa akademis namun membangun (konstruktif).`;
 
       {/* SETUP PHASE */}
       {!isSessionActive && (
-        <div className={isMobile ? "native-card" : "glass-panel p-6"} style={{ margin: isMobile ? "0 -0.75rem" : 0 }}>
+        <div className={isMobile ? "native-card" : "glass-panel"} style={{ margin: isMobile ? "0 -0.75rem" : 0, padding: isMobile ? undefined : "1.5rem" }}>
           <form onSubmit={handleStartSession}>
-            <h2 style={{ fontSize: "1.2rem", margin: "0 0 1.5rem 0" }}>Persiapan Sidang</h2>
+            <div style={{ display: "flex", alignItems: isMobile ? "flex-start" : "center", justifyContent: "space-between", gap: "1rem", flexDirection: isMobile ? "column" : "row", marginBottom: "1.4rem" }}>
+              <div>
+                <h2 style={{ fontSize: isMobile ? "1.1rem" : "1.25rem", margin: "0 0 0.25rem" }}>Persiapan Sidang</h2>
+                <p style={{ margin: 0, fontSize: "0.82rem", color: "var(--text-muted)" }}>Atur konteks, unggah dokumen, lalu mulai sesi tanya jawab.</p>
+              </div>
+              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.38rem 0.65rem", borderRadius: "999px", background: "rgba(79,70,229,0.1)", color: "var(--primary)", fontSize: "0.72rem", fontWeight: 700 }}>
+                  <PremiumIcon name="clock" size={13} /> 10-15 menit
+                </span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.38rem 0.65rem", borderRadius: "999px", background: "rgba(16,185,129,0.1)", color: "var(--success)", fontSize: "0.72rem", fontWeight: 700 }}>
+                  <PremiumIcon name="shield" size={13} /> Ephemeral
+                </span>
+              </div>
+            </div>
 
             {setupError && (
               <div style={{ padding: "0.75rem", backgroundColor: "rgba(239,68,68,0.1)", color: "var(--danger)", borderRadius: "8px", fontSize: "0.85rem", marginBottom: "1rem" }}>
@@ -537,11 +715,12 @@ Sajikan dengan gaya bahasa akademis namun membangun (konstruktif).`;
                   <button
                     key={mode} type="button" onClick={() => setSidangMode(mode)} disabled={plan === "free"}
                     style={{
-                      textAlign: "center", padding: "1rem", borderRadius: "10px",
-                      border: sidangMode === mode ? "2px solid #EC4899" : "2px solid var(--border)",
-                      backgroundColor: sidangMode === mode ? "rgba(236,72,153,0.05)" : "transparent",
+                      textAlign: "left", padding: "0.9rem", borderRadius: "10px",
+                      border: sidangMode === mode ? `2px solid ${accentColor}` : "1px solid var(--border)",
+                      backgroundColor: sidangMode === mode ? "rgba(79,70,229,0.07)" : "var(--surface)",
                       cursor: plan === "free" ? "not-allowed" : "pointer", opacity: plan === "free" ? 0.6 : 1,
-                      fontWeight: 600, color: sidangMode === mode ? "#DB2777" : "var(--text-main)", textTransform: "capitalize", fontSize: isMobile ? "0.85rem" : "0.95rem"
+                      fontWeight: 700, color: sidangMode === mode ? accentColor : "var(--text-main)", fontSize: isMobile ? "0.83rem" : "0.92rem",
+                      display: "flex", alignItems: "center", justifyContent: "center", gap: "0.55rem"
                     }}
                   >
                     📋 Sidang {mode === "proposal" ? "Proposal" : "Skripsi"}
@@ -603,7 +782,7 @@ Sajikan dengan gaya bahasa akademis namun membangun (konstruktif).`;
             </div>
 
             <div style={{ display: "flex", justifyContent: "flex-end" }}>
-              <button type="submit" className="btn btn-primary" style={{ background: "linear-gradient(135deg, #EC4899, #BE185D)" }} disabled={setupLoading || !skripsiTitle.trim() || plan === "free"}>
+              <button type="submit" className="btn btn-primary" style={{ background: `linear-gradient(135deg, ${accentColor}, #BE185D)` }} disabled={!canStartSession}>
                 {setupLoading ? <><LoadingSpinner size={18} className="text-white" /> Memuat...</> : "Mulai Simulasi"}
               </button>
             </div>
@@ -613,14 +792,14 @@ Sajikan dengan gaya bahasa akademis namun membangun (konstruktif).`;
 
       {/* CHAT/SESSION PHASE */}
       {isSessionActive && (
-        <div className={isMobile ? "native-card" : "glass-panel"} style={{ display: "flex", flexDirection: "column", height: isMobile ? "calc(100vh - 180px)" : "65vh", margin: isMobile ? "0 -0.75rem" : 0 }}>
+        <div className={isMobile ? "native-card" : "glass-panel"} style={{ display: "flex", flexDirection: "column", height: isMobile ? "calc(100vh - 165px)" : "72vh", minHeight: isMobile ? "560px" : "640px", margin: isMobile ? "0 -0.75rem" : 0, overflow: "hidden" }}>
 
           <div style={{ padding: isMobile ? "0.75rem 1rem" : "1rem 1.5rem", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "rgba(236,72,153,0.02)" }}>
             <div>
               <div style={{ fontSize: "0.65rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 700 }}>
                 {sidangMode} • Q: {questionCount}/{maxQuestions} • S: {sanggahanCount}/{maxSanggahan}
               </div>
-              <div style={{ fontWeight: 600, color: "var(--text-main)", fontSize: "0.95rem" }}>{DOSEN_PROFILES.find(p => p.id === dosenProfile).label}</div>
+              <div style={{ fontWeight: 600, color: "var(--text-main)", fontSize: "0.95rem" }}>{activeProfile.label}</div>
             </div>
             {isFinished ? (
               <button onClick={generateFinalScoring} disabled={chatLoading} className="btn btn-primary" style={{ padding: "0.3rem 0.75rem", fontSize: "0.75rem", background: "linear-gradient(135deg, #10B981, #059669)" }}>
@@ -630,6 +809,42 @@ Sajikan dengan gaya bahasa akademis namun membangun (konstruktif).`;
               <button onClick={() => setShowConfirmEnd(true)} className="btn btn-outline" style={{ borderColor: "var(--danger)", color: "var(--danger)", padding: "0.3rem 0.75rem", fontSize: "0.75rem" }}>
                 Akhiri Sidang
               </button>
+            )}
+          </div>
+
+          <div style={{ padding: isMobile ? "0.75rem 1rem" : "0.85rem 1.5rem", borderBottom: "1px solid var(--border)", display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr auto", gap: "0.85rem", alignItems: "center", backgroundColor: "rgba(79,70,229,0.035)" }}>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "0.75rem" }}>
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem", fontSize: "0.72rem", color: "var(--text-muted)", fontWeight: 700, marginBottom: "0.35rem" }}>
+                  <span>Pertanyaan</span>
+                  <span>{questionCount}/{maxQuestions}</span>
+                </div>
+                <div style={{ height: 7, borderRadius: "999px", background: "var(--surface-hover)", overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${questionProgress}%`, background: accentColor, borderRadius: "999px", transition: "width 0.25s ease" }} />
+                </div>
+              </div>
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem", fontSize: "0.72rem", color: "var(--text-muted)", fontWeight: 700, marginBottom: "0.35rem" }}>
+                  <span>Sanggahan</span>
+                  <span>{sanggahanCount}/{maxSanggahan}</span>
+                </div>
+                <div style={{ height: 7, borderRadius: "999px", background: "var(--surface-hover)", overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${sanggahanProgress}%`, background: "var(--danger)", borderRadius: "999px", transition: "width 0.25s ease" }} />
+                </div>
+              </div>
+            </div>
+            {idVoices.length > 0 && (
+              <select
+                value={selectedVoiceURI}
+                onChange={e => setSelectedVoiceURI(e.target.value)}
+                className="form-input"
+                style={{ width: isMobile ? "100%" : "230px", padding: "0.42rem 0.65rem", fontSize: "0.75rem", backgroundColor: "var(--surface)" }}
+                title="Pilih suara TTS browser"
+              >
+                {idVoices.map(voice => (
+                  <option key={voice.voiceURI} value={voice.voiceURI}>{voice.name}</option>
+                ))}
+              </select>
             )}
           </div>
 
@@ -666,14 +881,31 @@ Sajikan dengan gaya bahasa akademis namun membangun (konstruktif).`;
           </div>
 
           {!isFinished && (
-            <div style={{ padding: isMobile ? "0.75rem" : "1rem", borderTop: "1px solid var(--border)", display: "flex", gap: "0.5rem", alignItems: "flex-end" }}>
-              <button onClick={() => { if (isRecording) { recognitionRef.current?.stop(); setIsRecording(false); } else { recognitionRef.current?.start(); setIsRecording(true); if (window.currentAudio) window.currentAudio.pause(); } }} style={{ width: isMobile ? "40px" : "48px", height: isMobile ? "40px" : "48px", borderRadius: "50%", border: "none", cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: isRecording ? "rgba(239,68,68,0.1)" : "var(--surface-hover)", color: isRecording ? "var(--danger)" : "var(--text-muted)", transition: "all 0.2s" }} title="Gunakan mikrofon">
-                {isRecording ? <LoadingSpinner size={isMobile ? 20 : 24} className="text-danger" /> : <PremiumIcon name="mic" size={isMobile ? 20 : 24} />}
+            <div style={{ padding: isMobile ? "0.75rem" : "1rem", borderTop: "1px solid var(--border)", display: "grid", gridTemplateColumns: "auto 1fr auto", gap: "0.65rem", alignItems: "end", backgroundColor: "rgba(var(--surface-rgb), 0.86)" }}>
+              <button
+                type="button"
+                onClick={() => { if (isRecording) stopListening(); else startListening(); }}
+                disabled={!speechSupported || chatLoading}
+                style={{ width: isMobile ? "42px" : "50px", height: isMobile ? "42px" : "50px", borderRadius: "50%", border: isRecording ? "1px solid rgba(239,68,68,0.35)" : "1px solid var(--border)", cursor: speechSupported && !chatLoading ? "pointer" : "not-allowed", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: isRecording ? "rgba(239,68,68,0.12)" : "var(--surface-hover)", color: isRecording ? "var(--danger)" : "var(--text-muted)", transition: "all 0.2s", boxShadow: isRecording ? "0 0 0 6px rgba(239,68,68,0.08)" : "none" }}
+                title={speechSupported ? "Gunakan mikrofon" : "Speech recognition tidak didukung browser ini"}
+              >
+                {isRecording ? <PremiumIcon name="radio" size={isMobile ? 20 : 23} /> : <PremiumIcon name="mic" size={isMobile ? 20 : 23} />}
               </button>
-              <div style={{ flex: 1, backgroundColor: "var(--surface)", border: "1px solid var(--border)", borderRadius: "24px", padding: "0.4rem 1rem", display: "flex", alignItems: "center" }}>
-                <input type="text" value={currentInput} onChange={e => setCurrentInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter") handleSendMessage(); }} placeholder={isRecording ? "Sedang mendengarkan..." : "Jawab pertanyaan dosen..."} style={{ width: "100%", background: "transparent", border: "none", outline: "none", fontSize: isMobile ? "0.875rem" : "0.95rem" }} />
+              <div style={{ backgroundColor: "var(--surface)", border: isRecording ? "1px solid rgba(239,68,68,0.35)" : "1px solid var(--border)", borderRadius: "18px", padding: "0.55rem 0.8rem 0.35rem", display: "flex", flexDirection: "column", gap: "0.35rem", minWidth: 0 }}>
+                <textarea
+                  value={currentInput}
+                  onChange={e => handleInputChange(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
+                  placeholder={isRecording ? "Mic aktif. Teks muncul realtime dan tetap bisa diedit..." : "Jawab pertanyaan dosen..."}
+                  rows={isMobile ? 2 : 1}
+                  style={{ width: "100%", minHeight: isMobile ? "44px" : "28px", maxHeight: "120px", resize: "vertical", background: "transparent", border: "none", outline: "none", color: "var(--text-main)", fontFamily: "inherit", fontSize: isMobile ? "0.875rem" : "0.95rem", lineHeight: 1.45 }}
+                />
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem", fontSize: "0.68rem", color: isRecording ? "var(--danger)" : "var(--text-muted)" }}>
+                  <span>{isRecording ? "Mendengarkan terus sampai tombol kirim ditekan." : speechSupported ? "Enter untuk kirim, Shift+Enter untuk baris baru." : "Browser ini belum mendukung speech recognition."}</span>
+                  <span style={{ color: "var(--text-muted)" }}>{currentInput.trim().split(/\s+/).filter(Boolean).length} kata</span>
+                </div>
               </div>
-              <button onClick={handleSendMessage} disabled={!currentInput.trim() || chatLoading} style={{ width: isMobile ? "40px" : "48px", height: isMobile ? "40px" : "48px", borderRadius: "50%", border: "none", cursor: currentInput.trim() ? "pointer" : "not-allowed", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: currentInput.trim() ? "var(--primary)" : "var(--surface-hover)", color: currentInput.trim() ? "white" : "var(--text-muted)" }}>
+              <button type="button" onClick={handleSendMessage} disabled={!currentInput.trim() || chatLoading} style={{ width: isMobile ? "42px" : "50px", height: isMobile ? "42px" : "50px", borderRadius: "50%", border: "none", cursor: currentInput.trim() && !chatLoading ? "pointer" : "not-allowed", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: currentInput.trim() ? "var(--primary)" : "var(--surface-hover)", color: currentInput.trim() ? "white" : "var(--text-muted)" }} title="Kirim jawaban">
                 <PremiumIcon name="send" size={isMobile ? 18 : 20} />
               </button>
             </div>

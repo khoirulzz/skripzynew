@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import LegalModal from "@/components/ui/LegalModal";
+import { TermsContent, PrivacyContent, AiContent } from "./LegalContent";
 import { createUserWithEmailAndPassword, signInWithPopup } from "firebase/auth";
 import { d1Request } from "@/lib/d1Client";
 import { auth, googleProvider } from "@/lib/firebase";
@@ -20,6 +22,8 @@ export default function RegisterPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const [agreed, setAgreed] = useState(false);
+  const [showLegal, setShowLegal] = useState(false);
 
   const handleChange = (e) => {
     setFormData(prev => ({ ...prev, [e.target.id]: e.target.value }));
@@ -152,14 +156,38 @@ export default function RegisterPage() {
             <input id="password" type="password" className="form-input" placeholder="Minimal 6 karakter" value={formData.password} onChange={handleChange} minLength={6} required />
           </div>
 
+          <div className="form-group flex items-center mt-4">
+            <input
+              id="agreed"
+              type="checkbox"
+              className="form-checkbox"
+              checked={agreed}
+              onChange={e => setAgreed(e.target.checked)}
+              required
+            />
+            <label htmlFor="agreed" className="ml-2 text-sm" style={{ color: "var(--text-main)" }}>
+              Saya telah membaca dan memahami <span className="text-primary cursor-pointer" onClick={() => setShowLegal(true)}>Terms &amp; Conditions</span>, <span className="text-primary cursor-pointer" onClick={() => setShowLegal(true)}>Privacy Policy</span>, serta <span className="text-primary cursor-pointer" onClick={() => setShowLegal(true)}>AI Usage Disclaimer</span>.
+            </label>
+          </div>
+
           <button 
             type="submit" 
             className="btn btn-primary w-full mt-4" 
             style={{ padding: "0.85rem", fontSize: "1rem", borderRadius: 999, fontWeight: 800 }}
-            disabled={loading}
+            disabled={loading || !agreed}
           >
             {loading ? "Memproses..." : "Daftar Akun"}
           </button>
+
+          <LegalModal open={showLegal} onClose={() => setShowLegal(false)}>
+            <div className="p-4">
+              <TermsContent />
+              <hr className="my-4" />
+              <PrivacyContent />
+              <hr className="my-4" />
+              <AiContent />
+            </div>
+          </LegalModal>
         </form>
 
         <div style={{ display: "flex", alignItems: "center", gap: "1rem", margin: "1.5rem 0" }}>

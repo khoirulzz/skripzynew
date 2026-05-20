@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
+import DefaultSpinner from "@/components/ui/DefaultSpinner";
 import { validatePromoCode } from "@/lib/adminPromos";
 import {
   calculatePromoBreakdown,
@@ -19,7 +20,12 @@ import {
   BILLING_PERIODS,
   calculatePeriodPrice,
   createIpaymuPayment,
+  updateBillingRequest,
+  generateDynamicQRIS,
+  checkDuplicateReference,
+  analyzeReceiptText,
 } from "@/lib/billing";
+import { approveTopup } from "@/lib/adminCredits";
 import {
   useActivePromos,
   useBillingCatalog,
@@ -29,7 +35,34 @@ import {
 const WORKER_URL = process.env.NEXT_PUBLIC_WORKER_URL || "https://apikey.skripzy-app.workers.dev";
 const WORKER_SECRET = process.env.NEXT_PUBLIC_WORKER_SECRET || "skripzy1234";
 
+const loadTesseract = () => {
+  return new Promise((resolve, reject) => {
+    if (typeof window === "undefined") {
+      reject(new Error("Browser environment required"));
+      return;
+    }
+    if (window.Tesseract) {
+      resolve(window.Tesseract);
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+    script.onload = () => {
+      if (window.Tesseract) {
+        resolve(window.Tesseract);
+      } else {
+        reject(new Error("Gagal memuat Tesseract dari CDN"));
+      }
+    };
+    script.onerror = () => reject(new Error("Gagal mengunduh script Tesseract"));
+    document.body.appendChild(script);
+  });
+};
+
+const normalizeText = (val) => String(val || "").trim();
+
 const STATUS_STYLES = {
+  progress: { bg: "rgba(14,165,233,0.12)", color: "#0284C7", label: "Dalam Proses" },
   pending: { bg: "rgba(245,158,11,0.12)", color: "#D97706", label: "Menunggu Verifikasi" },
   approved: { bg: "rgba(16,185,129,0.12)", color: "#059669", label: "Disetujui" },
   rejected: { bg: "rgba(239,68,68,0.12)", color: "#DC2626", label: "Ditolak" },
@@ -224,6 +257,9 @@ export default function LanggananPage() {
 
 
   const [submitting, setSubmitting] = useState(false);
+  const [ocrProgressMsg, setOcrProgressMsg] = useState("");
+  const [showInfoModal, setShowInfoModal] = useState(false);
+  const [activeRequestId, setActiveRequestId] = useState(null);
   const [successMsg, setSuccessMsg] = useState(() =>
     initialPaymentStatus === "success"
       ? "Pembayaran berhasil diproses! Saldo atau paket Anda akan segera diperbarui."
@@ -234,16 +270,6 @@ export default function LanggananPage() {
     if (initialPaymentStatus === "cancelled") return "Pembayaran dibatalkan.";
     return "";
   });
-
-  useEffect(() => {
-    if (!initialPaymentStatus || typeof window === "undefined") return;
-
-    if (initialPaymentStatus === "success" && typeof refreshUserData === "function") {
-      refreshUserData();
-    }
-
-    window.history.replaceState({}, document.title, window.location.pathname);
-  }, [initialPaymentStatus, refreshUserData]);
 
   const defaultTarget = useMemo(() => {
     const recommendedPlan =
@@ -264,7 +290,7 @@ export default function LanggananPage() {
   }, [currentPlan, plans, topups]);
 
   const selectedOrder = useMemo(() => {
-    const target = selectedTarget || defaultTarget;
+    const target = selectedTarget;
     if (!target) return null;
 
     if (target.type === "plan") {
@@ -274,7 +300,7 @@ export default function LanggananPage() {
 
     const item = topupMap[target.id];
     return item ? { type: "topup", item } : null;
-  }, [defaultTarget, planMap, selectedTarget, topupMap]);
+  }, [planMap, selectedTarget, topupMap]);
 
   const selectedPaymentMethod = getPaymentMethodById(paymentMethodId);
   const selectedPaymentChannel = getPaymentChannelById(paymentChannelId);
@@ -291,6 +317,18 @@ export default function LanggananPage() {
     [basePriceForPeriod, selectedPromo]
   );
 
+  const dynamicQRISPayload = useMemo(() => {
+    if (selectedPaymentChannel?.id === "qris-main" && priceBreakdown?.finalPrice) {
+      const baseQRIS = "00020101021126610014COM.GO-JEK.WWW01189360091438876418720210G8876418720303UMI51440014ID.CO.QRIS.WWW0215ID10243599556960303UMI5204829953033605802ID5928Skripzy, Digital & Education6010PEKALONGAN61055116462070703A0163041982";
+      try {
+        return generateDynamicQRIS(baseQRIS, priceBreakdown.finalPrice);
+      } catch (err) {
+        console.error("Error generating dynamic QRIS:", err);
+      }
+    }
+    return null;
+  }, [selectedPaymentChannel, priceBreakdown]);
+
   const groupedChannels = useMemo(() => {
     return {
       bank: MANUAL_PAYMENT_CHANNELS.filter((item) => item.group === "bank"),
@@ -298,6 +336,72 @@ export default function LanggananPage() {
       ewallet: MANUAL_PAYMENT_CHANNELS.filter((item) => item.group === "ewallet"),
     };
   }, []);
+
+  useEffect(() => {
+    if (!initialPaymentStatus || typeof window === "undefined") return;
+
+    if (initialPaymentStatus === "success" && typeof refreshUserData === "function") {
+      refreshUserData();
+    }
+
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }, [initialPaymentStatus, refreshUserData]);
+
+  // Effect to create billing request with status "waiting_payment" when reaching Step 5
+  useEffect(() => {
+    if (currentStep === 5 && paymentMethodId === "manual" && !activeRequestId && selectedOrder && user) {
+      const initProgressRequest = async () => {
+        try {
+          const id = await createBillingRequest({
+            user,
+            userData,
+            requestType: selectedOrder.type,
+            selectedItem: selectedOrder.item,
+            paymentMethodId,
+            paymentChannelId,
+            promo: selectedPromo,
+            priceBreakdown,
+            customerNotes,
+            referenceNumber,
+            proofImageUrl: "",
+            status: "waiting_payment",
+          });
+          setActiveRequestId(id);
+        } catch (e) {
+          console.error("Error creating progress request:", e);
+        }
+      };
+      initProgressRequest();
+    }
+  }, [currentStep, paymentMethodId, activeRequestId, selectedOrder, user, userData, paymentChannelId, selectedPromo, priceBreakdown, customerNotes, referenceNumber]);
+
+  // Effect to update billing request in DB as details are changed
+  useEffect(() => {
+    if (activeRequestId && currentStep === 5 && selectedOrder) {
+      const updateProgressRequest = async () => {
+        try {
+          await updateBillingRequest(activeRequestId, {
+            paymentMethodId,
+            paymentMethodLabel: selectedPaymentMethod?.label || "",
+            paymentChannelId,
+            paymentChannelLabel: selectedPaymentChannel?.label || "",
+            paymentChannelGroup: selectedPaymentChannel?.group || "",
+            customerNotes,
+            referenceNumber,
+            promoId: selectedPromo?.id || null,
+            promoCode: selectedPromo?.code || null,
+            promoType: selectedPromo?.type || null,
+            basePrice: priceBreakdown.basePrice,
+            discountAmount: priceBreakdown.discountAmount,
+            finalPrice: priceBreakdown.finalPrice,
+          });
+        } catch (e) {
+          console.error("Error updating progress request:", e);
+        }
+      };
+      updateProgressRequest();
+    }
+  }, [activeRequestId, currentStep, paymentMethodId, paymentChannelId, selectedPaymentMethod, selectedPaymentChannel, customerNotes, referenceNumber, selectedPromo, priceBreakdown, selectedOrder]);
 
   const pendingRequests = userRequests.filter((item) => item.status === "pending");
   const latestRequests = userRequests.slice(0, 6);
@@ -414,6 +518,7 @@ export default function LanggananPage() {
     clearMessages();
 
     setSubmitting(true);
+    setOcrProgressMsg("Menyiapkan transaksi...");
     try {
       if (paymentMethodId === "automatic") {
         const ipaymuRes = await createIpaymuPayment({
@@ -439,39 +544,177 @@ export default function LanggananPage() {
 
         let proofUrl = "";
         if (currentStep === 5 && proofFile) {
+          setOcrProgressMsg("Mengunggah bukti transfer...");
           proofUrl = await uploadToCloudinary(proofFile);
         }
 
-        await createBillingRequest({
-          user, userData,
-          requestType: selectedOrder.type,
-          selectedItem: selectedOrder.item,
-          paymentMethodId,
-          paymentChannelId,
-          promo: selectedPromo,
-          priceBreakdown,
-          customerNotes,
-          referenceNumber,
-          proofImageUrl: proofUrl
-        });
-
-        setSuccessMsg(
-          selectedOrder.type === "plan"
-            ? "Permintaan upgrade plan berhasil dikirim. Admin akan memverifikasi pembayaran manual Anda."
-            : "Permintaan top-up kredit berhasil dikirim. Kredit akan masuk setelah admin menyetujui pembayaran."
-        );
+        // --- START OCR SCAN & VALIDATION ---
+        setOcrProgressMsg("Memulai pemindaian OCR bukti transfer...");
         
-        // Reset form to start
+        let ocrResult = null;
+        let ocrScore = 0;
+        let isDuplicate = false;
+        let detectedRef = referenceNumber;
+        
+        try {
+          const tesseract = await loadTesseract();
+          setOcrProgressMsg("Sedang membaca teks gambar dengan OCR...");
+          
+          const worker = await tesseract.createWorker("ind");
+          const ret = await worker.recognize(proofFile);
+          const ocrText = ret.data.text || "";
+          const confidence = ret.data.confidence || 0;
+          await worker.terminate();
+
+          setOcrProgressMsg("Menganalisis kecocokan transaksi...");
+          const targetPrice = priceBreakdown.finalPrice;
+          
+          ocrResult = analyzeReceiptText({
+            ocrText,
+            confidence,
+            targetPrice,
+            paymentChannelId
+          });
+          
+          ocrScore = ocrResult.score;
+          if (ocrResult.extractedRef) {
+            detectedRef = ocrResult.extractedRef;
+          }
+          
+          // Anti-Counterfeit duplicate check
+          setOcrProgressMsg("Memeriksa keaslian transaksi...");
+          if (detectedRef) {
+            isDuplicate = await checkDuplicateReference(detectedRef, activeRequestId);
+          }
+        } catch (ocrErr) {
+          console.error("OCR scan failed, falling back to manual confirmation:", ocrErr);
+          if (ocrResult) {
+            ocrResult.reasons.push("Gagal memproses OCR: " + ocrErr.message);
+          }
+        }
+        
+        if (isDuplicate) {
+          ocrScore = 0;
+          if (ocrResult) {
+            ocrResult.reasons = ocrResult.reasons || [];
+            ocrResult.reasons.push("NOMOR REFERENSI GANDA TERDETEKSI (Indikasi Pemalsuan)");
+          }
+        }
+        
+        let finalStatus = "pending";
+        let isAutoApproved = false;
+        
+        const autoApproveThreshold = 75;
+        if (ocrScore >= autoApproveThreshold && !isDuplicate) {
+          finalStatus = "approved";
+          isAutoApproved = true;
+        }
+        
+        let updatedNotes = customerNotes || "";
+        const ocrLog = `\n\n[SISTEM OCR VERIFIKASI]\n- Skor Kecocokan: ${ocrScore}/100\n- Referensi Terdeteksi: ${detectedRef || "-"}\n- Auto-Approve: ${isAutoApproved ? "YA" : "TIDAK (Konfirmasi Manual Admin)"}\n- Catatan OCR: ${ocrResult ? ocrResult.reasons.join(", ") : "Gagal membaca struk"}`;
+        updatedNotes += ocrLog;
+        
+        const finalRef = detectedRef || referenceNumber || `TRX-${Date.now()}`;
+        const targetRequestId = activeRequestId;
+        
+        if (targetRequestId) {
+          await updateBillingRequest(targetRequestId, {
+            status: finalStatus,
+            customerNotes: normalizeText(updatedNotes),
+            referenceNumber: normalizeText(finalRef),
+            proofImageUrl: proofUrl,
+            timestamp: new Date().toISOString(),
+          });
+        } else {
+          // Fallback if no activeRequestId
+          await createBillingRequest({
+            user, userData,
+            requestType: selectedOrder.type,
+            selectedItem: selectedOrder.item,
+            paymentMethodId,
+            paymentChannelId,
+            promo: selectedPromo,
+            priceBreakdown,
+            customerNotes: updatedNotes,
+            referenceNumber: finalRef,
+            proofImageUrl: proofUrl,
+            status: finalStatus
+          });
+        }
+        
+        if (isAutoApproved) {
+          setOcrProgressMsg("Pembayaran terverifikasi! Sedang menambahkan kredit...");
+          if (targetRequestId) {
+            await approveTopup(
+              targetRequestId, 
+              user.uid, 
+              selectedOrder.type === "plan" ? 0 : getTotalCreditsFromTopup(selectedOrder.item)
+            );
+          }
+          
+          const msg = selectedOrder.type === "plan"
+            ? "Pembayaran Anda terverifikasi otomatis oleh sistem! Akun Anda telah di-upgrade ke plan baru."
+            : `Pembayaran terverifikasi otomatis! Anda berhasil melakukan top-up sebesar ${getTotalCreditsFromTopup(selectedOrder.item).toLocaleString("id-ID")} kredit.`;
+          setSuccessMsg(msg);
+          setTimeout(() => window.alert("🎉 Pembayaran Berhasil!\n\n" + msg), 100);
+        } else {
+          const msg = selectedOrder.type === "plan"
+            ? "Bukti pembayaran diterima. Pembayaranmu sedang diverifikasi Admin/Sistem."
+            : "Bukti pembayaran diterima. Pembayaranmu sedang diverifikasi Admin/Sistem.";
+          setSuccessMsg(msg);
+          setTimeout(() => window.alert("⏳ Menunggu Verifikasi\n\n" + msg), 100);
+        }
+        
+        // Reset form
         setCurrentStep(1);
         setCustomerNotes("");
         setReferenceNumber("");
         setProofFile(null);
         setUploadPreview("");
+        setActiveRequestId(null);
       }
     } catch (error) {
       setErrorMsg(error.message || "Gagal membuat permintaan pembayaran.");
     } finally {
       setSubmitting(false);
+      setOcrProgressMsg("");
+    }
+  };
+
+  const handleHistoryItemClick = (item) => {
+    if (item.status === "progress" || item.status === "waiting_payment") {
+      setActiveRequestId(item.id);
+      
+      if (item.requestType === "plan") {
+        setSelectedTarget({ type: "plan", id: item.planId });
+        setProductType("plan");
+      } else {
+        setSelectedTarget({ type: "topup", id: item.topupSlug });
+        setProductType("topup");
+      }
+      
+      setPaymentMethodId(item.paymentMethodId || "manual");
+      setPaymentChannelId(item.paymentChannelId || "");
+      setCustomerNotes(item.customerNotes || "");
+      setReferenceNumber(item.referenceNumber || "");
+      
+      if (item.promoCode) {
+        setSelectedPromo({
+          id: item.promoId,
+          code: item.promoCode,
+          type: item.promoType,
+          discountAmount: item.discountAmount,
+          discountPercent: item.basePrice > 0 ? Math.round((item.discountAmount / item.basePrice) * 100) : 0,
+        });
+        setPromoInput(item.promoCode);
+      } else {
+        setSelectedPromo(null);
+        setPromoInput("");
+      }
+      
+      setCurrentStep(5);
+      clearMessages();
+      window.scrollTo({ top: 0, behavior: "smooth" });
     }
   };
 
@@ -484,7 +727,7 @@ export default function LanggananPage() {
         <div>
           <h1 style={{ fontSize: "1.75rem", margin: 0, fontWeight: 900 }}>Billing Studio</h1>
           <p style={{ margin: "0.35rem 0 0", fontSize: "0.92rem", color: "var(--text-muted)" }}>
-            Langganan & Top Up yang langsung terhubung ke admin.
+            Kelola paket langganan dan saldo kredit Anda dengan mudah dan aman.
           </p>
         </div>
       </div>
@@ -504,14 +747,24 @@ export default function LanggananPage() {
           <div className="animate-fade-in">
             <div style={{ display: "flex", gap: "0.5rem", marginBottom: "2rem", padding: "0.4rem", backgroundColor: "var(--surface-hover)", borderRadius: "100px", border: "1px solid var(--border)" }}>
               <button 
-                onClick={() => { setProductType('plan'); setSelectedTarget(null); clearMessages(); }}
+                onClick={() => { setProductType('plan'); setSelectedTarget(null); clearMessages(); setActiveRequestId(null); }}
                 style={{ flex: 1, padding: "0.75rem", borderRadius: "100px", border: "none", cursor: "pointer", fontWeight: 700, transition: "all 0.2s", backgroundColor: productType === 'plan' ? "var(--primary)" : "transparent", color: productType === 'plan' ? "white" : "var(--text-muted)", boxShadow: productType === 'plan' ? "var(--shadow-sm)" : "none" }}>
                 Upgrade Plan
               </button>
               <button 
-                onClick={() => { setProductType('topup'); setSelectedTarget(null); clearMessages(); }}
+                onClick={() => { setProductType('topup'); setSelectedTarget(null); clearMessages(); setActiveRequestId(null); }}
                 style={{ flex: 1, padding: "0.75rem", borderRadius: "100px", border: "none", cursor: "pointer", fontWeight: 700, transition: "all 0.2s", backgroundColor: productType === 'topup' ? "var(--primary)" : "transparent", color: productType === 'topup' ? "white" : "var(--text-muted)", boxShadow: productType === 'topup' ? "var(--shadow-sm)" : "none" }}>
                 Top Up Kredit
+              </button>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.4rem", marginTop: "-1.2rem", marginBottom: "1.8rem" }}>
+              <button 
+                type="button"
+                onClick={() => setShowInfoModal(true)}
+                style={{ background: "none", border: "none", color: "var(--primary)", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "0.35rem", fontSize: "0.82rem", fontWeight: 700, padding: "0.3rem 0.6rem", borderRadius: "100px", backgroundColor: "rgba(79,70,229,0.06)", transition: "all 0.2s" }}
+              >
+                <PremiumIcon name="help" size={14} /> Apa perbedaan Plan & Top Up Kredit?
               </button>
             </div>
 
@@ -580,8 +833,9 @@ export default function LanggananPage() {
                   {plans.map((plan) => {
                     const isSelected = selectedOrder?.type === "plan" && selectedOrder.item.planId === plan.planId;
                     const isCurrent = currentPlan === plan.planId;
+                    const isFree = plan.planId === "free";
                     return (
-                      <ChoiceCard key={plan.planId} title={plan.name} subtitle={plan.description} badge={plan.popular ? "Paling Dipilih" : isCurrent ? "Aktif" : null} selected={isSelected} disabled={false} accent={plan.accent} onClick={() => { clearMessages(); setSelectedTarget({ type: "plan", id: plan.planId }); }} price={formatRupiah(calculatePeriodPrice(plan.price || 0, billingPeriodId).finalPrice)}>
+                      <ChoiceCard key={plan.planId} title={plan.name} subtitle={plan.description} badge={plan.popular ? "Paling Dipilih" : isCurrent ? "Aktif" : null} selected={isSelected && !isCurrent && !isFree} disabled={isCurrent || isFree} accent={isCurrent || isFree ? "#9CA3AF" : plan.accent} onClick={() => { if(isCurrent || isFree) return; clearMessages(); setSelectedTarget({ type: "plan", id: plan.planId }); setActiveRequestId(null); }} price={formatRupiah(calculatePeriodPrice(plan.price || 0, billingPeriodId).finalPrice)}>
                         <div style={{ display: "flex", alignItems: "baseline", gap: "0.3rem", marginBottom: "0.8rem", flexWrap: "wrap" }}>
                           <span style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>Rp</span>
                           <span style={{ fontSize: "1.75rem", fontWeight: 900 }}>{Number(calculatePeriodPrice(plan.price || 0, billingPeriodId).finalPrice).toLocaleString("id-ID")}</span>
@@ -609,7 +863,7 @@ export default function LanggananPage() {
                     {topups.map((item) => {
                       const isSelected = selectedOrder?.type === "topup" && selectedOrder.item.slug === item.slug;
                       return (
-                        <ChoiceCard key={item.slug} title={item.name} subtitle={item.description} badge={item.badgeText} selected={isSelected} disabled={false} accent={item.accent} onClick={() => { clearMessages(); setSelectedTarget({ type: "topup", id: item.slug }); }} price={formatRupiah(item.price)}>
+                        <ChoiceCard key={item.slug} title={item.name} subtitle={item.description} badge={item.badgeText} selected={isSelected} disabled={false} accent={item.accent} onClick={() => { clearMessages(); setSelectedTarget({ type: "topup", id: item.slug }); setActiveRequestId(null); }} price={formatRupiah(item.price)}>
                           <div style={{ padding: "0.9rem", borderRadius: 14, backgroundColor: "var(--surface-hover)" }}>
                             <p style={{ margin: 0, fontSize: "0.65rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 700 }}>Total Kredit</p>
                             <p style={{ margin: "0.3rem 0 0", fontSize: "1.45rem", fontWeight: 900 }}>{getTotalCreditsFromTopup(item).toLocaleString("id-ID")}</p>
@@ -637,9 +891,10 @@ export default function LanggananPage() {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "0.9rem", marginBottom: "2rem" }}>
               {PAYMENT_METHODS.map((item) => {
                 const isSelected = paymentMethodId === item.id;
+                const isAuto = item.id === "automatic";
                 return (
-                  <ChoiceCard key={item.id} title={item.label} subtitle={item.description} badge={item.badgeText} selected={isSelected} disabled={false} accent={item.accent} onClick={() => { setPaymentMethodId(item.id); if(item.id !== 'manual') setActiveManualGroup(null); clearMessages(); }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", padding: "0.8rem 0.9rem", borderRadius: 14, backgroundColor: item.id === "automatic" ? "rgba(59,130,246,0.08)" : "rgba(16,185,129,0.08)", color: item.id === "automatic" ? "#2563EB" : "#047857", fontSize: "0.8rem", fontWeight: 700 }}>
+                  <ChoiceCard key={item.id} title={item.label} subtitle={item.description} badge={isAuto ? "MAINTENANCE" : item.badgeText} selected={isSelected && !isAuto} disabled={isAuto} accent={isAuto ? "#9CA3AF" : item.accent} onClick={() => { if(isAuto) return; setPaymentMethodId(item.id); if(item.id !== 'manual') setActiveManualGroup(null); clearMessages(); }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", padding: "0.8rem 0.9rem", borderRadius: 14, backgroundColor: item.id === "automatic" ? "rgba(59,130,246,0.08)" : "rgba(16,185,129,0.08)", color: item.id === "automatic" ? (isAuto ? "#9CA3AF" : "#2563EB") : "#047857", fontSize: "0.8rem", fontWeight: 700 }}>
                       <PremiumIcon name={item.id === "automatic" ? "sparkles" : "checkCircle"} size={16} />
                       {item.id === "automatic" ? "Checkout otomatis via iPaymu" : "Verifikasi manual oleh admin"}
                     </div>
@@ -824,7 +1079,18 @@ export default function LanggananPage() {
             </div>
 
             <div style={{ backgroundColor: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.2)", borderRadius: 20, padding: "clamp(1rem, 4vw, 1.5rem)", marginBottom: "2rem", display: "flex", gap: "1.5rem", flexWrap: "wrap", alignItems: "center" }}>
-               {selectedPaymentChannel?.qrisImage ? (
+               {selectedPaymentChannel?.id === "qris-main" && dynamicQRISPayload ? (
+                   <div style={{ flexShrink: 0, backgroundColor: "#fff", padding: "0.5rem", borderRadius: 12, display: "flex", flexDirection: "column", alignItems: "center", gap: "0.5rem", border: "2px dashed var(--primary)" }}>
+                     <img 
+                       src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=10&data=${encodeURIComponent(dynamicQRISPayload)}`} 
+                       alt="QRIS Dinamis" 
+                       style={{ width: 180, height: 180, borderRadius: 8 }} 
+                     />
+                     <span style={{ fontSize: "0.68rem", fontWeight: 800, color: "var(--primary)", backgroundColor: "rgba(79,70,229,0.1)", padding: "0.2rem 0.5rem", borderRadius: "100px" }}>
+                       QRIS DINAMIS • Rp {Number(priceBreakdown.finalPrice).toLocaleString("id-ID")}
+                     </span>
+                   </div>
+                ) : selectedPaymentChannel?.qrisImage ? (
                   <div style={{ flexShrink: 0, backgroundColor: "#fff", padding: "0.5rem", borderRadius: 12 }}>
                     <Image src={selectedPaymentChannel.qrisImage} alt="QRIS Code" width={180} height={180} style={{ objectFit: "contain", borderRadius: 8 }} />
                   </div>
@@ -857,7 +1123,12 @@ export default function LanggananPage() {
               </div>
 
               <div>
-                <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 700, marginBottom: "0.5rem" }}>Bukti Transfer (Image) <span style={{color: "#EF4444"}}>*</span></label>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.5rem" }}>
+                  <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 700 }}>Bukti Transfer (Image) <span style={{color: "#EF4444"}}>*</span></label>
+                  <button type="button" onClick={() => alert("Pastikan screenshot/foto bukti transfer JELAS dan memuat informasi berikut:\n\n1. Nama Pengirim / Pemilik Rekening\n2. Rekening Tujuan / Bank Tujuan\n3. Nomor Referensi / ID Transaksi\n4. Nominal Transfer (Harus sesuai tagihan)\n5. Tanggal & Waktu Transaksi\n\nHal ini diperlukan untuk memastikan sistem atau admin dapat memverifikasi pembayaran Anda secara cepat dan akurat.")} style={{ background: "none", border: "none", color: "var(--primary)", cursor: "pointer", display: "inline-flex", alignItems: "center", padding: 0 }} title="Info Upload Bukti">
+                    <PremiumIcon name="info" size={15} />
+                  </button>
+                </div>
                 <div style={{ border: "2px dashed var(--border)", borderRadius: 16, padding: "2rem", textAlign: "center", position: "relative", backgroundColor: "var(--surface-hover)", transition: "all 0.2s ease" }}>
                   <input type="file" accept="image/png, image/jpeg, image/jpg, image/webp" onChange={handleProofChange} style={{ position: "absolute", inset: 0, opacity: 0, cursor: "pointer", zIndex: 2 }} />
                   {uploadPreview ? (
@@ -878,9 +1149,22 @@ export default function LanggananPage() {
               </div>
             </div>
 
-            <div style={{ marginTop: "2rem", display: "flex", justifyContent: "flex-end" }}>
-               <button onClick={handleSubmitRequest} disabled={submitting || !proofFile} className="btn btn-primary" style={{ padding: "1rem 2rem", fontSize: "1.05rem", borderRadius: 999 }}>
-                  {submitting ? "Mengunggah & Mengirim..." : "Kirim Bukti Pembayaran"}
+            <div style={{ marginTop: "2rem", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "1rem" }}>
+               {ocrProgressMsg && (
+                 <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", color: "var(--primary)", fontSize: "0.88rem", fontWeight: 700, backgroundColor: "var(--surface-hover)", padding: "0.5rem 1rem", borderRadius: "100px", border: "1px solid var(--border)" }}>
+                   <DefaultSpinner size="small" color="#4F46E5" />
+                   <span>{ocrProgressMsg}</span>
+                 </div>
+               )}
+               <button onClick={() => {
+                 if (!proofFile) {
+                   setErrorMsg("Harap unggah bukti foto transfer terlebih dahulu.");
+                   window.scrollTo({ top: 0, behavior: "smooth" });
+                   return;
+                 }
+                 handleSubmitRequest();
+               }} disabled={submitting} className="btn btn-primary" style={{ padding: "1rem 2rem", fontSize: "1.05rem", borderRadius: 999 }}>
+                  {submitting ? "Memproses..." : "Kirim Bukti Pembayaran"}
                </button>
             </div>
           </div>
@@ -923,7 +1207,27 @@ export default function LanggananPage() {
                 {latestRequests.map((item) => {
                   const isPlan = item.requestType === "plan";
                   return (
-                    <tr key={item.id} style={{ borderBottom: "1px solid var(--border)", fontSize: "0.9rem" }}>
+                    <tr 
+                      key={item.id} 
+                      onClick={(item.status === "progress" || item.status === "waiting_payment") ? () => handleHistoryItemClick(item) : undefined}
+                      style={{ 
+                        borderBottom: "1px solid var(--border)", 
+                        fontSize: "0.9rem",
+                        cursor: (item.status === "progress" || item.status === "waiting_payment") ? "pointer" : "default",
+                        backgroundColor: (item.status === "progress" || item.status === "waiting_payment") ? "rgba(14,165,233,0.03)" : "transparent",
+                        transition: "all 0.2s",
+                      }}
+                      onMouseEnter={(e) => {
+                        if (item.status === "progress" || item.status === "waiting_payment") {
+                          e.currentTarget.style.backgroundColor = "rgba(14,165,233,0.08)";
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (item.status === "progress" || item.status === "waiting_payment") {
+                          e.currentTarget.style.backgroundColor = (item.status === "progress" || item.status === "waiting_payment") ? "rgba(14,165,233,0.03)" : "transparent";
+                        }
+                      }}
+                    >
                       <td style={{ padding: "1rem" }}>
                         <StatusBadge status={item.status} />
                       </td>
@@ -965,6 +1269,58 @@ export default function LanggananPage() {
           </div>
         )}
       </section>
+
+      {showInfoModal && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 1000, backgroundColor: "rgba(15,23,42,0.6)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+          <div style={{ backgroundColor: "var(--surface)", border: "1px solid var(--border)", borderRadius: "24px", maxWidth: "560px", width: "100%", padding: "2rem", boxShadow: "0 20px 40px rgba(0,0,0,0.15)", position: "relative", animation: "scaleUp 0.3s ease-out" }}>
+            <button 
+              onClick={() => setShowInfoModal(false)} 
+              style={{ position: "absolute", top: "1.25rem", right: "1.25rem", background: "var(--surface-hover)", border: "none", color: "var(--text-muted)", cursor: "pointer", width: "32px", height: "32px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s" }}
+            >
+              <PremiumIcon name="x" size={16} />
+            </button>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1.5rem" }}>
+              <div style={{ width: "40px", height: "40px", borderRadius: "12px", backgroundColor: "rgba(79,70,229,0.1)", color: "var(--primary)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <PremiumIcon name="help" size={22} />
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 800 }}>Perbedaan Plan & Kredit</h3>
+                <p style={{ margin: "0.2rem 0 0", fontSize: "0.82rem", color: "var(--text-muted)" }}>Pahami kebutuhan akun Anda sebelum bertransaksi</p>
+              </div>
+            </div>
+            
+            <div style={{ display: "grid", gap: "1.25rem" }}>
+              <div style={{ padding: "1.2rem", borderRadius: "18px", border: "1px solid rgba(79,70,229,0.15)", backgroundColor: "rgba(79,70,229,0.02)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.6rem" }}>
+                  <PremiumIcon name="zap" size={16} style={{ color: "var(--primary)" }} />
+                  <span style={{ fontWeight: 800, fontSize: "0.95rem", color: "var(--text-main)" }}>Upgrade Plan (Langganan Berkala)</span>
+                </div>
+                <p style={{ margin: 0, fontSize: "0.82rem", color: "var(--text-muted)", lineHeight: "1.45" }}>
+                  Sistem langganan berkala (bulanan/tahunan). Cocok untuk pemakaian rutin jangka panjang. 
+                  Memberikan <strong>kuota kredit bulanan tetap</strong> dan membuka akses ke batas karakter input AI yang lebih besar serta prioritas server.
+                </p>
+              </div>
+
+              <div style={{ padding: "1.2rem", borderRadius: "18px", border: "1px solid rgba(16,185,129,0.15)", backgroundColor: "rgba(16,185,129,0.02)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.6rem" }}>
+                  <PremiumIcon name="coins" size={16} style={{ color: "#10B981" }} />
+                  <span style={{ fontWeight: 800, fontSize: "0.95rem", color: "var(--text-main)" }}>Top Up Kredit (Sekali Beli)</span>
+                </div>
+                <p style={{ margin: 0, fontSize: "0.82rem", color: "var(--text-muted)", lineHeight: "1.45" }}>
+                  Pembelian kuota kredit tambahan sekali beli. Cocok jika kuota kredit bulanan dari plan Anda habis sebelum masa berakhir, 
+                  atau jika Anda hanya ingin memakai fitur premium secara kasual tanpa berlangganan berkala. <strong>Kredit ini tidak akan hangus</strong> dan bersifat akumulatif.
+                </p>
+              </div>
+            </div>
+
+            <div style={{ marginTop: "2rem", display: "flex", justifyContent: "flex-end" }}>
+              <button onClick={() => setShowInfoModal(false)} className="btn btn-primary" style={{ padding: "0.7rem 1.5rem", borderRadius: "999px" }}>
+                Saya Mengerti
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -28,49 +28,67 @@ export function FormRenderer({
 
   return (
     <div
+      className="form-renderer-container"
       style={{
         width: "100%",
-        maxWidth: device === "mobile" ? "390px" : "760px",
+        maxWidth: device === "mobile" ? "100%" : "800px",
         margin: "0 auto",
         display: "flex",
         flexDirection: "column",
-        gap: "1rem",
+        gap: "1.5rem",
+        padding: device === "mobile" ? "1rem" : "2rem",
+        transition: "all 0.3s ease"
       }}
     >
-      <div className="glass-panel" style={{ padding: "1.5rem 1.5rem 1.25rem", borderTop: "4px solid var(--primary)" }}>
-        <h2 style={{ fontSize: "1.35rem", margin: 0 }}>{form.title || "Tanpa Judul"}</h2>
-        <p style={{ margin: "0.5rem 0 0 0", fontSize: "0.9rem" }}>{form.description || "Deskripsi form belum diisi."}</p>
+      <div className="techy-card" style={{ padding: "2rem", borderTop: "5px solid var(--primary)", position: "relative", overflow: "hidden" }}>
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "100%", background: "radial-gradient(circle at top right, rgba(79, 70, 229, 0.08), transparent 60%)", pointerEvents: "none" }} />
+        <h2 style={{ fontSize: "1.75rem", margin: 0, fontWeight: 800, color: "var(--text-main)", letterSpacing: "-0.02em" }}>{form.title || "Tanpa Judul"}</h2>
+        <p style={{ margin: "0.75rem 0 0 0", fontSize: "1rem", color: "var(--text-muted)", lineHeight: 1.6 }}>{form.description || "Deskripsi form belum diisi."}</p>
       </div>
 
-      {form.sections.map((section) => (
-        <div key={section.id} className="glass-panel" style={{ padding: "1.25rem" }}>
-          <div style={{ paddingBottom: "0.85rem", borderBottom: "1px solid var(--border)", marginBottom: "1rem" }}>
-            <h3 style={{ fontSize: "1rem", margin: 0 }}>{section.title || "Bagian Tanpa Judul"}</h3>
+      {form.sections.map((section, sIdx) => (
+        <div key={section.id} className="techy-card" style={{ padding: device === "mobile" ? "1.25rem" : "2rem", display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+          <div style={{ paddingBottom: "1rem", borderBottom: "1px solid rgba(var(--primary-rgb), 0.15)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+              <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "28px", height: "28px", borderRadius: "8px", background: "rgba(var(--primary-rgb), 0.1)", color: "var(--primary)", fontSize: "0.85rem", fontWeight: 700 }}>{sIdx + 1}</span>
+              <h3 style={{ fontSize: "1.25rem", margin: 0, fontWeight: 700, color: "var(--text-main)" }}>{section.title || "Bagian Tanpa Judul"}</h3>
+            </div>
             {section.description ? (
-              <p style={{ margin: "0.4rem 0 0 0", fontSize: "0.85rem" }}>{section.description}</p>
+              <p style={{ margin: "0.75rem 0 0 0", fontSize: "0.95rem", color: "var(--text-muted)", lineHeight: 1.6 }}>{section.description}</p>
             ) : null}
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
             {(section.questions || [])
               .filter((question) => isQuestionVisible(question, answers))
               .map((question) => (
                 <div
                   key={question.id}
                   style={{
-                    padding: "1rem",
-                    border: "1px solid var(--border)",
-                    borderRadius: "10px",
-                    backgroundColor: "var(--background)",
+                    padding: device === "mobile" ? "1.25rem" : "1.75rem",
+                    border: "1px solid rgba(var(--primary-rgb), 0.1)",
+                    borderRadius: "14px",
+                    backgroundColor: "rgba(var(--surface-rgb), 0.5)",
+                    boxShadow: "0 4px 20px -10px rgba(0,0,0,0.05)",
+                    transition: "all 0.2s ease"
                   }}
+                  onMouseEnter={(e) => e.currentTarget.style.borderColor = "var(--primary)"}
+                  onMouseLeave={(e) => e.currentTarget.style.borderColor = "rgba(var(--primary-rgb), 0.1)"}
                 >
-                  <label style={{ display: "block", fontSize: "0.9rem", fontWeight: 600, marginBottom: "0.6rem", color: "var(--text-main)" }}>
-                    {question.label}
-                    {question.required ? <span style={{ color: "var(--danger)", marginLeft: "0.25rem" }}>*</span> : null}
-                  </label>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "1rem", marginBottom: "0.85rem" }}>
+                    <label style={{ display: "block", fontSize: "1.05rem", fontWeight: 600, color: "var(--text-main)", lineHeight: 1.4 }}>
+                      {question.label}
+                      {question.required ? <span style={{ color: "var(--danger)", marginLeft: "0.35rem" }}>*</span> : null}
+                    </label>
+                    {previewMode && question.variableKey ? (
+                      <span style={{ fontSize: "0.7rem", padding: "0.2rem 0.5rem", borderRadius: "6px", backgroundColor: "rgba(var(--primary-rgb), 0.1)", color: "var(--primary)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap" }}>
+                        Var: {question.variableKey}
+                      </span>
+                    ) : null}
+                  </div>
 
                   {question.helpText ? (
-                    <p style={{ fontSize: "0.8rem", margin: "0 0 0.75rem 0" }}>{question.helpText}</p>
+                    <p style={{ fontSize: "0.85rem", margin: "0 0 1rem 0", color: "var(--text-muted)", fontStyle: "italic" }}>{question.helpText}</p>
                   ) : null}
 
                   {question.type === "shortText" ? (
@@ -107,29 +125,36 @@ export function FormRenderer({
                   ) : null}
 
                   {question.type === "singleChoice" ? (
-                    <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
                       {(question.options || []).map((option) => (
                         <label
                           key={option}
                           style={{
                             display: "flex",
                             alignItems: "center",
-                            gap: "0.65rem",
-                            padding: "0.8rem 0.9rem",
-                            border: "1px solid var(--border)",
-                            borderRadius: "10px",
+                            gap: "0.85rem",
+                            padding: "0.95rem 1.1rem",
+                            border: answers[question.id] === option ? "1.5px solid var(--primary)" : "1.5px solid var(--border)",
+                            borderRadius: "12px",
                             cursor: disabled ? "default" : "pointer",
-                            backgroundColor: answers[question.id] === option ? "var(--primary-light)" : "var(--surface)",
+                            backgroundColor: answers[question.id] === option ? "rgba(var(--primary-rgb), 0.04)" : "var(--background)",
+                            transition: "all 0.2s ease"
                           }}
                         >
+                          <div style={{ 
+                            width: "20px", height: "20px", borderRadius: "50%", 
+                            border: answers[question.id] === option ? "6px solid var(--primary)" : "2px solid var(--border)", 
+                            backgroundColor: "transparent", transition: "all 0.2s ease", flexShrink: 0 
+                          }} />
                           <input
                             type="radio"
                             name={question.id}
                             disabled={disabled}
                             checked={answers[question.id] === option}
                             onChange={() => onAnswerChange?.(question, option)}
+                            style={{ display: "none" }}
                           />
-                          <span style={{ fontSize: "0.88rem", color: "var(--text-main)" }}>{option}</span>
+                          <span style={{ fontSize: "0.95rem", color: answers[question.id] === option ? "var(--text-main)" : "var(--text-muted)", fontWeight: answers[question.id] === option ? 600 : 400 }}>{option}</span>
                         </label>
                       ))}
                     </div>
@@ -137,7 +162,7 @@ export function FormRenderer({
 
                   {question.type === "dropdown" ? (
                     <select
-                      className="form-input-enhanced"
+                      className="form-input-enhanced form-select"
                       disabled={disabled}
                       value={answers[question.id] || ""}
                       onChange={(event) => onAnswerChange?.(question, event.target.value)}
@@ -152,42 +177,54 @@ export function FormRenderer({
                   ) : null}
 
                   {question.type === "checkbox" ? (
-                    <div style={{ display: "flex", flexDirection: "column", gap: "0.55rem" }}>
-                      {(question.options || []).map((option) => (
-                        <label
-                          key={option}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "0.65rem",
-                            padding: "0.75rem 0.85rem",
-                            border: "1px solid var(--border)",
-                            borderRadius: "10px",
-                            cursor: disabled ? "default" : "pointer",
-                            backgroundColor: Array.isArray(answers[question.id]) && answers[question.id].includes(option)
-                              ? "var(--primary-light)"
-                              : "var(--surface)",
-                          }}
-                        >
-                          <input
-                            type="checkbox"
-                            disabled={disabled}
-                            checked={Array.isArray(answers[question.id]) && answers[question.id].includes(option)}
-                            onChange={(event) =>
-                              onAnswerChange?.(
-                                question,
-                                updateCheckboxValue(answers[question.id], option, event.target.checked)
-                              )
-                            }
-                          />
-                          <span style={{ fontSize: "0.88rem", color: "var(--text-main)" }}>{option}</span>
-                        </label>
-                      ))}
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                      {(question.options || []).map((option) => {
+                        const isChecked = Array.isArray(answers[question.id]) && answers[question.id].includes(option);
+                        return (
+                          <label
+                            key={option}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "0.85rem",
+                              padding: "0.95rem 1.1rem",
+                              border: isChecked ? "1.5px solid var(--primary)" : "1.5px solid var(--border)",
+                              borderRadius: "12px",
+                              cursor: disabled ? "default" : "pointer",
+                              backgroundColor: isChecked ? "rgba(var(--primary-rgb), 0.04)" : "var(--background)",
+                              transition: "all 0.2s ease"
+                            }}
+                          >
+                            <div style={{
+                              width: "20px", height: "20px", borderRadius: "6px",
+                              border: isChecked ? "none" : "2px solid var(--border)",
+                              backgroundColor: isChecked ? "var(--primary)" : "transparent",
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                              transition: "all 0.2s ease", flexShrink: 0
+                            }}>
+                              {isChecked && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>}
+                            </div>
+                            <input
+                              type="checkbox"
+                              disabled={disabled}
+                              checked={isChecked}
+                              onChange={(event) =>
+                                onAnswerChange?.(
+                                  question,
+                                  updateCheckboxValue(answers[question.id], option, event.target.checked)
+                                )
+                              }
+                              style={{ display: "none" }}
+                            />
+                            <span style={{ fontSize: "0.95rem", color: isChecked ? "var(--text-main)" : "var(--text-muted)", fontWeight: isChecked ? 600 : 400 }}>{option}</span>
+                          </label>
+                        );
+                      })}
                     </div>
                   ) : null}
 
                   {question.type === "likert5" ? (
-                    <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
                       <div
                         style={{
                           display: "grid",
@@ -195,33 +232,46 @@ export function FormRenderer({
                           gap: "0.5rem",
                         }}
                       >
-                        {[1, 2, 3, 4, 5].map((value) => (
-                          <label
-                            key={value}
-                            style={{
-                              display: "flex",
-                              flexDirection: "column",
-                              alignItems: "center",
-                              gap: "0.45rem",
-                              padding: "0.75rem 0.5rem",
-                              border: "1px solid var(--border)",
-                              borderRadius: "10px",
-                              backgroundColor: Number(answers[question.id]) === value ? "var(--primary-light)" : "var(--surface)",
-                              cursor: disabled ? "default" : "pointer",
-                            }}
-                          >
-                            <input
-                              type="radio"
-                              name={question.id}
-                              disabled={disabled}
-                              checked={Number(answers[question.id]) === value}
-                              onChange={() => onAnswerChange?.(question, value)}
-                            />
-                            <span style={{ fontSize: "0.92rem", fontWeight: 600 }}>{value}</span>
-                          </label>
-                        ))}
+                        {[1, 2, 3, 4, 5].map((value) => {
+                          const isSelected = Number(answers[question.id]) === value;
+                          return (
+                            <label
+                              key={value}
+                              style={{
+                                display: "flex",
+                                flexDirection: "column",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                gap: "0.5rem",
+                                padding: device === "mobile" ? "0.85rem 0" : "1.25rem 0.5rem",
+                                border: isSelected ? "2px solid var(--primary)" : "1.5px solid var(--border)",
+                                borderRadius: "12px",
+                                backgroundColor: isSelected ? "rgba(var(--primary-rgb), 0.06)" : "var(--background)",
+                                cursor: disabled ? "default" : "pointer",
+                                transition: "all 0.2s ease",
+                                boxShadow: isSelected ? "0 4px 12px rgba(var(--primary-rgb), 0.15)" : "none"
+                              }}
+                            >
+                              <div style={{
+                                width: "18px", height: "18px", borderRadius: "50%",
+                                border: isSelected ? "5px solid var(--primary)" : "2px solid var(--border)",
+                                backgroundColor: "transparent", transition: "all 0.2s ease",
+                                display: device === "mobile" ? "none" : "block"
+                              }} />
+                              <input
+                                type="radio"
+                                name={question.id}
+                                disabled={disabled}
+                                checked={isSelected}
+                                onChange={() => onAnswerChange?.(question, value)}
+                                style={{ display: "none" }}
+                              />
+                              <span style={{ fontSize: "1.1rem", fontWeight: 700, color: isSelected ? "var(--primary)" : "var(--text-main)" }}>{value}</span>
+                            </label>
+                          );
+                        })}
                       </div>
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", fontSize: "0.85rem", color: "var(--text-muted)", fontWeight: 500, paddingInline: "0.25rem" }}>
                         <span>{question.scale?.minLabel || "Sangat Tidak Setuju"}</span>
                         <span>{question.scale?.maxLabel || "Sangat Setuju"}</span>
                       </div>

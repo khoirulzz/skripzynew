@@ -58,6 +58,7 @@ export default function ChatDosenAIPage() {
   const [callTranscript, setCallTranscript] = useState([]);
   const recognitionRef = useRef(null);
   const callEndRef = useRef(null);
+  const callActiveRef = useRef(false);
 
   const [selectedVoice, setSelectedVoice] = useState("Aoede");
   const [expandedVoiceOptions, setExpandedVoiceOptions] = useState(false);
@@ -291,6 +292,7 @@ export default function ChatDosenAIPage() {
       alert(err.message); return;
     }
 
+    callActiveRef.current = true;
     setCallActive(true);
     setCallTranscript([]);
 
@@ -308,42 +310,68 @@ export default function ChatDosenAIPage() {
     try {
       setCallStatus("connecting");
 
+      if (!callActiveRef.current) return;
+
       const wsUrl = getGeminiLiveProxyUrl({ group: CALL_GROUPS });
 
       const liveClient = new GeminiLiveClient({
         wsUrl,
         voiceName: selectedVoice,
         onMessage: (msg) => {
+          if (!callActiveRef.current) return;
           setCallTranscript(prev => [...prev, msg]);
         },
         onStatus: (status) => {
+          if (!callActiveRef.current) return;
           // Menyembunyikan status "thinking" dari UI dengan cara mengabaikannya
           if (status === "thinking") return;
           setCallStatus(status);
         },
         onError: (error) => {
           console.error("[LiveCall] Error:", error);
+          if (!callActiveRef.current) return;
           setCallStatus("error");
           endCall();
         },
       });
 
+      if (!callActiveRef.current) {
+        liveClient.disconnect();
+        return;
+      }
+
       liveClientRef.current = liveClient;
 
       await liveClient.connect();
+
+      if (!callActiveRef.current) {
+        liveClient.disconnect();
+        return;
+      }
+
       await startNativeMicrophone(liveClient);
+
+      if (!callActiveRef.current) {
+        liveClient.disconnect();
+        return;
+      }
 
       // Pancingan awal agar AI langsung menyapa
       setTimeout(() => {
-        liveClient.sendText("Halo, tolong sapa saya dan perkenalkan dirimu dengan ramah sebagai dosen AI pembimbing saya.");
+        if (callActiveRef.current && liveClientRef.current) {
+          liveClient.sendText("Halo, tolong sapa saya dan perkenalkan dirimu dengan ramah sebagai dosen AI pembimbing saya.");
+        }
       }, 500);
 
     } catch (error) {
       console.error("[StartCall] Failed:", error);
-      setCallTranscript(prev => [...prev, {
-        role: "model", text: `⚠️ Gagal memulai: ${error.message}`
-      }]);
-      setCallStatus("error");
+      if (callActiveRef.current) {
+        setCallTranscript(prev => [...prev, {
+          role: "model", text: `⚠️ Gagal memulai: ${error.message}`
+        }]);
+        setCallStatus("error");
+        endCall();
+      }
     }
   };
 
@@ -353,7 +381,13 @@ export default function ChatDosenAIPage() {
    */
   const startNativeMicrophone = async (liveClient) => {
     try {
+      if (!callActiveRef.current) return;
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      
+      if (!callActiveRef.current) {
+        stream.getTracks().forEach(track => track.stop());
+        return;
+      }
       micStreamRef.current = stream;
 
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
@@ -361,6 +395,7 @@ export default function ChatDosenAIPage() {
       const processor = audioCtx.createScriptProcessor(4096, 1, 1);
 
       processor.onaudioprocess = (e) => {
+        if (!callActiveRef.current) return;
         const float32Data = e.inputBuffer.getChannelData(0);
 
         // Konversi PCM Float32 ke PCM Int16
@@ -380,8 +415,18 @@ export default function ChatDosenAIPage() {
         const base64Data = btoa(binary);
 
         // Langsung tembak streaming audio ke Google
-        liveClient.sendAudioBase64(base64Data);
+        if (callActiveRef.current && liveClientRef.current) {
+          liveClient.sendAudioBase64(base64Data);
+        }
       };
+
+      if (!callActiveRef.current) {
+        stream.getTracks().forEach(track => track.stop());
+        processor.disconnect();
+        source.disconnect();
+        audioCtx.close();
+        return;
+      }
 
       source.connect(processor);
       processor.connect(audioCtx.destination);
@@ -389,27 +434,31 @@ export default function ChatDosenAIPage() {
 
     } catch (err) {
       console.error("Gagal mengakses mikrofon:", err);
-      alert("Tidak dapat mengakses mikrofon. Pastikan izin sudah diberikan.");
+      if (callActiveRef.current) {
+        alert("Tidak dapat mengakses mikrofon. Pastikan izin sudah diberikan.");
+      }
       throw err;
     }
   };
 
   /** Legacy Call (Fallback if WebSocket Fails) **/
   const startLegacyCall = async () => {
+    if (!callActiveRef.current) return;
     const greeting = "Halo. Saya dosen pembimbing AI Anda. Silakan mulai berbicara.";
     setCallTranscript([{ role: "model", text: greeting }]);
     setCallStatus("speaking");
-    speak(greeting, () => { startListeningLegacy(); });
+    speak(greeting, () => { if (callActiveRef.current) startListeningLegacy(); });
   };
 
   const startListeningLegacy = useCallback(() => {
-    if (!recognitionRef.current) return;
+    if (!recognitionRef.current || !callActiveRef.current) return;
     setCallStatus("listening");
     const recognition = recognitionRef.current;
 
     recognition.onresult = async (event) => {
+      if (!callActiveRef.current) return;
       const transcript = event.results[0][0].transcript?.trim();
-      if (!transcript) { startListeningLegacy(); return; }
+      if (!transcript) { if (callActiveRef.current) startListeningLegacy(); return; }
 
       let history = [];
       setCallTranscript((prev) => { history = [...prev, { role: "user", text: transcript }]; return history; });
@@ -422,21 +471,25 @@ export default function ChatDosenAIPage() {
           group: CALL_GROUPS,
           thinkingConfig: { thinkingBudget: 0 },
         });
+        if (!callActiveRef.current) return;
         // Extract thinking blocks dari response
         const { thinking, content } = extractThinkingBlocks(aiText);
         // For voice call, only speak the main content, not thinking
         setCallTranscript((prev) => [...prev, { role: "model", text: content, thinking }]);
         setCallStatus("speaking");
-        speak(content, () => { if (callActive) startListeningLegacy(); });
+        speak(content, () => { if (callActiveRef.current) startListeningLegacy(); });
       } catch (err) {
-        setCallStatus("listening");
-        setTimeout(() => startListeningLegacy(), 2000);
+        if (callActiveRef.current) {
+          setCallStatus("listening");
+          setTimeout(() => { if (callActiveRef.current) startListeningLegacy(); }, 2000);
+        }
       }
     };
     try { window.speechSynthesis?.cancel(); recognition.start(); } catch (err) { }
-  }, [callActive, speak]);
+  }, [speak]);
 
   const endCall = () => {
+    callActiveRef.current = false;
     setCallActive(false);
     setCallStatus("idle");
 
@@ -447,24 +500,58 @@ export default function ChatDosenAIPage() {
 
     if (audioProcessorRef.current) {
       const { audioCtx, source, processor } = audioProcessorRef.current;
-      processor.disconnect();
-      source.disconnect();
-      if (audioCtx.state !== 'closed') audioCtx.close();
+      try {
+        processor.disconnect();
+        source.disconnect();
+        if (audioCtx.state !== 'closed') audioCtx.close();
+      } catch (e) {
+        console.error("Error closing audio context:", e);
+      }
       audioProcessorRef.current = null;
     }
 
     if (micStreamRef.current) {
-      micStreamRef.current.getTracks().forEach(track => track.stop());
+      try {
+        micStreamRef.current.getTracks().forEach(track => track.stop());
+      } catch (e) {
+        console.error("Error stopping tracks:", e);
+      }
       micStreamRef.current = null;
     }
 
     if (recognitionRef.current) {
-      try { recognitionRef.current.abort(); } catch (e) { }
+      try {
+        recognitionRef.current.onresult = null;
+        recognitionRef.current.onerror = null;
+        recognitionRef.current.onend = null;
+        recognitionRef.current.abort();
+      } catch (e) { }
     }
     if (typeof window !== "undefined" && window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
   };
+
+  const handleEndCallClick = () => {
+    const confirmEnd = window.confirm("Apakah Anda yakin ingin mengakhiri sesi voice call?");
+    if (confirmEnd) {
+      endCall();
+    }
+  };
+
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (callActive) {
+        e.preventDefault();
+        e.returnValue = "Apakah Anda yakin ingin mengakhiri sesi voice call?";
+        return e.returnValue;
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [callActive]);
 
   useEffect(() => {
     return () => endCall();
@@ -849,7 +936,7 @@ export default function ChatDosenAIPage() {
                 </span>
               </div>
             </div>
-            <button onClick={endCall} style={{ padding: "0.4rem 1rem", borderRadius: "20px", border: "none", cursor: "pointer", backgroundColor: "rgba(239,68,68,0.1)", color: "#EF4444", fontWeight: 600, fontSize: "0.8rem", display: "flex", alignItems: "center", gap: "0.3rem", transition: "all 0.2s" }}>
+            <button onClick={handleEndCallClick} style={{ padding: "0.4rem 1rem", borderRadius: "20px", border: "none", cursor: "pointer", backgroundColor: "rgba(239,68,68,0.1)", color: "#EF4444", fontWeight: 600, fontSize: "0.8rem", display: "flex", alignItems: "center", gap: "0.3rem", transition: "all 0.2s" }}>
               <PremiumIcon name="x" size={14} /> Akhiri
             </button>
           </div>

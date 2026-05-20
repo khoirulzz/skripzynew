@@ -128,64 +128,86 @@ export function DataHub({ workspaceId }) {
       </div>
 
       {activeTab === "kuesioner" ? (
-        <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "1rem" }}>
-          <div className="glass-panel" style={{ padding: "1rem", backgroundColor: "var(--surface)" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem", marginBottom: "1rem", flexWrap: "wrap" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "1.5rem" }}>
+          <div className="techy-card" style={{ padding: "1.5rem", backgroundColor: "var(--surface)", borderTop: "4px solid var(--primary)" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem", marginBottom: "1.5rem", flexWrap: "wrap" }}>
               <div>
-                <h3 style={{ fontSize: "1rem", margin: 0 }}>Daftar Form Penelitian</h3>
-                <p style={{ margin: "0.3rem 0 0 0", fontSize: "0.82rem" }}>Buat beberapa draft form, tetapi publikasikan satu form aktif untuk responden.</p>
+                <h3 style={{ fontSize: "1.15rem", margin: 0, fontWeight: 700 }}>Daftar Instrumen Penelitian</h3>
+                <p style={{ margin: "0.4rem 0 0 0", fontSize: "0.88rem", color: "var(--text-muted)" }}>Kelola draft instrumen, kelompokkan berdasarkan variabel/section, dan aktifkan satu form untuk responden.</p>
               </div>
             </div>
 
             {forms.length === 0 ? (
-              <div style={{ padding: "1.5rem", border: "1px dashed var(--border)", borderRadius: "12px", textAlign: "center" }}>
-                <PremiumIcon name="layoutTemplate" size={30} className="text-muted" style={{ margin: "0 auto 0.65rem" }} />
-                <h4 style={{ margin: 0 }}>Belum Ada Form</h4>
-                <p style={{ margin: "0.4rem 0 0 0", fontSize: "0.84rem" }}>Mulai dengan membuat instrumen penelitian baru.</p>
+              <div style={{ padding: "3rem 1.5rem", border: "2px dashed var(--border)", borderRadius: "16px", textAlign: "center", backgroundColor: "rgba(var(--surface-rgb), 0.5)" }}>
+                <PremiumIcon name="layoutTemplate" size={42} className="text-muted" style={{ margin: "0 auto 1rem", opacity: 0.5 }} />
+                <h4 style={{ margin: 0, fontSize: "1.1rem" }}>Belum Ada Instrumen</h4>
+                <p style={{ margin: "0.5rem 0 0 0", fontSize: "0.9rem", color: "var(--text-muted)" }}>Mulai dengan membuat instrumen penelitian baru yang terstruktur.</p>
               </div>
             ) : (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "0.9rem" }}>
-                {forms.map((item) => (
-                  <div key={item.id} className="glass-panel" style={{ padding: "1rem", border: item.id === activeFormId ? "1px solid var(--primary)" : "1px solid var(--border)", backgroundColor: "var(--surface)" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", alignItems: "flex-start" }}>
-                      <div>
-                        <h4 style={{ margin: 0, fontSize: "0.98rem" }}>{item.title}</h4>
-                        <p style={{ margin: "0.35rem 0 0 0", fontSize: "0.8rem", lineHeight: 1.5 }}>
-                          {item.description || "Deskripsi form belum diisi."}
-                        </p>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "1.25rem" }}>
+                {forms.map((item) => {
+                  const isActive = item.id === activeFormId;
+                  return (
+                    <div 
+                      key={item.id} 
+                      className="techy-card" 
+                      style={{ 
+                        padding: "1.25rem", 
+                        border: isActive ? "2px solid var(--primary)" : "1px solid var(--border)", 
+                        backgroundColor: isActive ? "rgba(var(--primary-rgb), 0.03)" : "var(--surface)",
+                        display: "flex",
+                        flexDirection: "column",
+                        position: "relative",
+                        overflow: "hidden"
+                      }}
+                    >
+                      {isActive && (
+                        <div style={{ position: "absolute", top: 0, right: 0, padding: "0.25rem 0.75rem", backgroundColor: "var(--primary)", color: "white", fontSize: "0.7rem", fontWeight: 700, borderBottomLeftRadius: "8px" }}>
+                          AKTIF
+                        </div>
+                      )}
+                      
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", alignItems: "flex-start", marginBottom: "1rem" }}>
+                        <div style={{ paddingRight: isActive ? "2rem" : "0" }}>
+                          <h4 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700, color: "var(--text-main)", lineHeight: 1.3 }}>{item.title}</h4>
+                          <p style={{ margin: "0.4rem 0 0 0", fontSize: "0.85rem", lineHeight: 1.6, color: "var(--text-muted)", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                            {item.description || "Deskripsi instrumen belum diisi."}
+                          </p>
+                        </div>
                       </div>
-                      <span
-                        style={{
-                          fontSize: "0.72rem",
-                          textTransform: "capitalize",
-                          padding: "0.18rem 0.5rem",
-                          borderRadius: "999px",
-                          backgroundColor: item.status === FORM_STATUSES.published ? "rgba(16,185,129,0.12)" : "var(--surface-hover)",
-                          color: item.status === FORM_STATUSES.published ? "var(--success)" : "var(--text-muted)",
-                          fontWeight: 600,
-                        }}
-                      >
-                        {item.status || FORM_STATUSES.draft}
-                      </span>
-                    </div>
 
-                    <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginTop: "1rem", fontSize: "0.78rem", color: "var(--text-muted)" }}>
-                      <div>{item.sections?.length || 0} bagian • {item.sections?.reduce((sum, section) => sum + (section.questions?.length || 0), 0) || 0} butir</div>
-                      <div>{item.publicSlug ? `/form/${item.publicSlug}` : "Belum punya link publik"}</div>
-                    </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem", fontSize: "0.8rem", color: "var(--text-muted)", backgroundColor: "rgba(var(--surface-rgb), 0.5)", padding: "0.75rem", borderRadius: "8px", border: "1px solid rgba(var(--border), 0.5)", flexGrow: 1 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                          <PremiumIcon name="layers" size={14} className="text-primary" />
+                          <span><strong>{item.sections?.length || 0}</strong> variabel/bagian</span>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                          <PremiumIcon name="list" size={14} className="text-primary" />
+                          <span><strong>{item.sections?.reduce((sum, section) => sum + (section.questions?.length || 0), 0) || 0}</strong> butir pernyataan</span>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.25rem", color: item.publicSlug ? "var(--text-main)" : "inherit" }}>
+                          <PremiumIcon name={item.publicSlug ? "link" : "link2Off"} size={14} className={item.publicSlug ? "text-success" : ""} />
+                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {item.publicSlug ? `/form/${item.publicSlug}` : "Belum punya link publik"}
+                          </span>
+                        </div>
+                      </div>
 
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "1rem" }}>
-                      <button className="btn btn-primary" onClick={() => setEditingFormId(item.id)}>
-                        <PremiumIcon name="edit3" size={14} />
-                        Edit Builder
-                      </button>
-                      <button className="btn btn-outline" onClick={() => void handleActivateForm(item.id)}>
-                        <PremiumIcon name="checkCircle" size={14} />
-                        Jadikan Aktif
-                      </button>
+                      <div style={{ display: "flex", gap: "0.5rem", marginTop: "1.25rem", flexWrap: "wrap" }}>
+                        <button className="btn btn-primary" style={{ flexGrow: 1 }} onClick={() => setEditingFormId(item.id)}>
+                          <PremiumIcon name="edit3" size={14} />
+                          Builder
+                        </button>
+                        {!isActive && (
+                          <button className="btn btn-outline" style={{ flexGrow: 1 }} onClick={() => void handleActivateForm(item.id)}>
+                            <PremiumIcon name="checkCircle" size={14} />
+                            Aktifkan
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

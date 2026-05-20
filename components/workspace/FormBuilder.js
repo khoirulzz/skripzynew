@@ -565,28 +565,39 @@ export function FormBuilder({ workspaceId, form, existingForms = [], onClose, on
                                 setInspectorTab("properties");
                               }}
                             >
-                              <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem" }}>
-                                <div style={{ fontWeight: 600 }}>{question.label}</div>
-                                <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>{question.type}</span>
-                              </div>
-                              <div style={{ fontSize: "0.76rem", color: "var(--text-muted)", marginTop: "0.35rem" }}>
-                                {question.variableKey} | {question.required ? "wajib" : "opsional"}
-                              </div>
-                            </button>
-                          ))}
-                        </div>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "1rem" }}>
+                                  <div style={{ fontWeight: 600, fontSize: "0.95rem", lineHeight: 1.4 }}>{question.label}</div>
+                                  <span style={{ fontSize: "0.72rem", padding: "0.2rem 0.5rem", borderRadius: "6px", backgroundColor: "rgba(var(--primary-rgb), 0.1)", color: "var(--primary)", fontWeight: 700, textTransform: "uppercase" }}>{question.type}</span>
+                                </div>
+                                <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginTop: "0.75rem", flexWrap: "wrap" }}>
+                                  {question.variableKey ? (
+                                    <span style={{ fontSize: "0.75rem", padding: "0.25rem 0.6rem", borderRadius: "999px", backgroundColor: "rgba(16, 185, 129, 0.12)", color: "var(--success)", fontWeight: 600, letterSpacing: "0.02em" }}>
+                                      Var: {question.variableKey}
+                                    </span>
+                                  ) : (
+                                    <span style={{ fontSize: "0.75rem", padding: "0.25rem 0.6rem", borderRadius: "999px", backgroundColor: "rgba(var(--text-muted), 0.1)", color: "var(--text-muted)", fontWeight: 600 }}>
+                                      Tanpa Variabel
+                                    </span>
+                                  )}
+                                  <span style={{ fontSize: "0.75rem", color: question.required ? "var(--danger)" : "var(--text-muted)", fontWeight: 600 }}>
+                                    {question.required ? "Wajib Diisi" : "Opsional"}
+                                  </span>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
 
-                        <div className="workspace-scroll" style={{ display: "flex", gap: "0.45rem", marginTop: "1rem", overflowX: "auto", paddingBottom: "0.15rem" }}>
-                          {BUILDER_QUESTION_TYPES.filter((type) => type.value !== "sectionText").map((type) => (
-                            <button
-                              key={`${section.id}_${type.value}`}
-                              className="btn btn-outline"
-                              style={{ padding: "0.4rem 0.7rem", fontSize: "0.74rem", flexShrink: 0 }}
-                              onClick={() => addQuestionToSection(section.id, type.value)}
-                            >
-                              {type.label}
-                            </button>
-                          ))}
+                          <div className="workspace-scroll" style={{ display: "flex", gap: "0.6rem", marginTop: "1.25rem", overflowX: "auto", paddingBottom: "0.25rem" }}>
+                            {BUILDER_QUESTION_TYPES.filter((type) => type.value !== "sectionText").map((type) => (
+                              <button
+                                key={`${section.id}_${type.value}`}
+                                className="btn btn-outline"
+                                style={{ padding: "0.45rem 0.85rem", fontSize: "0.8rem", flexShrink: 0, borderRadius: "999px", backgroundColor: "rgba(var(--surface-rgb), 0.8)" }}
+                                onClick={() => addQuestionToSection(section.id, type.value)}
+                              >
+                                {type.label}
+                              </button>
+                            ))}
                         </div>
                       </>
                     ) : (

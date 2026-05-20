@@ -141,21 +141,9 @@ export default function HumanizerPage() {
           color: "#D97706" 
         }}>
           <PremiumIcon name="sparkles" size={14} />
-          <span>{creditCost} credit / humanize</span>
-          <span style={{ padding: "1px 6px", background: "linear-gradient(135deg, #6366F1, #8B5CF6)", color: "white", borderRadius: "8px", fontSize: "0.6rem", fontWeight: 800 }}>PRO</span>
+          <span>{creditCost} credit</span>
         </div>
       </div>
-
-      {/* Pro Gate — akan diganti saat plan system selesai */}
-      {plan === "free" && (
-        <div style={{ marginBottom: "1.5rem", padding: "1rem 1.25rem", background: "linear-gradient(135deg, rgba(99,102,241,0.1), rgba(139,92,246,0.1))", border: "1px solid rgba(99,102,241,0.25)", borderRadius: "var(--radius-md)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem" }}>
-          <div>
-            <p style={{ margin: 0, fontWeight: 700 }}>Fitur Khusus Pro & Plus</p>
-            <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--text-muted)" }}>Humanizer hanya tersedia bagi pengguna berbayar. Upgrade untuk mengakses seluruh fitur premium.</p>
-          </div>
-          <Link href="/dashboard/langganan" className="btn btn-primary" style={{ flexShrink: 0 }}>Upgrade Sekarang</Link>
-        </div>
-      )}
 
       {error && (
         <div style={{ marginBottom: "1.5rem", padding: "0.85rem 1.25rem", backgroundColor: "rgba(239,68,68,0.1)", color: "var(--danger)", borderRadius: "var(--radius-sm)", fontSize: "0.87rem", display: "flex", gap: "0.5rem", alignItems: "center" }}>
@@ -183,8 +171,14 @@ export default function HumanizerPage() {
               className="form-input"
               style={{ minHeight: isMobile ? "40vh" : "200px", resize: "vertical", fontFamily: "inherit", lineHeight: 1.6, fontSize: isMobile ? "0.8rem" : "0.95rem", border: isMobile ? "none" : "1px solid var(--border)", padding: isMobile ? "0.5rem 0" : "0.75rem 1rem", backgroundColor: isMobile ? "transparent" : "var(--background)" }}
               maxLength={charLimit}
-              disabled={plan === "free"}
+              disabled={loading}
             />
+            {plan === "free" && (
+              <p style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginTop: "0.75rem", marginBottom: 0 }}>
+                📌 Plan Free: maksimal {charLimit.toLocaleString('id-ID')} karakter.
+                <Link href="/dashboard/langganan" className="text-primary" style={{ marginLeft: "0.5rem", fontWeight: 600 }}>Upgrade →</Link>
+              </p>
+            )}
           </div>
 
           {/* Output */}
@@ -251,12 +245,12 @@ export default function HumanizerPage() {
             {expandedIntensitas && (
               <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
                 {INTENSITAS_LIST.map(item => (
-                  <button key={item.id} onClick={() => setIntensitas(item.id)} disabled={loading || plan === "free"} style={{
+                  <button key={item.id} onClick={() => setIntensitas(item.id)} disabled={loading} style={{
                     textAlign: "left", padding: "0.7rem 0.9rem",
                     border: `1.5px solid ${intensitas === item.id ? "#F59E0B" : "var(--border)"}`,
-                    borderRadius: "var(--radius-sm)", cursor: plan === "free" ? "not-allowed" : "pointer",
+                    borderRadius: "var(--radius-sm)", cursor: loading ? "not-allowed" : "pointer",
                     backgroundColor: intensitas === item.id ? "rgba(245,158,11,0.08)" : "transparent",
-                    fontFamily: "inherit", opacity: plan === "free" ? 0.5 : 1,
+                    fontFamily: "inherit", opacity: 1,
                   }}>
                     <div style={{ fontSize: "0.82rem", fontWeight: 700, color: intensitas === item.id ? "#D97706" : "var(--text-main)", marginBottom: "0.15rem" }}>{item.label}</div>
                     <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", lineHeight: 1.4 }}>{item.desc}</div>
@@ -292,12 +286,12 @@ export default function HumanizerPage() {
             {expandedStyle && (
               <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
                 {STYLE_LIST.map(s => (
-                  <button key={s.id} onClick={() => setStyle(s.id)} disabled={loading || plan === "free"} style={{
+                  <button key={s.id} onClick={() => setStyle(s.id)} disabled={loading} style={{
                     textAlign: "left", padding: "0.6rem 0.9rem",
                     border: `1.5px solid ${style === s.id ? "var(--primary)" : "var(--border)"}`,
-                    borderRadius: "var(--radius-sm)", cursor: plan === "free" ? "not-allowed" : "pointer",
+                    borderRadius: "var(--radius-sm)", cursor: loading ? "not-allowed" : "pointer",
                     backgroundColor: style === s.id ? "var(--primary-light)" : "transparent",
-                    fontFamily: "inherit", opacity: plan === "free" ? 0.5 : 1,
+                    fontFamily: "inherit", opacity: 1,
                   }}>
                     <div style={{ fontSize: "0.82rem", fontWeight: 700, color: style === s.id ? "var(--primary)" : "var(--text-main)", marginBottom: "0.15rem" }}>{s.label}</div>
                     <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", lineHeight: 1.4 }}>{s.desc}</div>
@@ -317,7 +311,7 @@ export default function HumanizerPage() {
               className="btn btn-primary w-full"
               style={{ padding: "0.75rem", fontSize: "0.95rem", background: "linear-gradient(135deg, #F59E0B, #D97706)", display: "flex", justifyContent: "center", alignItems: "center", gap: "0.4rem" }}
               onClick={handleHumanize}
-              disabled={loading || !canAfford || !input.trim() || plan === "free"}
+              disabled={loading || !canAfford || !input.trim()}
             >
               {loading ? (
                 <><LoadingSpinner size={16} className="text-white" /> Memanusiakan...</>
@@ -325,9 +319,9 @@ export default function HumanizerPage() {
                 <><PremiumIcon name="sparkles" size={16} /> Humanize Sekarang</>
               )}
             </button>
-            {plan === "free" && (
-              <Link href="/dashboard/langganan" className="btn btn-outline w-full text-center" style={{ padding: "0.5rem", fontSize: "0.8rem" }}>
-                Upgrade ke Pro
+            {!canAfford && (
+              <Link href="/dashboard/langganan" className="btn btn-outline w-full text-center" style={{ padding: "0.65rem", fontSize: "0.8rem", fontWeight: 500 }}>
+                💰 Top Up Credit
               </Link>
             )}
           </div>
@@ -346,12 +340,12 @@ export default function HumanizerPage() {
               <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-main)", marginBottom: "0.85rem" }}>🔥 Intensitas Humanisasi</div>
               <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
                 {INTENSITAS_LIST.map(item => (
-                  <button key={item.id} onClick={() => setIntensitas(item.id)} disabled={loading || plan === "free"} style={{
+                  <button key={item.id} onClick={() => setIntensitas(item.id)} disabled={loading} style={{
                     textAlign: "left", padding: "0.7rem 0.9rem",
                     border: `1.5px solid ${intensitas === item.id ? "#F59E0B" : "var(--border)"}`,
-                    borderRadius: "var(--radius-sm)", cursor: plan === "free" ? "not-allowed" : "pointer",
+                    borderRadius: "var(--radius-sm)", cursor: loading ? "not-allowed" : "pointer",
                     backgroundColor: intensitas === item.id ? "rgba(245,158,11,0.08)" : "transparent",
-                    fontFamily: "inherit", opacity: plan === "free" ? 0.5 : 1,
+                    fontFamily: "inherit", opacity: 1,
                   }}>
                     <div style={{ fontSize: "0.82rem", fontWeight: 700, color: intensitas === item.id ? "#D97706" : "var(--text-main)", marginBottom: "0.15rem" }}>{item.label}</div>
                     <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", lineHeight: 1.4 }}>{item.desc}</div>
@@ -364,12 +358,12 @@ export default function HumanizerPage() {
               <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-main)", marginBottom: "0.85rem" }}>✍️ Gaya Penulisan</div>
               <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
                 {STYLE_LIST.map(s => (
-                  <button key={s.id} onClick={() => setStyle(s.id)} disabled={loading || plan === "free"} style={{
+                  <button key={s.id} onClick={() => setStyle(s.id)} disabled={loading} style={{
                     textAlign: "left", padding: "0.6rem 0.9rem",
                     border: `1.5px solid ${style === s.id ? "var(--primary)" : "var(--border)"}`,
-                    borderRadius: "var(--radius-sm)", cursor: plan === "free" ? "not-allowed" : "pointer",
+                    borderRadius: "var(--radius-sm)", cursor: loading ? "not-allowed" : "pointer",
                     backgroundColor: style === s.id ? "var(--primary-light)" : "transparent",
-                    fontFamily: "inherit", opacity: plan === "free" ? 0.5 : 1,
+                    fontFamily: "inherit", opacity: 1,
                   }}>
                     <div style={{ fontSize: "0.82rem", fontWeight: 700, color: style === s.id ? "var(--primary)" : "var(--text-main)", marginBottom: "0.15rem" }}>{s.label}</div>
                     <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", lineHeight: 1.4 }}>{s.desc}</div>
@@ -389,7 +383,7 @@ export default function HumanizerPage() {
           <button className="btn btn-outline" onClick={() => setShowSettings(true)} style={{ padding: "0.5rem", borderRadius: "50%", aspectRatio: "1", width: "44px", height: "44px", backgroundColor: "var(--background)", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", pointerEvents: "auto", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <PremiumIcon name="settings" size={20} />
           </button>
-          <button className="btn btn-primary" style={{ flex: 1, padding: "0.6rem", fontSize: "0.85rem", fontWeight: 600, borderRadius: "24px", display: "flex", justifyContent: "center", alignItems: "center", gap: "0.4rem", background: "linear-gradient(135deg, #F59E0B, #D97706)", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", pointerEvents: "auto" }} onClick={handleHumanize} disabled={loading || !canAfford || !input.trim() || plan === "free"}>
+          <button className="btn btn-primary" style={{ flex: 1, padding: "0.6rem", fontSize: "0.85rem", fontWeight: 600, borderRadius: "24px", display: "flex", justifyContent: "center", alignItems: "center", gap: "0.4rem", background: "linear-gradient(135deg, #F59E0B, #D97706)", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", pointerEvents: "auto" }} onClick={handleHumanize} disabled={loading || !canAfford || !input.trim()}>
             {loading ? <><LoadingSpinner size={14} className="text-white" /> Proses...</> : <><PremiumIcon name="sparkles" size={14} /> Humanize</>}
           </button>
         </div>

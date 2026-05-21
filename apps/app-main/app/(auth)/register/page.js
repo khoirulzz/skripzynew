@@ -1,8 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import LegalModal from "@/components/ui/LegalModal";
-import { TermsContent, PrivacyContent, AiContent } from "./LegalContent";
 import { createUserWithEmailAndPassword, signInWithPopup } from "firebase/auth";
 import { d1Request } from "@/lib/d1Client";
 import { auth, googleProvider } from "@/lib/firebase";
@@ -23,7 +21,6 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const [agreed, setAgreed] = useState(false);
-  const [showLegal, setShowLegal] = useState(false);
 
   const handleChange = (e) => {
     setFormData(prev => ({ ...prev, [e.target.id]: e.target.value }));
@@ -156,38 +153,28 @@ export default function RegisterPage() {
             <input id="password" type="password" className="form-input" placeholder="Minimal 6 karakter" value={formData.password} onChange={handleChange} minLength={6} required />
           </div>
 
-          <div className="form-group flex items-center mt-4">
+          <div className="flex items-start mt-4 mb-4" style={{ cursor: "pointer", gap: "12px" }}>
             <input
               id="agreed"
               type="checkbox"
-              className="form-checkbox"
               checked={agreed}
               onChange={e => setAgreed(e.target.checked)}
               required
+              style={{ width: "18px", height: "18px", marginTop: "2px", cursor: "pointer", accentColor: "var(--primary)", flexShrink: 0 }}
             />
-            <label htmlFor="agreed" className="ml-2 text-sm" style={{ color: "var(--text-main)" }}>
-              Saya telah membaca dan memahami <span className="text-primary cursor-pointer" onClick={() => setShowLegal(true)}>Terms &amp; Conditions</span>, <span className="text-primary cursor-pointer" onClick={() => setShowLegal(true)}>Privacy Policy</span>, serta <span className="text-primary cursor-pointer" onClick={() => setShowLegal(true)}>AI Usage Disclaimer</span>.
+            <label htmlFor="agreed" className="text-sm m-0" style={{ color: "var(--text-main)", lineHeight: "1.5", cursor: "pointer", userSelect: "none" }}>
+              Saya telah membaca dan memahami <Link href="https://skripzy.id/terms" target="_blank" className="text-primary font-bold hover:underline">Terms &amp; Conditions</Link>, <Link href="https://skripzy.id/privacy-policy" target="_blank" className="text-primary font-bold hover:underline">Privacy Policy</Link>, serta <Link href="https://skripzy.id/ai-usage-disclaimer" target="_blank" className="text-primary font-bold hover:underline">AI Usage Disclaimer</Link>.
             </label>
           </div>
 
           <button 
             type="submit" 
-            className="btn btn-primary w-full mt-4" 
+            className="btn btn-primary w-full mt-2" 
             style={{ padding: "0.85rem", fontSize: "1rem", borderRadius: 999, fontWeight: 800 }}
             disabled={loading || !agreed}
           >
             {loading ? "Memproses..." : "Daftar Akun"}
           </button>
-
-          <LegalModal open={showLegal} onClose={() => setShowLegal(false)}>
-            <div className="p-4">
-              <TermsContent />
-              <hr className="my-4" />
-              <PrivacyContent />
-              <hr className="my-4" />
-              <AiContent />
-            </div>
-          </LegalModal>
         </form>
 
         <div style={{ display: "flex", alignItems: "center", gap: "1rem", margin: "1.5rem 0" }}>

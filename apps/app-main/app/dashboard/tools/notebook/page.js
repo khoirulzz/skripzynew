@@ -127,7 +127,7 @@ export default function NotebookDashboardPage() {
           <div>
             <h1 style={{ fontSize: isMobile ? "1.25rem" : "1.5rem", fontWeight: 700, margin: 0 }}>Notebook Referensi</h1>
             <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: "0.2rem 0 0 0" }}>
-              Kelola projek referensi RAG
+              Kelola proyek referensi
             </p>
           </div>
         </div>

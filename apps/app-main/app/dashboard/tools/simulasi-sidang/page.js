@@ -397,7 +397,7 @@ ${contextText.slice(0, 20000)}
 
     setSetupLoading(true);
     setSetupError("");
-    setExtractionStatus("Menyiapkan Ruang Sidang...");
+    setExtractionStatus("Menyiapkan ruang sidang, harap tunggu...");
 
     try {
       await deductCredits(user.uid, sessionCost);

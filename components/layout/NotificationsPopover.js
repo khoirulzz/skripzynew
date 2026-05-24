@@ -164,9 +164,9 @@ export function NotificationsPopover({ isMobile = false }) {
                     style={{
                         position: "absolute",
                         top: "calc(100% + 0.5rem)",
-                        right: isMobile ? "-40px" : "0",
-                        width: "320px",
-                        maxWidth: "90vw",
+                        right: isMobile ? "-10px" : "0",
+                        width: isMobile ? "300px" : "320px",
+                        maxWidth: "calc(100vw - 20px)",
                         zIndex: 50,
                         padding: "0",
                         overflow: "hidden",
@@ -249,7 +249,7 @@ export function NotificationsPopover({ isMobile = false }) {
                                                 {new Date(notif.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}
                                             </span>
                                         </div>
-                                        <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-muted)", lineHeight: 1.4 }}>
+                                        <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-muted)", lineHeight: 1.4, wordBreak: "break-word" }}>
                                             {notif.message}
                                         </p>
                                     </div>

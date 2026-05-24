@@ -1144,11 +1144,35 @@ const worker = {
                         console.error("[IPAYMU] Failed to update user in D1:", e.message);
                     }
 
+                    // Insert Notification
+                    if (docData.userId && env.DB) {
+                        try {
+                            const notifId = `notif_${Date.now()}_${Math.random().toString(36).substr(2,9)}`;
+                            await env.DB.prepare(`INSERT INTO notifications (id, userId, type, title, message, actionUrl) VALUES (?, ?, ?, ?, ?, ?)`)
+                                .bind(notifId, docData.userId, "transaction", "Top-up Berhasil", `Pembayaran Anda untuk ${docData.productName || "Top-up"} via iPaymu telah berhasil dikonfirmasi.`, "/dashboard/langganan")
+                                .run();
+                        } catch (e) {
+                            console.error("[IPAYMU] Failed to insert notification:", e.message);
+                        }
+                    }
+
                     console.log(`[IPAYMU] Payment SUCCESS processed for reference: ${referenceId}`);
                 } else if (isIpaymuFailedStatus(transactionStatus)) {
                     await env.DB.prepare(`UPDATE topups SET status = ?, rejectedAt = ?, rejectedReason = ?, dokuTransactionStatus = ?, dokuRawNotification = ? WHERE id = ?`)
                         .bind("rejected", now, `Pembayaran iPaymu: ${transactionStatus}`, transactionStatus, JSON.stringify(notifData), docData.id)
                         .run();
+
+                    // Insert Notification
+                    if (docData.userId && env.DB) {
+                        try {
+                            const notifId = `notif_${Date.now()}_${Math.random().toString(36).substr(2,9)}`;
+                            await env.DB.prepare(`INSERT INTO notifications (id, userId, type, title, message, actionUrl) VALUES (?, ?, ?, ?, ?, ?)`)
+                                .bind(notifId, docData.userId, "transaction", "Top-up Gagal/Expired", `Pembayaran Anda via iPaymu berstatus ${transactionStatus}.`, "/dashboard/langganan")
+                                .run();
+                        } catch (e) {
+                            console.error("[IPAYMU] Failed to insert notification:", e.message);
+                        }
+                    }
 
                     console.log(`[IPAYMU] Payment ${transactionStatus} for reference: ${referenceId}`);
                 } else {
@@ -1416,12 +1440,36 @@ const worker = {
                         }
                     }
 
+                    // Insert Notification
+                    if (docData.userId && env.DB) {
+                        try {
+                            const notifId = `notif_${Date.now()}_${Math.random().toString(36).substr(2,9)}`;
+                            await env.DB.prepare(`INSERT INTO notifications (id, userId, type, title, message, actionUrl) VALUES (?, ?, ?, ?, ?, ?)`)
+                                .bind(notifId, docData.userId, "transaction", "Top-up Berhasil", `Pembayaran Anda untuk ${docData.productName || "Top-up"} telah berhasil dikonfirmasi.`, "/dashboard/langganan")
+                                .run();
+                        } catch (e) {
+                            console.error("[DOKU] Failed to insert notification:", e.message);
+                        }
+                    }
+
                     console.log(`[DOKU] Payment SUCCESS processed for invoice: ${invoiceNumber}`);
                 } else {
                     // Payment failed/expired
                     await env.DB.prepare(`UPDATE topups SET status = ?, rejectedAt = ?, rejectedReason = ?, dokuTransactionStatus = ?, dokuRawNotification = ? WHERE id = ?`)
                         .bind("rejected", now, `Pembayaran DOKU: ${transactionStatus}`, transactionStatus, JSON.stringify(notifData), docData.id)
                         .run();
+                        
+                    // Insert Notification
+                    if (docData.userId && env.DB) {
+                        try {
+                            const notifId = `notif_${Date.now()}_${Math.random().toString(36).substr(2,9)}`;
+                            await env.DB.prepare(`INSERT INTO notifications (id, userId, type, title, message, actionUrl) VALUES (?, ?, ?, ?, ?, ?)`)
+                                .bind(notifId, docData.userId, "transaction", "Top-up Gagal/Expired", `Pembayaran Anda untuk invoice ${invoiceNumber} berstatus ${transactionStatus}.`, "/dashboard/langganan")
+                                .run();
+                        } catch (e) {
+                            console.error("[DOKU] Failed to insert notification:", e.message);
+                        }
+                    }
 
                     console.log(`[DOKU] Payment ${transactionStatus} for invoice: ${invoiceNumber}`);
                 }
@@ -1728,13 +1776,13 @@ const worker = {
                 "users", "workspaces", "document_metadata",
                 "workspace_references", "workspace_forms", "workspace_transcripts",
                 "workspace_analysis", "workspace_notes", "notebooks",
-                "topups", "promos", "pricing"
+                "topups", "promos", "pricing", "notifications"
             ];
             if (!allowedTables.includes(table)) {
                 return new Response(JSON.stringify({ error: "Table not allowed" }), { status: 403, headers: createCorsHeaders() });
             }
 
-            const isPublicRead = request.method === "GET" && table === "pricing";
+            const isPublicRead = request.method === "GET" && ["pricing", "promos"].includes(table);
             
             let session = null;
             if (!isPublicRead) {
@@ -1751,7 +1799,7 @@ const worker = {
 
             // Global tables that don't have user_id / aren't scoped by user
             const isGlobalAdminTable = ["promos", "pricing"].includes(table);
-            const uidColumn = table === "users" ? "id" : (table === "topups" ? "userId" : "user_id");
+            const uidColumn = table === "users" ? "id" : (table === "topups" || table === "notifications" ? "userId" : "user_id");
 
             // Ambil role user dari db
             let userRole = "user";
@@ -1774,7 +1822,10 @@ const worker = {
                     if (id) {
                         let query = `SELECT * FROM ${table} WHERE id = ?`;
                         let params = [id];
-                        if (!isGlobalAdminTable && !isAdmin) {
+                        if (table === "notifications" && !isAdmin) {
+                            query += ` AND (userId = ? OR userId IS NULL)`;
+                            params.push(session.uid);
+                        } else if (!isGlobalAdminTable && !isAdmin) {
                             query += ` AND ${uidColumn} = ?`;
                             params.push(session.uid);
                         }
@@ -1802,7 +1853,7 @@ const worker = {
                     
                     if (table === "users") {
                         body.id = session.uid;
-                    } else if (table === "topups") {
+                    } else if (table === "topups" || table === "notifications") {
                         body.userId = session.uid;
                     } else if (!isGlobalAdminTable) {
                         body.user_id = session.uid;
@@ -2265,6 +2316,127 @@ const worker = {
                 } catch (e) {
                     console.error("[Unpaywall API Error]", e.message);
                     return new Response(JSON.stringify({ error: e.message, results: [] }), {
+                        status: 500,
+                        headers: createCorsHeaders(),
+                    });
+                }
+            }
+
+            // ──── ENDPOINT: OCR RECEIPT (AI VISION) ────
+            if (url.pathname === "/api/ocr-receipt" && request.method === "POST") {
+                const payload = await request.json().catch(() => null);
+                if (!payload || !payload.proofUrl || !payload.targetPrice || !payload.paymentChannelId) {
+                    return new Response(JSON.stringify({ error: "Missing required parameters" }), {
+                        status: 400,
+                        headers: createCorsHeaders(),
+                    });
+                }
+
+                try {
+                    // Fetch the image
+                    const imageRes = await fetch(payload.proofUrl);
+                    if (!imageRes.ok) throw new Error("Gagal mengunduh gambar bukti");
+                    
+                    const arrayBuffer = await imageRes.arrayBuffer();
+                    let mimeType = "image/jpeg";
+                    const lowerUrl = payload.proofUrl.toLowerCase();
+                    if (lowerUrl.endsWith(".png")) mimeType = "image/png";
+                    if (lowerUrl.endsWith(".webp")) mimeType = "image/webp";
+                    if (lowerUrl.endsWith(".pdf")) mimeType = "application/pdf";
+
+                    // Convert to Base64
+                    const bytes = new Uint8Array(arrayBuffer);
+                    let binary = '';
+                    for (let i = 0; i < bytes.byteLength; i++) {
+                        binary += String.fromCharCode(bytes[i]);
+                    }
+                    const base64Data = btoa(binary);
+
+                    const systemInstruction = `Kamu adalah analis keuangan ahli spesialis pencegahan fraud (anti-fraud expert). Tugasmu adalah memverifikasi bukti transfer (top-up) dengan sangat ketat dan mengembalikan hasil analisis dalam format JSON murni.
+
+Informasi Target:
+- Nominal yang diharapkan: Rp ${payload.targetPrice}
+- Channel Pembayaran: ${payload.paymentChannelId}
+  (Jika channel terkait QRIS, pastikan merchant penerima valid. Jika bank/ewallet, pastikan tujuan benar.)
+
+Langkah Pengecekan:
+1. Ekstrak Nominal: Cari nominal transfer.
+2. Cek Penerima & Channel.
+3. Ekstrak Nomor Referensi: Cari No Referensi / ID Transaksi / RRN.
+4. Pengecekan FRAUD / EDITAN: Periksa secara teliti indikasi gambar diedit (Photoshop/pemalsuan). Perhatikan ketidakselarasan font ukuran/warna/jenis, bayangan, atau artefak kompresi yang janggal. Jika ada indikasi, tandai isEdited: true.
+
+Beri skor (0-100). (Nominal cocok = +50, Penerima/Channel cocok = +30, Transaksi Sukses = +20). Jika isEdited true, skor maksimal adalah 0.
+
+OUTPUT FORMAT HANYA JSON:
+{
+  "score": (integer 0-100),
+  "extractedRef": "(string)",
+  "reasons": ["(string, daftar alasan skor/penilaian)"],
+  "ocrText": "(string, ringkasan teks mentah penting yang terbaca)",
+  "confidence": (integer 0-100),
+  "isEdited": (boolean)
+}`;
+
+                    const geminiPayload = {
+                        contents: [
+                            {
+                                role: "user",
+                                parts: [
+                                    { text: "Verifikasi bukti transfer ini secara teliti dan waspadai editan gambar." },
+                                    { inlineData: { mimeType, data: base64Data } }
+                                ]
+                            }
+                        ],
+                        systemInstruction: { parts: [{ text: systemInstruction }] },
+                        generationConfig: {
+                            responseMimeType: "application/json",
+                            temperature: 0.1
+                        }
+                    };
+
+                    const groupHeader = request.headers.get("x-api-group") || "group_4";
+                    const requestedGroups = groupHeader.split(",").map((item) => item.trim()).filter(Boolean);
+                    const finalGroups = requestedGroups.length ? requestedGroups : ["group_4"];
+
+                    // Gunakan model 2.5 flash untuk kemampuan vision & reasoning yang lebih baik
+                    const response = await executeGeminiWithRotation(
+                        env,
+                        ctx,
+                        finalGroups,
+                        "gemini-2.5-flash", 
+                        false,
+                        JSON.stringify(geminiPayload),
+                        "SYSTEM",
+                        "OCR",
+                        true // forceSingleModel agar rotasi fokus ke 2.5 flash
+                    );
+
+                    if (!response.ok) {
+                        const err = await response.text();
+                        throw new Error("AI Endpoint gagal memproses gambar: " + err);
+                    }
+
+                    const data = await response.json();
+                    let text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+                    if (text.startsWith("\`\`\`json")) text = text.replace(/^\`\`\`json/, "").replace(/\`\`\`$/, "").trim();
+                    
+                    let parsedOutput = { score: 0, extractedRef: "", reasons: [], ocrText: "", confidence: 0, isEdited: false };
+                    if (text) {
+                        try { parsedOutput = JSON.parse(text); } catch (e) {
+                            parsedOutput.reasons.push("Gagal mem-parsing format JSON AI.");
+                            parsedOutput.ocrText = text.substring(0, 200);
+                        }
+                    } else {
+                        parsedOutput.reasons.push("AI tidak mengembalikan teks.");
+                    }
+
+                    return new Response(JSON.stringify(parsedOutput), {
+                        status: 200,
+                        headers: createCorsHeaders(),
+                    });
+                } catch (e) {
+                    console.error("[OCR Receipt Error]", e.message);
+                    return new Response(JSON.stringify({ error: e.message }), {
                         status: 500,
                         headers: createCorsHeaders(),
                     });

@@ -1,6 +1,7 @@
 "use client";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
+import { NotificationsPopover } from "@/components/layout/NotificationsPopover";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
@@ -118,6 +119,7 @@ export function Header({ onMenuClick = null, isMobile = false }) {
           </Link>
         </div>
 
+        <NotificationsPopover isMobile={isMobile} />
         {!isMobile && <ThemeToggle />}
 
         {/* Profile avatar + logout â€” desktop only (on mobile, these are in sidebar) */}

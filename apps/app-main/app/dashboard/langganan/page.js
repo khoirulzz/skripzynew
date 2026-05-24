@@ -35,30 +35,6 @@ import {
 const WORKER_URL = process.env.NEXT_PUBLIC_WORKER_URL || "https://apikey.skripzy-app.workers.dev";
 const WORKER_SECRET = process.env.NEXT_PUBLIC_WORKER_SECRET || "skripzy1234";
 
-const loadTesseract = () => {
-  return new Promise((resolve, reject) => {
-    if (typeof window === "undefined") {
-      reject(new Error("Browser environment required"));
-      return;
-    }
-    if (window.Tesseract) {
-      resolve(window.Tesseract);
-      return;
-    }
-    const script = document.createElement("script");
-    script.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
-    script.onload = () => {
-      if (window.Tesseract) {
-        resolve(window.Tesseract);
-      } else {
-        reject(new Error("Gagal memuat Tesseract dari CDN"));
-      }
-    };
-    script.onerror = () => reject(new Error("Gagal mengunduh script Tesseract"));
-    document.body.appendChild(script);
-  });
-};
-
 const normalizeText = (val) => String(val || "").trim();
 
 const STATUS_STYLES = {
@@ -421,7 +397,7 @@ export default function LanggananPage() {
     setPromoLoading(true);
     setPromoError("");
     try {
-      const promo = await validatePromoCode(finalCode);
+      const promo = await validatePromoCode(finalCode, selectedOrder?.type || "all", basePriceForPeriod);
       setSelectedPromo(promo);
       setPromoInput(finalCode);
     } catch (error) {
@@ -549,56 +525,64 @@ export default function LanggananPage() {
         }
 
         // --- START OCR SCAN & VALIDATION ---
-        setOcrProgressMsg("Memulai pemindaian OCR bukti transfer...");
+        setOcrProgressMsg("Memulai verifikasi cerdas AI Vision...");
         
         let ocrResult = null;
         let ocrScore = 0;
         let isDuplicate = false;
         let detectedRef = referenceNumber;
+        let isEdited = false;
         
         try {
-          const tesseract = await loadTesseract();
-          setOcrProgressMsg("Sedang membaca teks gambar dengan OCR...");
-          
-          const worker = await tesseract.createWorker("ind");
-          const ret = await worker.recognize(proofFile);
-          const ocrText = ret.data.text || "";
-          const confidence = ret.data.confidence || 0;
-          await worker.terminate();
-
-          setOcrProgressMsg("Menganalisis kecocokan transaksi...");
+          setOcrProgressMsg("Menganalisis gambar dengan AI Vision...");
           const targetPrice = priceBreakdown.finalPrice;
           
-          ocrResult = analyzeReceiptText({
-            ocrText,
-            confidence,
-            targetPrice,
-            paymentChannelId
+          const aiRes = await fetch(`${WORKER_URL}/api/ocr-receipt`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              proofUrl,
+              targetPrice,
+              paymentChannelId
+            })
           });
+
+          if (!aiRes.ok) throw new Error("Gagal memanggil API AI Vision");
+          ocrResult = await aiRes.json();
           
-          ocrScore = ocrResult.score;
+          ocrScore = ocrResult.score || 0;
           if (ocrResult.extractedRef) {
             detectedRef = ocrResult.extractedRef;
           }
+          isEdited = !!ocrResult.isEdited;
           
-          // Anti-Counterfeit duplicate check
-          setOcrProgressMsg("Memeriksa keaslian transaksi...");
-          if (detectedRef) {
-            isDuplicate = await checkDuplicateReference(detectedRef, activeRequestId);
+          if (!isEdited) {
+            // Anti-Counterfeit duplicate check
+            setOcrProgressMsg("Memeriksa keaslian transaksi...");
+            if (detectedRef) {
+              isDuplicate = await checkDuplicateReference(detectedRef, activeRequestId);
+            }
           }
         } catch (ocrErr) {
-          console.error("OCR scan failed, falling back to manual confirmation:", ocrErr);
-          if (ocrResult) {
-            ocrResult.reasons.push("Gagal memproses OCR: " + ocrErr.message);
+          console.error("AI scan failed, falling back to manual confirmation:", ocrErr);
+          if (!ocrResult) {
+            ocrResult = { reasons: ["Gagal memproses AI Vision: " + ocrErr.message] };
+          } else {
+            ocrResult.reasons = ocrResult.reasons || [];
+            ocrResult.reasons.push("Error AI Vision: " + ocrErr.message);
           }
         }
         
+        if (isEdited) {
+          ocrScore = 0;
+          ocrResult.reasons = ocrResult.reasons || [];
+          ocrResult.reasons.push("INDIKASI EDITAN FOTO/PEMALSUAN TERDETEKSI OLEH AI");
+        }
+
         if (isDuplicate) {
           ocrScore = 0;
-          if (ocrResult) {
-            ocrResult.reasons = ocrResult.reasons || [];
-            ocrResult.reasons.push("NOMOR REFERENSI GANDA TERDETEKSI (Indikasi Pemalsuan)");
-          }
+          ocrResult.reasons = ocrResult.reasons || [];
+          ocrResult.reasons.push("NOMOR REFERENSI GANDA TERDETEKSI (Indikasi Pemalsuan)");
         }
         
         let finalStatus = "pending";

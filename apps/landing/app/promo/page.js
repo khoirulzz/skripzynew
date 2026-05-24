@@ -68,13 +68,25 @@ export default function PromoPage() {
   useEffect(() => {
     let mounted = true;
 
-    getPromos()
-      .then((items) => {
+    fetch("https://apikey.skripzy-app.workers.dev/api/d1/promos")
+      .then(res => res.json())
+      .then(json => {
         if (!mounted) return;
-        const active = items.filter(isPromoActive).slice(0, 3);
-        setRemotePromos(active);
+        if (json && json.data) {
+          const items = json.data.map(d => ({
+            ...d,
+            discountPercent: d.type === "percent" ? d.discountValue : undefined,
+            discountAmount: d.type === "fixed" ? d.discountValue : undefined,
+            isActive: Boolean(d.isActive),
+            createdAt: d.createdAt ? new Date(d.createdAt) : new Date(),
+            validUntil: d.validUntil ? new Date(d.validUntil) : null
+          }));
+          const active = items.filter(p => isPromoActive(p) && p.showOnLanding === 1).slice(0, 3);
+          setRemotePromos(active);
+        }
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error("Failed to fetch promos:", err);
         if (mounted) setRemotePromos([]);
       });
 
@@ -89,7 +101,8 @@ export default function PromoPage() {
       ...fallbackPromos[index % fallbackPromos.length],
       ...promo,
       terms: promo.terms || fallbackPromos[index % fallbackPromos.length].terms,
-      audience: promo.audience || "Promo aktif Skripzy",
+      audience: promo.audience || (promo.applicableTo === "plan" ? "Khusus Langganan" : promo.applicableTo === "topup" ? "Khusus Top Up" : "Semua Layanan"),
+      description: promo.description || fallbackPromos[index % fallbackPromos.length].description,
     }));
   }, [remotePromos]);
 

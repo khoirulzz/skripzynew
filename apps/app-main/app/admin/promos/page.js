@@ -19,6 +19,9 @@ const DEFAULT_FORM = {
   validUntil: "",
   usageLimit: 0,
   isActive: true,
+  applicableTo: "all",
+  minTransaction: 0,
+  showOnLanding: true,
 };
 
 function PromoFormModal({ item, onClose, onSave }) {
@@ -32,6 +35,9 @@ function PromoFormModal({ item, onClose, onSave }) {
           validUntil: item.validUntil ? (item.validUntil.toDate ? item.validUntil.toDate().toISOString().split('T')[0] : new Date(item.validUntil).toISOString().split('T')[0]) : "",
           usageLimit: item.usageLimit || 0,
           isActive: item.isActive ?? true,
+          applicableTo: item.applicableTo || "all",
+          minTransaction: item.minTransaction || 0,
+          showOnLanding: item.showOnLanding ?? true,
         }
       : DEFAULT_FORM
   );
@@ -49,7 +55,7 @@ function PromoFormModal({ item, onClose, onSave }) {
         discountValue: Number(form.discountValue),
       };
       
-      delete data.description; // Remove description because it doesn't exist in D1
+
 
       if (item) {
         await onSave(item.id, data);
@@ -143,6 +149,32 @@ function PromoFormModal({ item, onClose, onSave }) {
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
             <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 600, color: "var(--text-muted)" }}>
+              Berlaku Untuk
+              <select
+                value={form.applicableTo}
+                onChange={(e) => setForm((f) => ({ ...f, applicableTo: e.target.value }))}
+                style={inputStyle}
+              >
+                <option value="all">Semua Transaksi</option>
+                <option value="plan">Plan Langganan Saja</option>
+                <option value="topup">Top Up Kredit Saja</option>
+              </select>
+            </label>
+
+            <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 600, color: "var(--text-muted)" }}>
+              Minimum Transaksi
+              <input
+                type="number"
+                min={0}
+                value={form.minTransaction}
+                onChange={(e) => setForm((f) => ({ ...f, minTransaction: e.target.value }))}
+                style={inputStyle}
+              />
+            </label>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+            <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 600, color: "var(--text-muted)" }}>
               Tipe Diskon
               <select
                 value={form.type}
@@ -199,6 +231,19 @@ function PromoFormModal({ item, onClose, onSave }) {
             />
             <label htmlFor="isActive" style={{ fontSize: "0.85rem", fontWeight: 600, cursor: "pointer", color: "var(--text-main)" }}>
               Aktifkan Kode Promo
+            </label>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.2rem" }}>
+            <input
+              type="checkbox"
+              id="showOnLanding"
+              checked={form.showOnLanding}
+              onChange={(e) => setForm((f) => ({ ...f, showOnLanding: e.target.checked }))}
+              style={{ width: 18, height: 18, cursor: "pointer" }}
+            />
+            <label htmlFor="showOnLanding" style={{ fontSize: "0.85rem", fontWeight: 600, cursor: "pointer", color: "var(--text-main)" }}>
+              Tampilkan di Landing Page Promo
             </label>
           </div>
         </div>
@@ -268,6 +313,22 @@ function PromoCard({ promo, onEdit, onDelete, onToggle }) {
         >
           {active ? "Aktif" : isExpired ? "Expired" : isLimitReached ? "Limit" : "Non-aktif"}
         </span>
+        {promo.showOnLanding && (
+          <span
+            style={{
+              padding: "0.25rem 0.6rem",
+              borderRadius: 99,
+              fontSize: "0.65rem",
+              fontWeight: 800,
+              textTransform: "uppercase",
+              backgroundColor: "rgba(139,92,246,0.12)",
+              color: "#8b5cf6",
+              marginLeft: "0.5rem",
+            }}
+          >
+            Landing
+          </span>
+        )}
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
@@ -303,6 +364,21 @@ function PromoCard({ promo, onEdit, onDelete, onToggle }) {
           <p style={{ margin: 0, fontWeight: 800, fontSize: "1rem" }}>
             {promo.usedCount || 0}
             {promo.usageLimit > 0 ? <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", fontWeight: 400 }}> / {promo.usageLimit}</span> : ""}
+          </p>
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginTop: "-0.2rem" }}>
+        <div style={{ padding: "0.5rem", backgroundColor: "var(--surface-hover)", borderRadius: 8 }}>
+          <p style={{ margin: 0, fontSize: "0.65rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 700 }}>Min. Transaksi</p>
+          <p style={{ margin: 0, fontWeight: 800, fontSize: "1rem" }}>
+            Rp {(promo.minTransaction || 0).toLocaleString("id-ID")}
+          </p>
+        </div>
+        <div style={{ padding: "0.5rem", backgroundColor: "var(--surface-hover)", borderRadius: 8 }}>
+          <p style={{ margin: 0, fontSize: "0.65rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 700 }}>Berlaku Untuk</p>
+          <p style={{ margin: 0, fontWeight: 800, fontSize: "0.95rem" }}>
+            {promo.applicableTo === "plan" ? "Langganan" : promo.applicableTo === "topup" ? "Top Up" : "Semua Transaksi"}
           </p>
         </div>
       </div>

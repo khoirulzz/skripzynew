@@ -1730,15 +1730,19 @@ const worker = {
                 "workspace_analysis", "workspace_notes", "notebooks",
                 "topups", "promos", "pricing"
             ];
-
             if (!allowedTables.includes(table)) {
                 return new Response(JSON.stringify({ error: "Table not allowed" }), { status: 403, headers: createCorsHeaders() });
             }
 
-            const authToken = extractBearerToken(request);
-            const session = await verifyFirebaseToken(authToken, env);
-            if (!session) {
-                return new Response(JSON.stringify({ error: "Unauthorized: Invalid Firebase token" }), { status: 401, headers: createCorsHeaders() });
+            const isPublicRead = request.method === "GET" && table === "pricing";
+            
+            let session = null;
+            if (!isPublicRead) {
+                const authToken = extractBearerToken(request);
+                session = await verifyFirebaseToken(authToken, env);
+                if (!session) {
+                    return new Response(JSON.stringify({ error: "Unauthorized: Invalid Firebase token" }), { status: 401, headers: createCorsHeaders() });
+                }
             }
 
             if (!env.DB) {
@@ -1751,14 +1755,16 @@ const worker = {
 
             // Ambil role user dari db
             let userRole = "user";
-            try {
-                const roleStmt = env.DB.prepare(`SELECT role FROM users WHERE id = ?`).bind(session.uid);
-                const roleResult = await roleStmt.first();
-                if (roleResult && roleResult.role) {
-                    userRole = roleResult.role;
+            if (session) {
+                try {
+                    const roleStmt = env.DB.prepare(`SELECT role FROM users WHERE id = ?`).bind(session.uid);
+                    const roleResult = await roleStmt.first();
+                    if (roleResult && roleResult.role) {
+                        userRole = roleResult.role;
+                    }
+                } catch (e) {
+                    console.warn("Failed to fetch user role", e);
                 }
-            } catch (e) {
-                console.warn("Failed to fetch user role", e);
             }
             const isAdmin = userRole === "admin";
 

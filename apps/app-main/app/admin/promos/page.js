@@ -46,14 +46,10 @@ function PromoFormModal({ item, onClose, onSave }) {
       const data = {
         ...form,
         code: form.code.toUpperCase(),
-        [form.type === "percent" ? "discountPercent" : "discountAmount"]: Number(form.discountValue),
+        discountValue: Number(form.discountValue),
       };
       
-      // Clean up the object based on type
-      if (form.type === "percent") delete data.discountAmount;
-      else delete data.discountPercent;
-      
-      delete data.discountValue;
+      delete data.description; // Remove description because it doesn't exist in D1
 
       if (item) {
         await onSave(item.id, data);

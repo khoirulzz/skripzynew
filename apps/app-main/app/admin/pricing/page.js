@@ -122,7 +122,7 @@ function PlanPriceModal({ item, onClose, onSave }) {
   return (
     <ModalShell
       title={`Edit Harga ${item?.name}`}
-      subtitle="Plan selalu tetap tiga slot: Free, Pro, dan Plus."
+      subtitle="Sesuaikan harga plan langganan yang akan ditampilkan ke pengguna."
       onClose={onClose}
     >
       <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
@@ -205,7 +205,7 @@ function TopupModal({ item, onClose, onSave }) {
   return (
     <ModalShell
       title={item ? "Edit Paket Kredit" : "Tambah Paket Kredit"}
-      subtitle="Paket kredit akan langsung ikut muncul atau hilang di halaman langganan user."
+      subtitle="Kelola opsi paket kredit yang tersedia pada halaman top-up pengguna."
       onClose={onClose}
     >
       <div style={{ display: "grid", gap: "1rem" }}>
@@ -221,7 +221,7 @@ function TopupModal({ item, onClose, onSave }) {
         </label>
 
         <label style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--text-muted)" }}>
-          Deskripsi Singkat
+          Deskripsi Paket
           <input
             type="text"
             value={form.description}
@@ -268,7 +268,7 @@ function TopupModal({ item, onClose, onSave }) {
           </label>
 
           <label style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--text-muted)" }}>
-            Badge Kecil
+            Teks Label Tambahan (Opsional)
             <input
               type="text"
               value={form.badgeText}
@@ -281,7 +281,7 @@ function TopupModal({ item, onClose, onSave }) {
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
           <label style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--text-muted)" }}>
-            Warna Aksen
+            Warna Aksen (Kode Hex)
             <input
               type="text"
               value={form.accent}
@@ -297,7 +297,7 @@ function TopupModal({ item, onClose, onSave }) {
               checked={form.popular}
               onChange={(event) => saveField("popular", event.target.checked)}
             />
-            Tampilkan sebagai paket unggulan
+            Sorot sebagai paket pilihan
           </label>
         </div>
       </div>
@@ -365,7 +365,7 @@ function ToolModal({ item, onClose, onSave }) {
   return (
     <ModalShell
       title={item ? "Edit Biaya Tool" : "Tambah Tool Pricing"}
-      subtitle="Pilih tool dari daftar. Biaya akan langsung terhubung ke halaman user."
+      subtitle="Atur biaya kredit yang akan dikenakan untuk setiap penggunaan fitur."
       onClose={onClose}
     >
       <div style={{ display: "grid", gap: "1rem" }}>
@@ -738,12 +738,11 @@ export default function PricingManagement() {
     const currentPlan = catalog.planMap[planId];
     await upsertPricing(`plan-${planId}`, {
       category: "plan",
-      planId,
+      slug: planId,
       toolName: getPlanDisplayName(planId),
       description: currentPlan?.description || "",
       price: numberValue(price),
       popular: currentPlan?.popular || false,
-      features: currentPlan?.features || [],
     });
   };
 

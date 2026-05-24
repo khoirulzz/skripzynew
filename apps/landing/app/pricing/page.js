@@ -2,10 +2,9 @@
 
 import LandingLayout from "@/components/layout/LandingLayout";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
-import { PLAN_METADATA, formatRupiah } from "@/lib/billing";
+import { PLAN_METADATA, formatRupiah, buildBillingCatalog } from "@/lib/billing";
 import Link from "next/link";
-
-const planOrder = [PLAN_METADATA.free, PLAN_METADATA.pro, PLAN_METADATA.plus];
+import { useEffect, useState } from "react";
 
 const planNotes = {
   free: {
@@ -44,6 +43,22 @@ const creditFacts = [
 ];
 
 export default function PricingPage() {
+  const [planOrder, setPlanOrder] = useState([PLAN_METADATA.free, PLAN_METADATA.pro, PLAN_METADATA.plus]);
+
+  useEffect(() => {
+    fetch("https://apikey.skripzy-app.workers.dev/api/d1/pricing")
+      .then(res => res.json())
+      .then(json => {
+        if (json && json.data) {
+          const catalog = buildBillingCatalog(json.data);
+          if (catalog.plans && catalog.plans.length > 0) {
+            setPlanOrder(catalog.plans);
+          }
+        }
+      })
+      .catch(err => console.error("Failed to fetch pricing:", err));
+  }, []);
+
   return (
     <LandingLayout>
       <section className="landing-section" style={{ paddingTop: "clamp(5.7rem, 9vw, 8.5rem)" }}>

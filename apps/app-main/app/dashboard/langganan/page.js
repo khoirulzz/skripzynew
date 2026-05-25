@@ -31,6 +31,7 @@ import {
   useBillingCatalog,
   useUserBillingRequests,
 } from "@/lib/useBillingCatalog";
+import { d1Request } from "@/lib/d1Client";
 
 const WORKER_URL = process.env.NEXT_PUBLIC_WORKER_URL || "https://apikey.skripzy-app.workers.dev";
 const WORKER_SECRET = process.env.NEXT_PUBLIC_WORKER_SECRET || "skripzy1234";
@@ -539,7 +540,10 @@ export default function LanggananPage() {
           
           const aiRes = await fetch(`${WORKER_URL}/api/ocr-receipt`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { 
+              "Content-Type": "application/json",
+              "x-skripzy-secret": WORKER_SECRET 
+            },
             body: JSON.stringify({
               proofUrl,
               targetPrice,
@@ -647,6 +651,19 @@ export default function LanggananPage() {
             : "Bukti pembayaran diterima. Pembayaranmu sedang diverifikasi Admin/Sistem.";
           setSuccessMsg(msg);
           setTimeout(() => window.alert("⏳ Menunggu Verifikasi\n\n" + msg), 100);
+
+          await d1Request("notifications", {
+            method: "POST",
+            body: {
+              id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+              userId: user.uid,
+              title: "Menunggu Verifikasi",
+              message: `Pembayaran manual Anda sedang menunggu verifikasi admin. Kami akan memprosesnya secepat mungkin.`,
+              type: "transaction",
+              isRead: 0,
+              actionUrl: "/dashboard/langganan"
+            }
+          }).catch(e => console.error("Gagal mengirim notifikasi topup pending", e));
         }
         
         // Reset form

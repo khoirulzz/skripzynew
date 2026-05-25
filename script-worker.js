@@ -1835,7 +1835,10 @@ const worker = {
                     } else {
                         let query = `SELECT * FROM ${table}`;
                         let params = [];
-                        if (!isGlobalAdminTable && !isAdmin) {
+                        if (table === "notifications" && !isAdmin) {
+                            query += ` WHERE (userId = ? OR userId IS NULL)`;
+                            params.push(session.uid);
+                        } else if (!isGlobalAdminTable && !isAdmin) {
                             query += ` WHERE ${uidColumn} = ?`;
                             params.push(session.uid);
                         } else if (table === "topups" && !isAdmin) {

@@ -511,7 +511,7 @@ export function ReferenceManager({ workspaceId, currentChapterKey = null, onClos
               <option value="all">Semua</option>
             </select>
           ) : null}
-          <button className="btn btn-primary" type="submit" disabled={searching} style={{ width: isMobile ? "100%" : "auto" }}>
+          <button className="btn btn-primary" type="submit" disabled={searching || !searchTerm.trim()} style={{ width: isMobile ? "100%" : "auto" }}>
             <PremiumIcon name="search" size={14} />
             {searching ? "Mencari..." : "Cari"}
           </button>
@@ -575,13 +575,14 @@ export function ReferenceManager({ workspaceId, currentChapterKey = null, onClos
             flexDirection: "column", 
             gap: "0.65rem", 
             maxHeight: isMobile ? "200px" : (compact ? "220px" : "320px"), 
+            overflowY: "auto",
             paddingRight: "0.15rem", 
             border: "2px solid var(--primary-light)", 
             borderRadius: "12px", 
             padding: "0.75rem",
             backgroundColor: "rgba(79, 70, 229, 0.03)"
           }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem", flexShrink: 0 }}>
               <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--primary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>HASIL PENCARIAN:</div>
               <button className="btn btn-ghost" onClick={() => setSearchResults([])} style={{ padding: "0.2rem 0.5rem", fontSize: "0.7rem", color: "var(--text-muted)" }}>
                 <PremiumIcon name="x" size={12} /> Tutup

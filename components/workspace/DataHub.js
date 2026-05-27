@@ -1,19 +1,28 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { d1Request } from "@/lib/d1Client";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
 import { FormBuilder } from "./FormBuilder";
 import { DataAnalysisDashboard } from "./DataAnalysisDashboard";
 import { TranscriptManager } from "./TranscriptManager";
 import { FORM_STATUSES, createEmptyForm, createId, flattenFormQuestions } from "@/lib/workspaceDefaults";
+import { ChevronLeft, Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/components/providers/AuthProvider";
+import Link from "next/link";
 
 export function DataHub({ workspaceId, hideQualitative = false }) {
-  const [activeTab, setActiveTab] = useState("kuesioner");
+  const { user } = useAuth();
+  const router = useRouter();
+  const [activeTab, setActiveTab] = useState(hideQualitative ? "builder" : "kuesioner");
   const [forms, setForms] = useState([]);
   const [responses, setResponses] = useState([]);
   const [activeFormId, setActiveFormId] = useState(null);
   const [editingFormId, setEditingFormId] = useState(null);
+  const [workspace, setWorkspace] = useState(null);
+  const [copied, setCopied] = useState(false);
+  const creatingDefaultRef = useRef(false);
 
   useEffect(() => {
     if (!workspaceId) return;
@@ -23,7 +32,10 @@ export function DataHub({ workspaceId, hideQualitative = false }) {
       try {
         // Get workspace for activeFormId
         const wsResp = await d1Request("workspaces", { id: workspaceId });
-        if (isMounted && wsResp.data) setActiveFormId(wsResp.data.activeFormId || null);
+        if (isMounted && wsResp.data) {
+          setWorkspace(wsResp.data);
+          setActiveFormId(wsResp.data.activeFormId || null);
+        }
 
         // Get forms for this workspace
         const formsResp = await d1Request("workspace_forms");
@@ -35,7 +47,49 @@ export function DataHub({ workspaceId, hideQualitative = false }) {
           return { ...f, ...parsed };
         });
         nextForms.sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0));
+        
         if (isMounted) setForms(nextForms);
+
+        // Auto create form if empty
+        if (isMounted && nextForms.length === 0 && hideQualitative && !creatingDefaultRef.current) {
+          creatingDefaultRef.current = true;
+          const formId = createId("form");
+          const nextForm = createEmptyForm({ id: formId, title: "Kuesioner Utama" });
+          
+          try {
+            await d1Request("workspace_forms", {
+              method: "POST",
+              body: {
+                id: formId,
+                workspace_id: workspaceId,
+                title: nextForm.title,
+                status: FORM_STATUSES.draft,
+                content: JSON.stringify({
+                  description: "Silakan isi dan lengkapi instrumen penelitian ini.",
+                  publicSlug: "",
+                  settings: nextForm.settings || {},
+                  sections: nextForm.sections || [],
+                }),
+              }
+            });
+
+            await d1Request("workspaces", {
+              method: "PATCH",
+              id: workspaceId,
+              body: { activeFormId: formId }
+            });
+            
+            const newForm = { ...nextForm, workspace_id: workspaceId, status: FORM_STATUSES.draft, description: "Silakan isi dan lengkapi instrumen penelitian ini." };
+            if (isMounted) {
+              setForms([newForm]);
+              setActiveFormId(formId);
+            }
+          } catch (err) {
+            console.error("Gagal membuat form default:", err);
+          } finally {
+            creatingDefaultRef.current = false;
+          }
+        }
 
         // Get responses for this workspace
         const responsesResp = await d1Request("workspace_form_responses");
@@ -54,12 +108,14 @@ export function DataHub({ workspaceId, hideQualitative = false }) {
     fetchWorkspaceAndForms();
     const interval = setInterval(fetchWorkspaceAndForms, 8000);
     return () => { isMounted = false; clearInterval(interval); };
-  }, [workspaceId]);
+  }, [workspaceId, hideQualitative]);
 
-  const activeForm = useMemo(
-    () => forms.find((form) => form.id === editingFormId) || null,
-    [editingFormId, forms]
-  );
+  const activeForm = useMemo(() => {
+    if (hideQualitative) {
+      return forms[0] || null;
+    }
+    return forms.find((form) => form.id === editingFormId) || null;
+  }, [editingFormId, forms, hideQualitative]);
 
   const handleCreateForm = async () => {
     const formId = createId("form");
@@ -95,9 +151,9 @@ export function DataHub({ workspaceId, hideQualitative = false }) {
   const tabs = useMemo(() => {
     if (hideQualitative) {
       return [
-        { key: "kuesioner", label: "Kuesioner", icon: "layoutTemplate" },
-        { key: "tabulasi", label: "Tabulasi Data", icon: "table" },
-        { key: "analisis", label: "Analisis Statistik", icon: "barChart3" },
+        { key: "builder", label: "Builder", icon: "layoutTemplate" },
+        { key: "data", label: "Data", icon: "table" },
+        { key: "analisis", label: "Analisis Data", icon: "barChart3" },
       ];
     }
     return [
@@ -158,6 +214,233 @@ export function DataHub({ workspaceId, hideQualitative = false }) {
     document.body.removeChild(link);
   };
 
+  const handleCopyLink = (url) => {
+    navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const targetRespondents = useMemo(() => {
+    if (!workspace?.topic) return 100;
+    const parsed = parseInt(workspace.topic, 10);
+    return isNaN(parsed) ? 100 : parsed;
+  }, [workspace]);
+
+  const progressPercent = useMemo(() => {
+    if (targetRespondents <= 0) return 0;
+    return Math.min(100, Math.round((responses.length / targetRespondents) * 100));
+  }, [responses.length, targetRespondents]);
+
+  const activeFormPublicUrl = useMemo(() => {
+    const active = forms[0];
+    if (active && active.status === "published" && active.publicSlug) {
+      return `${window.location.origin}/form?slug=${active.publicSlug}`;
+    }
+    return "";
+  }, [forms]);
+
+  // Quantitative/Quick Tools Layout
+  if (hideQualitative) {
+    return (
+      <div className="space-y-6 w-full animate-fade-in">
+        {/* Modern Workspace Header */}
+        <div className="glass-panel p-6 sm:p-8 flex flex-col lg:flex-row lg:items-center justify-between gap-6" style={{ border: "1px solid var(--border)", borderRadius: "16px", backgroundColor: "var(--surface)" }}>
+          <div className="flex items-start gap-4 flex-1">
+            <Link href="/dashboard/tools/data-analysis" className="btn btn-ghost p-2 rounded-full flex items-center justify-center border border-border hover:bg-muted transition-colors" style={{ width: "40px", height: "40px", flexShrink: 0 }}>
+              <ChevronLeft className="w-5 h-5" />
+            </Link>
+            
+            <div className="space-y-3 flex-1 min-w-0">
+              <div className="flex items-center gap-3 flex-wrap">
+                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-primary/10 text-primary uppercase tracking-wider">
+                  Kuesioner &amp; Analisis Kuantitatif
+                </span>
+                {forms[0]?.status === "published" ? (
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-500 uppercase tracking-wider flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    Aktif / Published
+                  </span>
+                ) : (
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-500 uppercase tracking-wider">
+                    Draft
+                  </span>
+                )}
+              </div>
+              
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-card-foreground break-words" style={{ margin: 0 }}>
+                {workspace?.title || "Memuat Judul..."}
+              </h1>
+              
+              {/* Share link section */}
+              <div className="pt-2">
+                {activeFormPublicUrl ? (
+                  <div className="flex items-center gap-2 max-w-xl">
+                    <div className="relative flex-1 min-w-0">
+                      <input 
+                        type="text" 
+                        readOnly 
+                        value={activeFormPublicUrl} 
+                        className="w-full text-xs font-mono bg-background/50 border border-border rounded-lg py-2 px-3 pr-10 text-muted-foreground outline-none select-all"
+                      />
+                    </div>
+                    <button 
+                      onClick={() => handleCopyLink(activeFormPublicUrl)}
+                      className="btn btn-outline text-xs py-2 px-3 flex items-center gap-1.5 transition-all duration-300"
+                      style={{ borderRadius: "8px" }}
+                    >
+                      <PremiumIcon name={copied ? "check" : "copy"} size={14} className={copied ? "text-emerald-500" : ""} />
+                      {copied ? "Tersalin!" : "Salin Link"}
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-xs text-amber-500 flex items-center gap-1.5" style={{ margin: 0 }}>
+                    <PremiumIcon name="alertTriangle" size={14} />
+                    Kuesioner belum dipublikasikan. Silakan masuk ke tab <strong>Builder</strong> dan klik <strong>Publish</strong> untuk mengaktifkan link kuesioner.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Progress Target Responden */}
+          <div className="lg:w-80 w-full glass-panel p-4 space-y-3" style={{ border: "1px solid var(--border)", borderRadius: "12px", backgroundColor: "var(--background)" }}>
+            <div className="flex justify-between items-center text-xs font-semibold">
+              <span className="text-muted-foreground">Progress Responden</span>
+              <span className="text-primary">{responses.length} / {targetRespondents}</span>
+            </div>
+            
+            {/* Beautiful Progress Bar */}
+            <div className="w-full bg-muted rounded-full h-3.5 overflow-hidden relative">
+              <div 
+                className="bg-gradient-to-r from-blue-500 to-primary h-full rounded-full transition-all duration-500 ease-out" 
+                style={{ width: `${progressPercent}%` }}
+              ></div>
+            </div>
+            
+            <div className="flex justify-between items-center text-[10px] text-muted-foreground">
+              <span>Target: {progressPercent}% Tercapai</span>
+              {progressPercent >= 100 ? (
+                <span className="text-emerald-500 font-medium">Target Terpenuhi! 🎉</span>
+              ) : (
+                <span>Kurang {Math.max(0, targetRespondents - responses.length)} pengisi</span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Navigation Tabs */}
+        <div style={{ display: "flex", gap: "0.75rem", borderBottom: "1px solid var(--border)", paddingBottom: "0.2rem", overflowX: "auto" }}>
+          {tabs.map((tab) => (
+            <button
+              key={tab.key}
+              className="btn btn-ghost"
+              onClick={() => {
+                setActiveTab(tab.key);
+              }}
+              style={{
+                borderBottom: activeTab === tab.key ? "2px solid var(--primary)" : "2px solid transparent",
+                color: activeTab === tab.key ? "var(--primary)" : "var(--text-muted)",
+                borderRadius: 0,
+                paddingInline: "0.4rem",
+              }}
+            >
+              <PremiumIcon name={tab.icon} size={15} />
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Tab Contents */}
+        {activeTab === "builder" && (
+          <div className="w-full bg-card rounded-xl border border-border overflow-hidden">
+            {forms[0] ? (
+              <FormBuilder
+                key={forms[0].id}
+                workspaceId={workspaceId}
+                form={forms[0]}
+                existingForms={forms}
+                onSaved={(nextForm) => {
+                  setForms((current) => current.map((item) => (item.id === nextForm.id ? nextForm : item)));
+                }}
+                isInline={true}
+              />
+            ) : (
+              <div className="flex items-center justify-center p-12">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === "data" && (
+          <div className="techy-card" style={{ padding: "1.5rem", backgroundColor: "var(--surface)", borderTop: "4px solid var(--primary)" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyBetween: "space-between", justifyContent: "space-between", gap: "1rem", marginBottom: "1.5rem", flexWrap: "wrap" }}>
+              <div>
+                <h3 style={{ fontSize: "1.15rem", margin: 0, fontWeight: 700 }}>Tabulasi Jawaban Responden</h3>
+                <p style={{ margin: "0.4rem 0 0 0", fontSize: "0.88rem", color: "var(--text-muted)" }}>
+                  Tabel data mentah dari respon kuesioner aktif yang masuk ke sistem.
+                </p>
+              </div>
+              {responses.length > 0 && activeFormQuestions.length > 0 && (
+                <button className="btn btn-primary" onClick={handleExportCSV}>
+                  <PremiumIcon name="download" size={15} />
+                  Ekspor Excel (CSV)
+                </button>
+              )}
+            </div>
+
+            {responses.length === 0 ? (
+              <div style={{ padding: "3rem 1.5rem", border: "2px dashed var(--border)", borderRadius: "16px", textAlign: "center", backgroundColor: "rgba(var(--surface-rgb), 0.5)" }}>
+                <PremiumIcon name="users" size={42} className="text-muted" style={{ margin: "0 auto 1rem", opacity: 0.5 }} />
+                <h4 style={{ margin: 0, fontSize: "1.1rem" }}>Belum Ada Respon</h4>
+                <p style={{ margin: "0.5rem 0 0 0", fontSize: "0.9rem", color: "var(--text-muted)" }}>Sebarkan link kuesioner untuk mengumpulkan jawaban responden.</p>
+              </div>
+            ) : (
+              <div style={{ overflowX: "auto", border: "1px solid var(--border)", borderRadius: "12px", backgroundColor: "var(--background)" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem", textAlign: "left" }}>
+                  <thead>
+                    <tr style={{ borderBottom: "2px solid var(--border)", backgroundColor: "var(--surface)" }}>
+                      <th style={{ padding: "0.75rem 1rem", width: "50px" }}>No</th>
+                      <th style={{ padding: "0.75rem 1rem", minWidth: "150px" }}>Waktu Pengisian</th>
+                      {activeFormQuestions.map((q) => (
+                        <th key={q.id} style={{ padding: "0.75rem 1rem", minWidth: "160px" }} title={q.label}>
+                          <div style={{ fontWeight: 600, color: "var(--text-main)" }}>{q.variableKey || "No Var"}</div>
+                          <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontWeight: 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "160px" }}>
+                            {q.label}
+                          </div>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {responses.map((resp, idx) => (
+                      <tr key={resp.id} style={{ borderBottom: "1px solid var(--border)" }}>
+                        <td style={{ padding: "0.75rem 1rem", color: "var(--text-muted)" }}>{idx + 1}</td>
+                        <td style={{ padding: "0.75rem 1rem", color: "var(--text-muted)" }}>
+                          {new Date(resp.created_at || resp.createdAt).toLocaleString("id-ID")}
+                        </td>
+                        {activeFormQuestions.map((q) => (
+                          <td key={q.id} style={{ padding: "0.75rem 1rem", color: "var(--text-main)" }}>
+                            {getFormattedAnswer(resp, q)}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === "analisis" && (
+          <DataAnalysisDashboard workspaceId={workspaceId} activeFormId={forms[0]?.id || activeFormId} />
+        )}
+      </div>
+    );
+  }
+
+  // Regular Skripsi/Jurnal Layout
   return (
     <div className="animate-fade-in" style={{ padding: "1.5rem", maxWidth: "1400px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "1rem" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
@@ -167,9 +450,7 @@ export function DataHub({ workspaceId, hideQualitative = false }) {
             Manajemen Data Penelitian
           </h1>
           <p style={{ margin: "0.35rem 0 0 0", fontSize: "0.92rem" }}>
-            {hideQualitative 
-              ? "Kelola kuesioner, lihat data tabulasi, dan lakukan analisis statistik kuantitatif."
-              : "Kelola form kuesioner, transkrip wawancara, dan snapshot analisis dalam satu ruang kerja."}
+            Kelola form kuesioner, transkrip wawancara, dan snapshot analisis dalam satu ruang kerja.
           </p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "0.65rem", flexWrap: "wrap" }}>
@@ -265,7 +546,7 @@ export function DataHub({ workspaceId, hideQualitative = false }) {
                         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.25rem", color: item.publicSlug ? "var(--text-main)" : "inherit" }}>
                           <PremiumIcon name={item.publicSlug ? "link" : "link2Off"} size={14} className={item.publicSlug ? "text-success" : ""} />
                           <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {item.publicSlug ? `/form/${item.publicSlug}` : "Belum punya link publik"}
+                            {item.publicSlug ? `/form?slug=${item.publicSlug}` : "Belum punya link publik"}
                           </span>
                         </div>
                       </div>
@@ -291,79 +572,10 @@ export function DataHub({ workspaceId, hideQualitative = false }) {
         </div>
       ) : null}
 
-      {activeTab === "tabulasi" && hideQualitative ? (
-        <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "1.5rem" }}>
-          <div className="techy-card" style={{ padding: "1.5rem", backgroundColor: "var(--surface)", borderTop: "4px solid var(--primary)" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem", marginBottom: "1.5rem", flexWrap: "wrap" }}>
-              <div>
-                <h3 style={{ fontSize: "1.15rem", margin: 0, fontWeight: 700 }}>Tabulasi Jawaban Responden</h3>
-                <p style={{ margin: "0.4rem 0 0 0", fontSize: "0.88rem", color: "var(--text-muted)" }}>
-                  Tabel data mentah dari respon kuesioner aktif yang masuk ke sistem.
-                </p>
-              </div>
-              {responses.length > 0 && activeFormQuestions.length > 0 && (
-                <button className="btn btn-primary" onClick={handleExportCSV}>
-                  <PremiumIcon name="download" size={15} />
-                  Ekspor Excel (CSV)
-                </button>
-              )}
-            </div>
-
-            {!activeForm ? (
-              <div style={{ padding: "3rem 1.5rem", border: "2px dashed var(--border)", borderRadius: "16px", textAlign: "center", backgroundColor: "rgba(var(--surface-rgb), 0.5)" }}>
-                <PremiumIcon name="table" size={42} className="text-muted" style={{ margin: "0 auto 1rem", opacity: 0.5 }} />
-                <h4 style={{ margin: 0, fontSize: "1.1rem" }}>Belum Ada Form Aktif</h4>
-                <p style={{ margin: "0.5rem 0 0 0", fontSize: "0.9rem", color: "var(--text-muted)" }}>Pilih atau publikasikan form terlebih dahulu di tab Kuesioner.</p>
-              </div>
-            ) : responses.length === 0 ? (
-              <div style={{ padding: "3rem 1.5rem", border: "2px dashed var(--border)", borderRadius: "16px", textAlign: "center", backgroundColor: "rgba(var(--surface-rgb), 0.5)" }}>
-                <PremiumIcon name="users" size={42} className="text-muted" style={{ margin: "0 auto 1rem", opacity: 0.5 }} />
-                <h4 style={{ margin: 0, fontSize: "1.1rem" }}>Belum Ada Respon</h4>
-                <p style={{ margin: "0.5rem 0 0 0", fontSize: "0.9rem", color: "var(--text-muted)" }}>Sebarkan link kuesioner untuk mengumpulkan jawaban responden.</p>
-              </div>
-            ) : (
-              <div style={{ overflowX: "auto", border: "1px solid var(--border)", borderRadius: "12px", backgroundColor: "var(--background)" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem", textAlign: "left" }}>
-                  <thead>
-                    <tr style={{ borderBottom: "2px solid var(--border)", backgroundColor: "var(--surface)" }}>
-                      <th style={{ padding: "0.75rem 1rem", width: "50px" }}>No</th>
-                      <th style={{ padding: "0.75rem 1rem", minWidth: "150px" }}>Waktu Pengisian</th>
-                      {activeFormQuestions.map((q) => (
-                        <th key={q.id} style={{ padding: "0.75rem 1rem", minWidth: "160px" }} title={q.label}>
-                          <div style={{ fontWeight: 600, color: "var(--text-main)" }}>{q.variableKey || "No Var"}</div>
-                          <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontWeight: 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "160px" }}>
-                            {q.label}
-                          </div>
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {responses.map((resp, idx) => (
-                      <tr key={resp.id} style={{ borderBottom: "1px solid var(--border)" }}>
-                        <td style={{ padding: "0.75rem 1rem", color: "var(--text-muted)" }}>{idx + 1}</td>
-                        <td style={{ padding: "0.75rem 1rem", color: "var(--text-muted)" }}>
-                          {new Date(resp.created_at || resp.createdAt).toLocaleString("id-ID")}
-                        </td>
-                        {activeFormQuestions.map((q) => (
-                          <td key={q.id} style={{ padding: "0.75rem 1rem", color: "var(--text-main)" }}>
-                            {getFormattedAnswer(resp, q)}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </div>
-      ) : null}
-
       {!hideQualitative && activeTab === "wawancara" ? <TranscriptManager workspaceId={workspaceId} /> : null}
       {activeTab === "analisis" ? <DataAnalysisDashboard workspaceId={workspaceId} activeFormId={activeFormId} /> : null}
 
-      {activeForm ? (
+      {activeForm && !hideQualitative ? (
         <div style={{ position: "fixed", inset: 0, zIndex: 100, backgroundColor: "rgba(11,15,25,0.58)", backdropFilter: "blur(6px)" }}>
           <FormBuilder
             key={activeForm.id}

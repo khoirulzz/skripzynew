@@ -48,7 +48,7 @@ function updateArrayState(current, itemId, shouldInclude) {
   return current.filter((item) => item !== itemId);
 }
 
-export function FormBuilder({ workspaceId, form, existingForms = [], onClose, onSaved }) {
+export function FormBuilder({ workspaceId, form, existingForms = [], onClose, onSaved, isInline = false }) {
   const [draft, setDraft] = useState(form);
   const [selection, setSelection] = useState({ type: "form", sectionId: null, questionId: null });
   const [previewAnswers, setPreviewAnswers] = useState({});
@@ -82,7 +82,7 @@ export function FormBuilder({ workspaceId, form, existingForms = [], onClose, on
 
   const publicUrl =
     typeof window !== "undefined" && draft.publicSlug
-      ? `${window.location.origin}/form/${draft.publicSlug}`
+      ? `${window.location.origin}/form?slug=${draft.publicSlug}`
       : "";
 
   const ensureSectionExpanded = (sectionId) => {
@@ -169,7 +169,7 @@ export function FormBuilder({ workspaceId, form, existingForms = [], onClose, on
         ),
       });
 
-      setSaveMessage(`Form dipublikasikan ke /form/${slug}`);
+      setSaveMessage(`Form dipublikasikan ke /form?slug=${slug}`);
     } catch (error) {
       console.error("Gagal publish form:", error);
       setSaveMessage("Gagal mempublikasikan form.");
@@ -335,7 +335,10 @@ export function FormBuilder({ workspaceId, form, existingForms = [], onClose, on
   };
 
   return (
-    <div className="flex flex-col h-screen w-full bg-[var(--background)] animate-fade-in">
+    <div 
+      className="flex flex-col w-full bg-[var(--background)] animate-fade-in"
+      style={{ height: isInline ? "calc(100vh - 280px)" : "100vh", minHeight: isInline ? "600px" : undefined }}
+    >
       <div className="w-full h-full flex flex-col bg-[var(--background)]">
         <div className="flex items-center justify-between gap-4 p-4 border-b border-[var(--border)] bg-[var(--surface)]">
           <div>
@@ -374,9 +377,11 @@ export function FormBuilder({ workspaceId, form, existingForms = [], onClose, on
               </button>
             )}
 
-            <button className="btn btn-ghost" onClick={onClose}>
-              <PremiumIcon name="x" size={18} />
-            </button>
+            {!isInline && onClose && (
+              <button className="btn btn-ghost" onClick={onClose}>
+                <PremiumIcon name="x" size={18} />
+              </button>
+            )}
           </div>
         </div>
 

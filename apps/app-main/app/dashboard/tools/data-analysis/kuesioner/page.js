@@ -53,16 +53,6 @@ function KuesionerWorkspaceContent() {
 
     return (
         <div className="container mx-auto p-4 md:p-8 max-w-7xl space-y-6 animate-fade-in">
-            <div className="flex items-center gap-3">
-                <Link href="/dashboard/tools/data-analysis" className="btn btn-ghost p-2 rounded-full">
-                    <ChevronLeft className="w-5 h-5" />
-                </Link>
-                <div>
-                    <span className="text-xs font-semibold text-primary uppercase tracking-wider">Data Analysis Workspace</span>
-                    <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-card-foreground">{workspace.title}</h1>
-                </div>
-            </div>
-            
             <DataHub workspaceId={workspaceId} hideQualitative={true} />
         </div>
     );

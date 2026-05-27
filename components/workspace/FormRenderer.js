@@ -223,16 +223,16 @@ export function FormRenderer({
                     </div>
                   ) : null}
 
-                  {question.type === "likert5" ? (
+                  {(question.type === "likert5" || question.type === "likert" || question.type === "rating") ? (
                     <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
                       <div
                         style={{
                           display: "grid",
-                          gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+                          gridTemplateColumns: `repeat(${question.scale?.max || 5}, minmax(0, 1fr))`,
                           gap: "0.5rem",
                         }}
                       >
-                        {[1, 2, 3, 4, 5].map((value) => {
+                        {Array.from({ length: (question.scale?.max || 5) - (question.scale?.min || 1) + 1 }, (_, i) => (question.scale?.min || 1) + i).map((value) => {
                           const isSelected = Number(answers[question.id]) === value;
                           return (
                             <label

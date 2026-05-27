@@ -1576,24 +1576,55 @@ const worker = {
             }
 
             if (request.method === "GET" && !url.pathname.endsWith("/responses")) {
-                const publicForm = await getPublicFormSnapshot(env, slug);
-                if (!publicForm || publicForm.status !== "published") {
+                const stmt = env.DB.prepare(`
+                    SELECT * FROM workspace_forms 
+                    WHERE status = 'published' AND json_extract(content, '$.publicSlug') = ?
+                    LIMIT 1
+                `).bind(slug);
+                const publicForm = await stmt.first();
+
+                if (!publicForm) {
                     return new Response(JSON.stringify({ error: "Form publik tidak ditemukan." }), {
                         status: 404,
                         headers: createCorsHeaders(),
                     });
                 }
 
-                return new Response(JSON.stringify({ form: publicForm }), {
+                let content = {};
+                try {
+                    content = typeof publicForm.content === "string" ? JSON.parse(publicForm.content) : (publicForm.content || {});
+                } catch (e) {}
+
+                const responseData = {
+                    form: {
+                        workspaceId: publicForm.workspace_id,
+                        formId: publicForm.id,
+                        title: publicForm.title || "Form Tanpa Judul",
+                        description: content.description || "",
+                        publicSlug: content.publicSlug || slug,
+                        settings: content.settings || {},
+                        sections: content.sections || [],
+                        publishedAt: content.publishedAt || publicForm.updated_at,
+                        status: publicForm.status,
+                    }
+                };
+
+                return new Response(JSON.stringify(responseData), {
                     status: 200,
                     headers: createCorsHeaders(),
                 });
             }
 
             if (request.method === "POST" && url.pathname.endsWith("/responses")) {
-                const publicForm = await getPublicFormSnapshot(env, slug);
-                if (!publicForm || publicForm.status !== "published") {
-                    return new Response(JSON.stringify({ error: "Form publik tidak aktif." }), {
+                const stmt = env.DB.prepare(`
+                    SELECT * FROM workspace_forms 
+                    WHERE status = 'published' AND json_extract(content, '$.publicSlug') = ?
+                    LIMIT 1
+                `).bind(slug);
+                const publicForm = await stmt.first();
+
+                if (!publicForm) {
+                    return new Response(JSON.stringify({ error: "Form publik tidak aktif atau tidak ditemukan." }), {
                         status: 404,
                         headers: createCorsHeaders(),
                     });
@@ -1607,42 +1638,42 @@ const worker = {
                     });
                 }
 
-                const responseBody = {
-                    fields: toFirestoreDocument({
-                        workspaceId: publicForm.workspaceId,
-                        formId: publicForm.formId,
-                        publicSlug: publicForm.publicSlug,
-                        submittedFrom: "public-form",
-                        submittedAt: new Date().toISOString(),
-                        answers: payload.answers,
-                        answersLabeled: payload.answersLabeled || {},
-                        metadata: {
-                            userAgent: request.headers.get("User-Agent") || "",
-                            locale: payload.locale || "",
-                        },
-                    }).fields,
-                };
-
-                const firestoreResponse = await firestoreRequest(
-                    env,
-                    `workspaces/${publicForm.workspaceId}/forms/${publicForm.formId}/responses`,
-                    {
-                        method: "POST",
-                        body: responseBody,
-                    }
+                const responseId = crypto.randomUUID();
+                const insertStmt = env.DB.prepare(`
+                    INSERT INTO workspace_form_responses (
+                        id, user_id, form_id, workspace_id, answers, answersLabeled, submittedFrom, metadata, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                `).bind(
+                    responseId,
+                    publicForm.user_id,
+                    publicForm.id,
+                    publicForm.workspace_id,
+                    JSON.stringify(payload.answers),
+                    JSON.stringify(payload.answersLabeled || {}),
+                    "public-form",
+                    JSON.stringify({
+                        userAgent: request.headers.get("User-Agent") || "",
+                        locale: payload.locale || "",
+                    })
                 );
+                await insertStmt.run();
 
-                const firestoreData = await firestoreResponse.json().catch(() => ({}));
-                if (!firestoreResponse.ok) {
-                    return new Response(JSON.stringify({ error: firestoreData.error?.message || "Gagal menyimpan respons publik." }), {
-                        status: firestoreResponse.status,
-                        headers: createCorsHeaders(),
-                    });
+                // Update responseCount in workspaces
+                try {
+                    await env.DB.prepare(`
+                        UPDATE workspaces 
+                        SET responseCount = (
+                            SELECT COUNT(*) FROM workspace_form_responses WHERE workspace_id = ?
+                        ) 
+                        WHERE id = ?
+                    `).bind(publicForm.workspace_id, publicForm.workspace_id).run();
+                } catch (err) {
+                    console.error("Gagal update responseCount:", err);
                 }
 
                 return new Response(JSON.stringify({
                     ok: true,
-                    responseId: firestoreData?.name?.split("/").pop() || null,
+                    responseId: responseId,
                 }), {
                     status: 200,
                     headers: createCorsHeaders(),
@@ -1670,18 +1701,11 @@ const worker = {
             }
 
             if (payload?.mode === "unpublish") {
-                const deleteResponse = await firestoreRequest(env, `public_forms/${slug}`, {
-                    method: "DELETE",
-                    authToken,
-                });
-
-                if (!deleteResponse.ok && deleteResponse.status !== 404) {
-                    const errorData = await deleteResponse.json().catch(() => ({}));
-                    return new Response(JSON.stringify({ error: errorData.error?.message || "Gagal menghapus snapshot form publik." }), {
-                        status: deleteResponse.status,
-                        headers: createCorsHeaders(),
-                    });
-                }
+                await env.DB.prepare(`
+                    UPDATE workspace_forms 
+                    SET status = 'draft', updated_at = CURRENT_TIMESTAMP
+                    WHERE json_extract(content, '$.publicSlug') = ? AND user_id = ?
+                `).bind(slug, session.uid).run();
 
                 return new Response(JSON.stringify({ ok: true, mode: "unpublish", slug }), {
                     status: 200,
@@ -1689,35 +1713,40 @@ const worker = {
                 });
             }
 
-            const snapshot = {
-                ...(payload?.snapshot || {}),
-                ownerId: session.uid,
-                publicSlug: slug,
-                status: "published",
-                updatedAt: new Date().toISOString(),
-                publishedAt: payload?.snapshot?.publishedAt || new Date().toISOString(),
-            };
-
-            const publishResponse = await firestoreRequest(env, `public_forms/${slug}`, {
-                method: "PATCH",
-                authToken,
-                body: toFirestoreDocument(snapshot),
-            });
-
-            const publishData = await publishResponse.json().catch(() => ({}));
-            if (!publishResponse.ok) {
-                return new Response(JSON.stringify({ error: publishData.error?.message || "Gagal mempublikasikan snapshot form." }), {
-                    status: publishResponse.status,
+            const snapshot = payload?.snapshot;
+            if (!snapshot || !snapshot.formId) {
+                return new Response(JSON.stringify({ error: "Snapshot form tidak valid." }), {
+                    status: 400,
                     headers: createCorsHeaders(),
                 });
             }
 
-            return new Response(JSON.stringify({
-                ok: true,
-                mode: "publish",
-                slug,
-                documentId: publishData?.name?.split("/").pop() || slug,
-            }), {
+            const checkStmt = env.DB.prepare(`
+                SELECT * FROM workspace_forms WHERE id = ? AND user_id = ?
+            `).bind(snapshot.formId, session.uid);
+            const existingForm = await checkStmt.first();
+            if (!existingForm) {
+                return new Response(JSON.stringify({ error: "Form tidak ditemukan atau Anda bukan pemiliknya." }), {
+                    status: 404,
+                    headers: createCorsHeaders(),
+                });
+            }
+
+            const updatedContent = JSON.stringify({
+                description: snapshot.description || "",
+                publicSlug: slug,
+                settings: snapshot.settings || {},
+                sections: snapshot.sections || [],
+                publishedAt: snapshot.publishedAt || new Date().toISOString(),
+            });
+
+            await env.DB.prepare(`
+                UPDATE workspace_forms 
+                SET status = 'published', content = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND user_id = ?
+            `).bind(updatedContent, snapshot.formId, session.uid).run();
+
+            return new Response(JSON.stringify({ ok: true, slug }), {
                 status: 200,
                 headers: createCorsHeaders(),
             });
@@ -1774,7 +1803,7 @@ const worker = {
             const table = url.pathname.replace("/api/d1/", "").split("/")[0];
             const allowedTables = [
                 "users", "workspaces", "document_metadata",
-                "workspace_references", "workspace_forms", "workspace_transcripts",
+                "workspace_references", "workspace_forms", "workspace_form_responses", "workspace_transcripts",
                 "workspace_analysis", "workspace_notes", "notebooks",
                 "topups", "promos", "pricing", "notifications"
             ];

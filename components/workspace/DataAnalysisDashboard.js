@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { d1Request } from "@/lib/d1Client";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
-import { computeFormAnalysis, buildAnalysisNarrative } from "@/lib/formAnalysis";
+import { computeFormAnalysis, buildAnalysisNarrative, computeVariableAnalysis, computeRegressionAnalysis } from "@/lib/formAnalysis";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { deductCredits, refundCredits } from "@/lib/credits";
 import { useBillingCatalog } from "@/lib/useBillingCatalog";
@@ -27,7 +27,7 @@ function StatTile({ label, value, caption, tone = "default" }) {
   );
 }
 
-export function DataAnalysisDashboard({ workspaceId, activeFormId = null, compact = false, onInsertContent = null }) {
+export function DataAnalysisDashboard({ workspaceId, activeFormId = null, compact = false, onInsertContent = null, hideQualitative = false }) {
   const { user, userData } = useAuth();
   const { toolMap } = useBillingCatalog();
   const [workspaceActiveFormId, setWorkspaceActiveFormId] = useState(activeFormId);
@@ -39,6 +39,9 @@ export function DataAnalysisDashboard({ workspaceId, activeFormId = null, compac
   const [savingSnapshot, setSavingSnapshot] = useState(false);
   const [isInterpreting, setIsInterpreting] = useState(false);
   const [interpretStatus, setInterpretStatus] = useState("");
+  const [selectedVarXId, setSelectedVarXId] = useState("");
+  const [selectedVarYId, setSelectedVarYId] = useState("");
+  
   const notesHydratedRef = useRef(false);
   const generationCost = toolMap["chapter-generation"]?.creditCost ?? 2;
 
@@ -61,6 +64,16 @@ export function DataAnalysisDashboard({ workspaceId, activeFormId = null, compac
           return { ...f, ...parsed };
         });
         if (isMounted) setForms(nextForms);
+
+        // Get responses
+        const responsesResp = await d1Request("workspace_form_responses");
+        let nextResponses = (responsesResp.data || []).filter(r => r.workspace_id === workspaceId);
+        nextResponses = nextResponses.map(r => {
+          let parsedAnswers = {};
+          try { parsedAnswers = typeof r.answers === "string" ? JSON.parse(r.answers) : (r.answers || {}); } catch {}
+          return { ...r, answers: parsedAnswers };
+        });
+        if (isMounted) setResponses(nextResponses);
 
         // Get transcripts
         const transResp = await d1Request("workspace_transcripts");
@@ -96,6 +109,32 @@ export function DataAnalysisDashboard({ workspaceId, activeFormId = null, compac
     if (!activeForm) return null;
     return computeFormAnalysis(activeForm, workspaceActiveFormId ? responses : []);
   }, [activeForm, responses, workspaceActiveFormId]);
+
+  const variableAnalyses = useMemo(() => {
+    if (!activeForm || !activeForm.sections) return [];
+    return activeForm.sections.map(section => {
+      const result = computeVariableAnalysis(section, responses);
+      return {
+        sectionId: section.id,
+        title: section.title,
+        description: section.description,
+        ...result
+      };
+    }).filter(v => v.itemStats.length > 0);
+  }, [activeForm, responses]);
+
+  const regressionResult = useMemo(() => {
+    if (!selectedVarXId || !selectedVarYId || selectedVarXId === selectedVarYId) return null;
+    const varX = activeForm.sections.find(s => s.id === selectedVarXId);
+    const varY = activeForm.sections.find(s => s.id === selectedVarYId);
+    if (!varX || !varY) return null;
+    try {
+      return computeRegressionAnalysis(varX, varY, responses);
+    } catch (err) {
+      console.error(err);
+      return { error: err.message };
+    }
+  }, [selectedVarXId, selectedVarYId, activeForm, responses]);
 
   const narrative = useMemo(() => {
     if (!activeForm || !analysis) return "";
@@ -193,6 +232,53 @@ Kembangkan hasil analisis dan catatan peneliti tersebut menjadi narasi pembahasa
     }
   };
 
+  const handleExportStatsCSV = () => {
+    if (!variableAnalyses.length) return;
+    
+    const headers = ["Variabel", "Butir", "Label Pertanyaan", "Mean", "Variance", "Std Dev", "r Hitung", "r Tabel", "Status Validitas"];
+    const rows = [];
+    
+    variableAnalyses.forEach(v => {
+      v.itemStats.forEach(item => {
+        rows.push([
+          v.title,
+          item.variableKey || item.questionId,
+          item.label,
+          item.mean,
+          item.variance,
+          item.stdDev,
+          item.rCalculated,
+          item.rCritical,
+          item.isValid ? "Valid" : "Tidak Valid"
+        ]);
+      });
+    });
+    
+    const csvRows = [headers, ...rows].map(row => 
+      row.map(val => {
+        const str = String(val);
+        if (str.includes(",") || str.includes('"') || str.includes("\n") || str.includes("\r")) {
+          return `"${str.replace(/"/g, '""')}"`;
+        }
+        return str;
+      }).join(",")
+    );
+
+    const csvString = "\uFEFF" + csvRows.join("\r\n");
+    const blob = new Blob([csvString], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `statistik_${activeForm.title.toLowerCase().replace(/\s+/g, "_")}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handlePrint = () => {
+    window.print();
+  };
+
   if (!activeForm) {
     return (
       <div className="glass-panel" style={{ padding: "2rem", textAlign: "center", backgroundColor: "var(--surface)" }}>
@@ -205,17 +291,63 @@ Kembangkan hasil analisis dan catatan peneliti tersebut menjadi narasi pembahasa
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-      <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: "1rem" }}>
+      <style dangerouslySetInnerHTML={{__html: `
+        @media print {
+          body, html, #__next, main, .container {
+            background: white !important;
+            color: black !important;
+            padding: 0 !important;
+            margin: 0 !important;
+          }
+          nav, aside, header, footer, button, .btn, select, textarea, input, .no-print, [role="navigation"] {
+            display: none !important;
+          }
+          .glass-panel {
+            border: none !important;
+            background: transparent !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+            margin-bottom: 2rem !important;
+          }
+          table {
+            border-collapse: collapse !important;
+            width: 100% !important;
+          }
+          th, td {
+            border: 1px solid #ddd !important;
+            padding: 8px !important;
+            color: black !important;
+            text-align: left !important;
+          }
+          h1, h2, h3, h4, h5 {
+            color: black !important;
+          }
+        }
+      `}} />
+
+      <div className="no-print" style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: "1rem", alignItems: "center" }}>
         <div>
-          <h3 style={{ fontSize: "1.1rem", margin: 0 }}>Analisis Instrumen dan Respons</h3>
+          <h3 style={{ fontSize: "1.1rem", margin: 0, fontWeight: 700 }}>Analisis Instrumen dan Respons</h3>
           <p style={{ margin: "0.35rem 0 0 0", fontSize: "0.85rem" }}>
             Form aktif: <strong>{activeForm.title}</strong> • Respons terbaca: <strong>{responses.length}</strong>
           </p>
         </div>
-        <button className="btn btn-primary" onClick={handleSaveSnapshot} disabled={savingSnapshot}>
-          <PremiumIcon name="save" size={15} />
-          {savingSnapshot ? "Menyimpan..." : "Simpan Snapshot"}
-        </button>
+        <div style={{ display: "flex", gap: "0.5rem" }}>
+          <button className="btn btn-outline" onClick={handlePrint}>
+            <PremiumIcon name="printer" size={15} />
+            Cetak PDF
+          </button>
+          {variableAnalyses.length > 0 && (
+            <button className="btn btn-outline" onClick={handleExportStatsCSV}>
+              <PremiumIcon name="download" size={15} />
+              Ekspor Statistik (CSV)
+            </button>
+          )}
+          <button className="btn btn-primary" onClick={handleSaveSnapshot} disabled={savingSnapshot}>
+            <PremiumIcon name="save" size={15} />
+            {savingSnapshot ? "Menyimpan..." : "Simpan Snapshot"}
+          </button>
+        </div>
       </div>
 
       <div className="grid md:grid-cols-4 gap-4">
@@ -227,7 +359,11 @@ Kembangkan hasil analisis dan catatan peneliti tersebut menjadi narasi pembahasa
           caption="Reliabilitas instrumen"
           tone={(analysis?.cronbachAlpha ?? 0) >= 0.6 ? "success" : "warning"}
         />
-        <StatTile label="Transkrip" value={transcripts.length} caption="Pengayaan kualitatif untuk pembahasan" />
+        {hideQualitative ? (
+          <StatTile label="Variabel" value={activeForm.sections?.length || 0} caption="Variabel penelitian terdaftar" />
+        ) : (
+          <StatTile label="Transkrip" value={transcripts.length} caption="Pengayaan kualitatif untuk pembahasan" />
+        )}
       </div>
 
       <div className={compact ? "" : "grid md:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)] gap-4"}>
@@ -243,39 +379,138 @@ Kembangkan hasil analisis dan catatan peneliti tersebut menjadi narasi pembahasa
           <div className="glass-panel" style={{ padding: "1rem", backgroundColor: "var(--surface)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.85rem" }}>
               <PremiumIcon name="barChart3" size={16} className="text-primary" />
-              <h4 style={{ fontSize: "0.95rem", margin: 0 }}>Statistik Butir Numerik</h4>
+              <h4 style={{ fontSize: "0.95rem", margin: 0, fontWeight: 700 }}>Statistik Deskriptif & Uji Instrumen (Per Variabel)</h4>
             </div>
 
-            {analysis?.itemStats?.length ? (
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.84rem" }}>
-                  <thead>
-                    <tr style={{ borderBottom: "1px solid var(--border)" }}>
-                      <th style={{ textAlign: "left", padding: "0.55rem 0.35rem" }}>Butir</th>
-                      <th style={{ textAlign: "left", padding: "0.55rem 0.35rem" }}>Mean</th>
-                      <th style={{ textAlign: "left", padding: "0.55rem 0.35rem" }}>Var</th>
-                      <th style={{ textAlign: "left", padding: "0.55rem 0.35rem" }}>r item-total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {analysis.itemStats.map((item) => (
-                      <tr key={item.questionId} style={{ borderBottom: "1px solid var(--border)" }}>
-                        <td style={{ padding: "0.6rem 0.35rem", color: "var(--text-main)" }}>
-                          <div style={{ fontWeight: 600 }}>{item.variableKey || item.questionId}</div>
-                          <div style={{ fontSize: "0.76rem", color: "var(--text-muted)" }}>{item.label}</div>
-                        </td>
-                        <td style={{ padding: "0.6rem 0.35rem" }}>{item.mean}</td>
-                        <td style={{ padding: "0.6rem 0.35rem" }}>{item.variance}</td>
-                        <td style={{ padding: "0.6rem 0.35rem", color: item.itemTotalCorrelation >= 0.3 ? "var(--success)" : "var(--danger)" }}>
-                          {item.itemTotalCorrelation}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            {variableAnalyses.length ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+                {variableAnalyses.map((v) => (
+                  <div key={v.sectionId} style={{ padding: "1rem", border: "1px solid var(--border)", borderRadius: "12px", backgroundColor: "var(--background)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.75rem", borderBottom: "1px solid var(--border)", paddingBottom: "0.5rem" }}>
+                      <div>
+                        <h5 style={{ fontSize: "0.9rem", fontWeight: 700, margin: 0 }}>{v.title}</h5>
+                        {v.description && <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", margin: "0.15rem 0 0 0" }}>{v.description}</p>}
+                      </div>
+                      <div>
+                        <span style={{ fontSize: "0.75rem", fontWeight: 700, padding: "0.2rem 0.55rem", borderRadius: "999px", backgroundColor: v.isReliable ? "rgba(16, 185, 129, 0.12)" : "rgba(220, 38, 38, 0.12)", color: v.isReliable ? "var(--success)" : "var(--danger)" }}>
+                          Alpha: {v.cronbachAlpha} ({v.isReliable ? "Reliabel" : "Tidak Reliabel"})
+                        </span>
+                      </div>
+                    </div>
+
+                    <div style={{ overflowX: "auto" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
+                        <thead>
+                          <tr style={{ borderBottom: "1px solid var(--border)", color: "var(--text-muted)" }}>
+                            <th style={{ textAlign: "left", padding: "0.5rem 0.3rem" }}>Butir</th>
+                            <th style={{ textAlign: "center", padding: "0.5rem 0.3rem" }}>Mean</th>
+                            <th style={{ textAlign: "center", padding: "0.5rem 0.3rem" }}>Variance</th>
+                            <th style={{ textAlign: "center", padding: "0.5rem 0.3rem" }}>r-Hitung</th>
+                            <th style={{ textAlign: "center", padding: "0.5rem 0.3rem" }}>r-Tabel (N={v.N})</th>
+                            <th style={{ textAlign: "center", padding: "0.5rem 0.3rem" }}>Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {v.itemStats.map((item) => (
+                            <tr key={item.questionId} style={{ borderBottom: "1px solid var(--border)" }}>
+                              <td style={{ padding: "0.5rem 0.3rem", color: "var(--text-main)" }}>
+                                <div style={{ fontWeight: 600 }}>{item.variableKey || item.questionId}</div>
+                                <div style={{ fontSize: "0.74rem", color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "220px" }} title={item.label}>
+                                  {item.label}
+                                </div>
+                              </td>
+                              <td style={{ padding: "0.5rem 0.3rem", textAlign: "center" }}>{item.mean}</td>
+                              <td style={{ padding: "0.5rem 0.3rem", textAlign: "center" }}>{item.variance}</td>
+                              <td style={{ padding: "0.5rem 0.3rem", textAlign: "center", fontWeight: 600, color: item.isValid ? "var(--success)" : "var(--danger)" }}>
+                                {item.rCalculated ?? item.itemTotalCorrelation}
+                              </td>
+                              <td style={{ padding: "0.5rem 0.3rem", textAlign: "center", color: "var(--text-muted)" }}>{item.rCritical ?? "0.300"}</td>
+                              <td style={{ padding: "0.5rem 0.3rem", textAlign: "center" }}>
+                                <span style={{ fontSize: "0.7rem", fontWeight: 700, padding: "0.15rem 0.4rem", borderRadius: "5px", backgroundColor: item.isValid ? "rgba(16, 185, 129, 0.1)" : "rgba(220, 38, 38, 0.1)", color: item.isValid ? "var(--success)" : "var(--danger)" }}>
+                                  {item.isValid ? "VALID" : "TIDAK VALID"}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : (
-              <p style={{ margin: 0, fontSize: "0.85rem" }}>Belum ada butir numerik yang cukup lengkap untuk dihitung.</p>
+              <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-muted)" }}>Belum ada data butir numerik variabel yang lengkap untuk dihitung.</p>
+            )}
+          </div>
+
+          <div className="glass-panel" style={{ padding: "1rem", backgroundColor: "var(--surface)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1rem" }}>
+              <PremiumIcon name="barChart" size={16} className="text-primary" />
+              <h4 style={{ fontSize: "0.95rem", margin: 0, fontWeight: 700 }}>Analisis Regresi Linier Sederhana</h4>
+            </div>
+
+            {activeForm.sections && activeForm.sections.length >= 2 ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                <p style={{ fontSize: "0.82rem", color: "var(--text-muted)", margin: 0 }} className="no-print">
+                  Pilih variabel bebas (X) dan terikat (Y) untuk menguji hipotesis hubungan linier.
+                </p>
+                <div className="no-print" style={{ display: "flex", flexWrap: "wrap", gap: "1rem" }}>
+                  <div style={{ flex: "1 1 200px" }}>
+                    <label style={{ display: "block", fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "0.25rem" }}>Variabel Independen (X)</label>
+                    <select className="form-input" style={{ width: "100%", padding: "0.5rem", borderRadius: "8px", border: "1px solid var(--border)", backgroundColor: "var(--background)" }} value={selectedVarXId} onChange={(e) => setSelectedVarXId(e.target.value)}>
+                      <option value="">Pilih Variabel X</option>
+                      {activeForm.sections.map(s => (
+                        <option key={s.id} value={s.id} disabled={s.id === selectedVarYId}>{s.title}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div style={{ flex: "1 1 200px" }}>
+                    <label style={{ display: "block", fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "0.25rem" }}>Variabel Dependen (Y)</label>
+                    <select className="form-input" style={{ width: "100%", padding: "0.5rem", borderRadius: "8px", border: "1px solid var(--border)", backgroundColor: "var(--background)" }} value={selectedVarYId} onChange={(e) => setSelectedVarYId(e.target.value)}>
+                      <option value="">Pilih Variabel Y</option>
+                      {activeForm.sections.map(s => (
+                        <option key={s.id} value={s.id} disabled={s.id === selectedVarXId}>{s.title}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {regressionResult ? (
+                  regressionResult.error ? (
+                    <div style={{ padding: "0.75rem", borderRadius: "8px", backgroundColor: "rgba(220, 38, 38, 0.1)", color: "var(--danger)", fontSize: "0.82rem" }}>
+                      {regressionResult.error}
+                    </div>
+                  ) : (
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "1rem", marginTop: "0.5rem", padding: "1rem", border: "1px solid var(--border)", borderRadius: "10px", backgroundColor: "var(--background)" }}>
+                      <div>
+                        <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Persamaan Regresi</div>
+                        <div style={{ fontSize: "1.05rem", fontWeight: 700, marginTop: "0.2rem", color: "var(--text-main)" }}>{regressionResult.equation}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Korelasi (R)</div>
+                        <div style={{ fontSize: "1.05rem", fontWeight: 700, marginTop: "0.2rem", color: "var(--text-main)" }}>{regressionResult.rCorrelation}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Koefisien Determinasi (R²)</div>
+                        <div style={{ fontSize: "1.05rem", fontWeight: 700, marginTop: "0.2rem", color: "var(--text-main)" }}>{regressionResult.rSquared} ({Math.round(regressionResult.rSquared * 100)}%)</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Uji Signifikansi (t-Stat)</div>
+                        <div style={{ fontSize: "1.05rem", fontWeight: 700, marginTop: "0.2rem", color: regressionResult.isSignificant ? "var(--success)" : "var(--danger)" }}>
+                          t = {regressionResult.tStat} ({regressionResult.isSignificant ? "Signifikan" : "Tidak Signifikan"})
+                        </div>
+                        <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginTop: "0.1rem" }}>
+                          t-tabel = {regressionResult.tCritical} (df = {regressionResult.df})
+                        </div>
+                      </div>
+                    </div>
+                  )
+                ) : null}
+              </div>
+            ) : (
+              <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-muted)" }}>
+                Dibutuhkan minimal 2 variabel kuesioner untuk menghitung regresi.
+              </p>
             )}
           </div>
 
@@ -317,7 +552,7 @@ Kembangkan hasil analisis dan catatan peneliti tersebut menjadi narasi pembahasa
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-          <div className="glass-panel" style={{ padding: "1rem", backgroundColor: "var(--surface)" }}>
+          <div className="glass-panel no-print" style={{ padding: "1rem", backgroundColor: "var(--surface)" }}>
             <h4 style={{ fontSize: "0.95rem", margin: 0 }}>Catatan Interpretasi</h4>
             <p style={{ margin: "0.35rem 0 0.75rem 0", fontSize: "0.8rem" }}>
               Gunakan ruang ini untuk menyusun kalimat pembahasan resmi sebelum dikirim ke Bab IV.
@@ -357,7 +592,7 @@ Kembangkan hasil analisis dan catatan peneliti tersebut menjadi narasi pembahasa
             )}
           </div>
 
-          <div className="glass-panel" style={{ padding: "1rem", backgroundColor: "var(--surface)" }}>
+          <div className="glass-panel no-print" style={{ padding: "1rem", backgroundColor: "var(--surface)" }}>
             <h4 style={{ fontSize: "0.95rem", margin: 0 }}>Snapshot Terakhir</h4>
             {latestSnapshot ? (
               <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem", marginTop: "0.75rem", fontSize: "0.82rem" }}>

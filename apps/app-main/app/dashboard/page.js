@@ -137,7 +137,18 @@ const QUICK_TOOLS = [
     pro: true,
     badge: "PRO",
   },
-  
+  {
+    href: "/dashboard/tools/data-analysis",
+    slug: "data-analysis",
+    icon: "barChart3",
+    iconColor: "#F59E0B",
+    iconBg: "rgba(245, 158, 11, 0.1)",
+    title: "Data Analysis",
+    desc: "Olah data kuesioner, wawancara, dan observasi",
+    credit: 0,
+    pro: false,
+    badge: "NEW",
+  },
 ];
 
 // ============================================================

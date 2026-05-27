@@ -48,7 +48,11 @@ export function WorkspaceModal({ onClose, type = "skripsi" }) {
       
       
       onClose();
-      router.push(`/dashboard/${type}/edit?id=${id}`);
+      if (type === "data-analysis") {
+        router.push(`/dashboard/tools/data-analysis/kuesioner/${id}`);
+      } else {
+        router.push(`/dashboard/${type}/edit?id=${id}`);
+      }
     } catch (err) {
       console.error("Gagal membuat workspace:", err);
       setError(err.message || "Gagal membuat workspace. Periksa koneksi.");

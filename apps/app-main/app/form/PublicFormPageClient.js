@@ -10,12 +10,13 @@ import { flattenFormQuestions, getQuestionLabelMap, isQuestionVisible } from "@/
 export default function PublicFormPageClient() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [loading, setLoading] = useState(false);
   const [form, setForm] = useState(null);
   const [answers, setAnswers] = useState({});
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  // Mulai loading = true agar tidak ada flash "not found" sebelum fetch selesai
+  const [loading, setLoading] = useState(true);
 
   const slug = useMemo(() => {
     const pathSegments = (pathname || "").split("/").filter(Boolean);
@@ -26,22 +27,28 @@ export default function PublicFormPageClient() {
   }, [pathname, searchParams]);
 
   useEffect(() => {
-    if (!slug) return undefined;
+    if (!slug) {
+      setLoading(false);
+      return undefined;
+    }
 
     let isMounted = true;
+    setLoading(true);
 
     async function loadForm() {
-      setLoading(true);
       setError("");
       try {
         const response = await fetchPublicFormBySlug(slug);
         if (isMounted) {
           setForm(response.form || null);
+          if (!response.form) {
+            setError("Formulir ini tidak tersedia atau sudah tidak aktif.");
+          }
         }
       } catch (loadError) {
         console.error("Gagal memuat form publik:", loadError);
         if (isMounted) {
-          setError(loadError.message || "Form publik tidak dapat dimuat.");
+          setError(loadError.message || "Formulir tidak dapat dimuat saat ini. Coba beberapa saat lagi.");
         }
       } finally {
         if (isMounted) {
@@ -117,7 +124,7 @@ export default function PublicFormPageClient() {
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: "var(--background)" }}>
         <div style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}>
           <DefaultSpinner size="large" />
-          <div style={{ fontSize: "1rem", color: "var(--text-muted)", fontWeight: 600 }}>Memuat formulir publik...</div>
+          <div style={{ fontSize: "1rem", color: "var(--text-muted)", fontWeight: 600 }}>Memuat kuesioner...</div>
         </div>
       </div>
     );
@@ -130,22 +137,35 @@ export default function PublicFormPageClient() {
           <div style={{ width: "62px", height: "62px", borderRadius: "999px", backgroundColor: "rgba(16,185,129,0.12)", color: "var(--success)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1rem" }}>
             <span style={{ fontSize: "1.5rem", fontWeight: 700 }}>✓</span>
           </div>
-          <h1 style={{ fontSize: "1.5rem", margin: 0 }}>Terima kasih</h1>
+          <h1 style={{ fontSize: "1.5rem", margin: 0 }}>Terima kasih!</h1>
           <p style={{ margin: "0.6rem 0 0 0", fontSize: "0.92rem" }}>
-            {form?.settings?.thankYouMessage || "Jawaban Anda telah berhasil direkam."}
+            {form?.settings?.thankYouMessage || "Jawaban Anda telah berhasil dikirim dan tercatat."}
           </p>
         </div>
       </div>
     );
   }
 
-  if (!form) {
+  if (!slug) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: "var(--background)" }}>
         <div className="glass-panel" style={{ maxWidth: "520px", width: "100%", padding: "2rem", textAlign: "center" }}>
-          <h1 style={{ fontSize: "1.35rem", margin: 0 }}>Formulir Tidak Ditemukan</h1>
-          <p style={{ margin: "0.6rem 0 0 0", fontSize: "0.9rem" }}>
-            Link publik ini tidak aktif atau sudah tidak tersedia.
+          <h1 style={{ fontSize: "1.35rem", margin: 0 }}>Link Tidak Valid</h1>
+          <p style={{ margin: "0.6rem 0 0 0", fontSize: "0.9rem", color: "var(--text-muted)" }}>
+            Link formulir yang Anda buka tidak memiliki identifikasi yang valid.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !form) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: "var(--background)" }}>
+        <div className="glass-panel" style={{ maxWidth: "520px", width: "100%", padding: "2rem", textAlign: "center" }}>
+          <h1 style={{ fontSize: "1.35rem", margin: 0 }}>Formulir Tidak Tersedia</h1>
+          <p style={{ margin: "0.6rem 0 0 0", fontSize: "0.9rem", color: "var(--text-muted)" }}>
+            {error || "Link ini mungkin sudah kadaluarsa atau belum aktif. Hubungi peneliti untuk mendapatkan link terbaru."}
           </p>
         </div>
       </div>

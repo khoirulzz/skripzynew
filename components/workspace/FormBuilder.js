@@ -342,9 +342,9 @@ export function FormBuilder({ workspaceId, form, existingForms = [], onClose, on
       <div className="w-full h-full flex flex-col bg-[var(--background)]">
         <div className="flex items-center justify-between gap-4 p-4 border-b border-[var(--border)] bg-[var(--surface)]">
           <div>
-            <h2 className="text-lg font-semibold m-0">Skripzy Form Builder</h2>
-            <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.8rem" }}>
-              Builder instrumen penelitian yang lebih ringkas, fokus, dan nyaman dipakai lama.
+            <h2 className="text-lg font-semibold m-0">Form Builder Kuesioner</h2>
+            <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.8rem", color: "var(--text-muted)" }}>
+              Rancang instrumen penelitian Anda — tambah bagian, susun pertanyaan, lalu publish.
             </p>
           </div>
 
@@ -355,8 +355,8 @@ export function FormBuilder({ workspaceId, form, existingForms = [], onClose, on
 
             {publicUrl ? (
               <a href={publicUrl} target="_blank" rel="noreferrer" className="btn btn-outline">
-                <PremiumIcon name="download" size={14} />
-                Link Publik
+                <PremiumIcon name="externalLink" size={14} />
+                Buka Form
               </a>
             ) : null}
 
@@ -368,12 +368,12 @@ export function FormBuilder({ workspaceId, form, existingForms = [], onClose, on
             {draft.status === FORM_STATUSES.published ? (
               <button className="btn btn-outline" onClick={() => void handleUnpublish()} disabled={publishing}>
                 <PremiumIcon name="pause" size={14} />
-                Nonaktifkan
+                Tutup Form
               </button>
             ) : (
               <button className="btn btn-primary" onClick={() => void handlePublish()} disabled={publishing}>
                 <PremiumIcon name="play" size={14} />
-                {publishing ? "Mempublikasikan..." : "Publish"}
+                {publishing ? "Mempublikasikan..." : "Publikasikan"}
               </button>
             )}
 
@@ -399,12 +399,12 @@ export function FormBuilder({ workspaceId, form, existingForms = [], onClose, on
           <div className="glass-panel" style={{ padding: "1rem", display: "flex", flexDirection: "column", gap: "0.9rem", minHeight: 0 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem" }}>
               <div>
-                <h3 style={{ fontSize: "0.95rem", margin: 0 }}>Outline Form</h3>
-                <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.76rem" }}>Pilih bagian aktif, tambah template, dan ringkas struktur form.</p>
+                <h3 style={{ fontSize: "0.95rem", margin: 0 }}>Daftar Bagian</h3>
+                <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.76rem", color: "var(--text-muted)" }}>Pilih bagian aktif, tambah template, atau tambah bagian baru.</p>
               </div>
               <button className="btn btn-primary" onClick={addSection}>
                 <PremiumIcon name="plus" size={14} />
-                Bagian
+                Bagian Baru
               </button>
             </div>
 
@@ -457,7 +457,7 @@ export function FormBuilder({ workspaceId, form, existingForms = [], onClose, on
                         }}
                       >
                         <span style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{section.title}</span>
-                        <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>{section.questions.length} butir</span>
+                        <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>{section.questions.length} pertanyaan</span>
                       </button>
                       <button className="btn btn-ghost" style={{ borderRadius: 0, paddingInline: "0.7rem" }} onClick={() => toggleSectionCollapsed(section.id)}>
                         <PremiumIcon name={isCollapsed ? "chevronRight" : "chevronDown"} size={15} />
@@ -492,7 +492,7 @@ export function FormBuilder({ workspaceId, form, existingForms = [], onClose, on
                           onClick={() => addQuestionToSection(section.id, "shortText")}
                         >
                           <PremiumIcon name="plus" size={14} />
-                          Tambah Butir
+                          Tambah Pertanyaan
                         </button>
                       </div>
                     ) : null}
@@ -505,8 +505,8 @@ export function FormBuilder({ workspaceId, form, existingForms = [], onClose, on
           <div className="glass-panel" style={{ padding: "1rem", display: "flex", flexDirection: "column", gap: "1rem", minHeight: 0 }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap", alignItems: "flex-start" }}>
               <div>
-                <h3 style={{ fontSize: "0.95rem", margin: 0 }}>Canvas Form</h3>
-                <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.76rem" }}>Section lain bisa diringkas, jadi fokus edit berpindah lebih cepat.</p>
+                <h3 style={{ fontSize: "0.95rem", margin: 0 }}>Area Desain</h3>
+                <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.76rem", color: "var(--text-muted)" }}>Klik bagian atau pertanyaan untuk mengedit. Bagian lain bisa diciutkan.</p>
               </div>
               {saveMessage ? <span style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>{saveMessage}</span> : null}
             </div>
@@ -577,11 +577,11 @@ export function FormBuilder({ workspaceId, form, existingForms = [], onClose, on
                                 <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginTop: "0.75rem", flexWrap: "wrap" }}>
                                   {question.variableKey ? (
                                     <span style={{ fontSize: "0.75rem", padding: "0.25rem 0.6rem", borderRadius: "999px", backgroundColor: "rgba(16, 185, 129, 0.12)", color: "var(--success)", fontWeight: 600, letterSpacing: "0.02em" }}>
-                                      Var: {question.variableKey}
+                                      #{question.variableKey}
                                     </span>
                                   ) : (
                                     <span style={{ fontSize: "0.75rem", padding: "0.25rem 0.6rem", borderRadius: "999px", backgroundColor: "rgba(var(--text-muted), 0.1)", color: "var(--text-muted)", fontWeight: 600 }}>
-                                      Tanpa Variabel
+                                      Belum ada kode
                                     </span>
                                   )}
                                   <span style={{ fontSize: "0.75rem", color: question.required ? "var(--danger)" : "var(--text-muted)", fontWeight: 600 }}>
@@ -607,7 +607,7 @@ export function FormBuilder({ workspaceId, form, existingForms = [], onClose, on
                       </>
                     ) : (
                       <div style={{ marginTop: "0.75rem", fontSize: "0.78rem", color: "var(--text-muted)" }}>
-                        {section.questions.length} pertanyaan disembunyikan untuk menghemat ruang kerja.
+                        {section.questions.length} pertanyaan diciutkan — klik panah untuk membuka.
                       </div>
                     )}
                   </div>
@@ -620,10 +620,10 @@ export function FormBuilder({ workspaceId, form, existingForms = [], onClose, on
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", marginBottom: "0.85rem", flexWrap: "wrap" }}>
               <div style={{ display: "flex", gap: "0.45rem", flexWrap: "wrap" }}>
                 <button className={`btn ${inspectorTab === "properties" ? "btn-primary" : "btn-outline"}`} style={{ padding: "0.35rem 0.65rem" }} onClick={() => setInspectorTab("properties")}>
-                  Properti
+                  Pengaturan
                 </button>
                 <button className={`btn ${inspectorTab === "preview" ? "btn-primary" : "btn-outline"}`} style={{ padding: "0.35rem 0.65rem" }} onClick={() => setInspectorTab("preview")}>
-                  Preview
+                  Pratinjau
                 </button>
               </div>
 
@@ -645,21 +645,12 @@ export function FormBuilder({ workspaceId, form, existingForms = [], onClose, on
                   {selection.type === "form" ? (
                     <>
                       <div className="form-group" style={{ margin: 0 }}>
-                        <label className="form-label">Judul Form</label>
+                        <label className="form-label">Judul Kuesioner</label>
                         <input className="form-input" value={draft.title} onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))} />
                       </div>
                       <div className="form-group" style={{ margin: 0 }}>
-                        <label className="form-label">Deskripsi</label>
-                        <textarea className="form-textarea" rows={4} value={draft.description} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} />
-                      </div>
-                      <div className="form-group" style={{ margin: 0 }}>
-                        <label className="form-label">Slug Publik</label>
-                        <input
-                          className="form-input"
-                          value={draft.publicSlug || ""}
-                          onChange={(event) => setDraft((current) => ({ ...current, publicSlug: slugify(event.target.value) }))}
-                          placeholder="otomatis jika dikosongkan"
-                        />
+                        <label className="form-label">Deskripsi / Pengantar</label>
+                        <textarea className="form-textarea" rows={4} value={draft.description} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} placeholder="Tuliskan pengantar singkat untuk responden..." />
                       </div>
                     </>
                   ) : null}
@@ -702,15 +693,18 @@ export function FormBuilder({ workspaceId, form, existingForms = [], onClose, on
                   {selection.type === "question" && selectedQuestion ? (
                     <>
                       <div className="form-group" style={{ margin: 0 }}>
-                        <label className="form-label">Label Pertanyaan</label>
+                        <label className="form-label">Teks Pertanyaan</label>
                         <input className="form-input" value={selectedQuestion.label} onChange={(event) => updateSelectedQuestion({ label: event.target.value })} />
                       </div>
                       <div className="form-group" style={{ margin: 0 }}>
-                        <label className="form-label">Variable Key</label>
-                        <input className="form-input" value={selectedQuestion.variableKey || ""} onChange={(event) => updateSelectedQuestion({ variableKey: slugify(event.target.value).replace(/-/g, "_") })} />
+                        <label className="form-label" style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
+                          <span>Kode Variabel</span>
+                          <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", fontWeight: 400 }}>Singkatan unik untuk analisis (contoh: x1, kepuasan_kerja)</span>
+                        </label>
+                        <input className="form-input" style={{ fontFamily: "monospace" }} value={selectedQuestion.variableKey || ""} onChange={(event) => updateSelectedQuestion({ variableKey: slugify(event.target.value).replace(/-/g, "_") })} placeholder="cth: x1, y2, usia" />
                       </div>
                       <div className="form-group" style={{ margin: 0 }}>
-                        <label className="form-label">Jenis Pertanyaan</label>
+                        <label className="form-label">Tipe Pertanyaan</label>
                         <select className="form-input" value={selectedQuestion.type} onChange={(event) => updateSelectedQuestion({ type: event.target.value })}>
                           {BUILDER_QUESTION_TYPES.map((type) => (
                             <option key={type.value} value={type.value}>
@@ -720,12 +714,12 @@ export function FormBuilder({ workspaceId, form, existingForms = [], onClose, on
                         </select>
                       </div>
                       <div className="form-group" style={{ margin: 0 }}>
-                        <label className="form-label">Bantuan / Instruksi</label>
-                        <textarea className="form-textarea" rows={3} value={selectedQuestion.helpText || ""} onChange={(event) => updateSelectedQuestion({ helpText: event.target.value })} />
+                        <label className="form-label">Petunjuk Pengisian <span style={{ fontWeight: 400, color: "var(--text-muted)" }}>(opsional)</span></label>
+                        <textarea className="form-textarea" rows={3} value={selectedQuestion.helpText || ""} onChange={(event) => updateSelectedQuestion({ helpText: event.target.value })} placeholder="Contoh: Pilih satu jawaban yang paling sesuai..." />
                       </div>
                       {["singleChoice", "dropdown", "checkbox"].includes(selectedQuestion.type) ? (
                         <div className="form-group" style={{ margin: 0 }}>
-                          <label className="form-label">Pilihan Jawaban</label>
+                          <label className="form-label">Pilihan Jawaban <span style={{ fontWeight: 400, color: "var(--text-muted)" }}>(satu per baris)</span></label>
                           <textarea
                             className="form-textarea"
                             rows={5}
@@ -738,7 +732,7 @@ export function FormBuilder({ workspaceId, form, existingForms = [], onClose, on
                                   .filter(Boolean),
                               })
                             }
-                            placeholder="Satu pilihan per baris"
+                            placeholder="Satu pilihan per baris&#10;Contoh:&#10;Sangat Setuju&#10;Setuju"
                           />
                         </div>
                       ) : null}
@@ -782,9 +776,9 @@ export function FormBuilder({ workspaceId, form, existingForms = [], onClose, on
                           </div>
                         </div>
                       ) : null}
-                      <label style={{ display: "flex", alignItems: "center", gap: "0.6rem", fontSize: "0.82rem", color: "var(--text-main)" }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: "0.6rem", fontSize: "0.82rem", color: "var(--text-main)", cursor: "pointer" }}>
                         <input type="checkbox" checked={selectedQuestion.required} onChange={(event) => updateSelectedQuestion({ required: event.target.checked })} />
-                        Pertanyaan wajib diisi
+                        Wajib diisi oleh responden
                       </label>
                       <div style={{ display: "flex", gap: "0.45rem", flexWrap: "wrap" }}>
                         <button className="btn btn-outline" onClick={() => moveQuestion("up")}>

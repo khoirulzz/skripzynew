@@ -354,159 +354,6 @@ function buildOpenAlexDateFilter(yearFrom, yearTo) {
 
 async function verifyFirebaseToken(idToken, env) {
     if (!idToken) return null;
-
-    const { webApiKey } = getFirebaseConfig(env);
-    const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${webApiKey}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken }),
-    });
-
-    if (!response.ok) {
-        return null;
-    }
-
-    const data = await response.json().catch(() => ({}));
-    const user = data?.users?.[0];
-    if (!user?.localId) return null;
-
-    return {
-        uid: user.localId,
-        email: user.email || "",
-    };
-}
-
-function toFirestoreValue(value) {
-    if (value === null || value === undefined) {
-        return { nullValue: null };
-    }
-
-    if (Array.isArray(value)) {
-        return {
-            arrayValue: {
-                values: value.map((entry) => toFirestoreValue(entry)),
-            },
-        };
-    }
-
-    if (typeof value === "object") {
-        const fields = {};
-        Object.entries(value).forEach(([key, entry]) => {
-            if (entry === undefined) return;
-            fields[key] = toFirestoreValue(entry);
-        });
-        return {
-            mapValue: { fields },
-        };
-    }
-
-    if (typeof value === "boolean") {
-        return { booleanValue: value };
-    }
-
-    if (typeof value === "number") {
-        if (Number.isInteger(value)) {
-            return { integerValue: String(value) };
-        }
-        return { doubleValue: value };
-    }
-
-    return { stringValue: String(value) };
-}
-
-function toFirestoreDocument(payload = {}) {
-    const fields = {};
-    Object.entries(payload).forEach(([key, value]) => {
-        if (value === undefined) return;
-        fields[key] = toFirestoreValue(value);
-    });
-    return { fields };
-}
-
-function fromFirestoreValue(value) {
-    if (value === null || value === undefined) return null;
-    if ("stringValue" in value) return value.stringValue;
-    if ("integerValue" in value) return Number(value.integerValue);
-    if ("doubleValue" in value) return value.doubleValue;
-    if ("booleanValue" in value) return value.booleanValue;
-    if ("timestampValue" in value) return value.timestampValue;
-    if ("nullValue" in value) return null;
-    if ("arrayValue" in value) {
-        return (value.arrayValue.values || []).map((entry) => fromFirestoreValue(entry));
-    }
-    if ("mapValue" in value) {
-        const result = {};
-        Object.entries(value.mapValue.fields || {}).forEach(([key, entry]) => {
-            result[key] = fromFirestoreValue(entry);
-        });
-        return result;
-    }
-    return null;
-}
-
-function fromFirestoreDocument(document) {
-    const plain = {};
-    Object.entries(document?.fields || {}).forEach(([key, value]) => {
-        plain[key] = fromFirestoreValue(value);
-    });
-    plain.id = document?.name?.split("/").pop() || null;
-    return plain;
-}
-
-async function firestoreRequest(env, path, { method = "GET", authToken = null, body = null, query = "" } = {}) {
-    const { projectId, webApiKey } = getFirebaseConfig(env);
-    const baseUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${path}`;
-    const url = `${baseUrl}${query ? `?${query}` : `?key=${webApiKey}`}`;
-    const headers = {
-        "Content-Type": "application/json",
-    };
-
-    if (authToken) {
-        headers.Authorization = `Bearer ${authToken}`;
-    }
-
-    return fetch(url, {
-        method,
-        headers,
-        body: body ? JSON.stringify(body) : undefined,
-    });
-}
-
-function parsePublicFormSlug(pathname) {
-    const match = pathname.match(/^\/public\/forms\/([^/]+)(?:\/responses)?$/);
-    return match?.[1] || null;
-}
-
-async function getPublicFormSnapshot(env, slug) {
-    const response = await firestoreRequest(env, `public_forms/${slugify(slug)}`, { method: "GET" });
-    if (!response.ok) {
-        return null;
-    }
-
-    const data = await response.json().catch(() => null);
-    if (!data) return null;
-    return fromFirestoreDocument(data);
-}
-
-// ── API Usage Tracking & Rate Limiting ────────────────────────
-
-const RATE_LIMITS = {
-    "gemini-flash-latest": 20,
-    "gemini-2.5-flash": 20,
-    "gemini-flash-lite-latest": 500
-};
-
-// Global helper untuk mendapatkan grup beserta nama variablenya
-const getApiGroups = (env) => ({
-    group_1: [{ name: "GEMINI_API_KEY_1", key: env.GEMINI_API_KEY_1 }, { name: "GEMINI_API_KEY_2", key: env.GEMINI_API_KEY_2 }],
-    group_2: [{ name: "GEMINI_API_KEY_3", key: env.GEMINI_API_KEY_3 }, { name: "GEMINI_API_KEY_4", key: env.GEMINI_API_KEY_4 }],
-    group_3: [{ name: "GEMINI_API_KEY_5", key: env.GEMINI_API_KEY_5 }, { name: "GEMINI_API_KEY_6", key: env.GEMINI_API_KEY_6 }],
-    group_4: [{ name: "GEMINI_API_KEY_7", key: env.GEMINI_API_KEY_7 }, { name: "GEMINI_API_KEY_8", key: env.GEMINI_API_KEY_8 }]
-});
-
-async function checkLocalRateLimit(env, apiKeyObj, model) {
-    if (!env.DB) return true; 
-
     const limit = RATE_LIMITS[model] || 1500;
 
     try {
@@ -1578,9 +1425,9 @@ const worker = {
             if (request.method === "GET" && !url.pathname.endsWith("/responses")) {
                 const stmt = env.DB.prepare(`
                     SELECT * FROM workspace_forms 
-                    WHERE status = 'published' AND json_extract(content, '$.publicSlug') = ?
+                    WHERE status = 'published' AND content LIKE ?
                     LIMIT 1
-                `).bind(slug);
+                `).bind(`%"publicSlug":"${slug}"%`);
                 const publicForm = await stmt.first();
 
                 if (!publicForm) {
@@ -1618,9 +1465,9 @@ const worker = {
             if (request.method === "POST" && url.pathname.endsWith("/responses")) {
                 const stmt = env.DB.prepare(`
                     SELECT * FROM workspace_forms 
-                    WHERE status = 'published' AND json_extract(content, '$.publicSlug') = ?
+                    WHERE status = 'published' AND content LIKE ?
                     LIMIT 1
-                `).bind(slug);
+                `).bind(`%"publicSlug":"${slug}"%`);
                 const publicForm = await stmt.first();
 
                 if (!publicForm) {
@@ -1704,8 +1551,8 @@ const worker = {
                 await env.DB.prepare(`
                     UPDATE workspace_forms 
                     SET status = 'draft', updated_at = CURRENT_TIMESTAMP
-                    WHERE json_extract(content, '$.publicSlug') = ? AND user_id = ?
-                `).bind(slug, session.uid).run();
+                    WHERE content LIKE ? AND user_id = ?
+                `).bind(`%"publicSlug":"${slug}"%`, session.uid).run();
 
                 return new Response(JSON.stringify({ ok: true, mode: "unpublish", slug }), {
                     status: 200,

@@ -1,0 +1,6 @@
+{
+  "name": "ResearchForm",
+  "description": "Online form builder optimized for academic research, featuring automated variable sectioning, real-time data collection, and built-in statistical analysis (validity, reliability, regression). Supports data export and API integration.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

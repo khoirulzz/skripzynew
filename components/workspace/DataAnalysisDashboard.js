@@ -19,10 +19,10 @@ function StatTile({ label, value, caption, tone = "default" }) {
   };
 
   return (
-    <div className="glass-panel" style={{ padding: "1rem", backgroundColor: "var(--surface)" }}>
-      <div style={{ fontSize: "0.76rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>{label}</div>
-      <div style={{ fontSize: "1.8rem", fontWeight: 700, color: colorMap[tone], marginTop: "0.35rem" }}>{value}</div>
-      {caption ? <p style={{ margin: "0.35rem 0 0 0", fontSize: "0.82rem" }}>{caption}</p> : null}
+    <div className="glass-panel" style={{ padding: "0.85rem 1rem", backgroundColor: "var(--surface)", display: "flex", flexDirection: "column", gap: "0.3rem", minWidth: 0 }}>
+      <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600, display: "block", lineHeight: 1.2 }}>{label}</span>
+      <span style={{ fontSize: "1.6rem", fontWeight: 800, color: colorMap[tone], lineHeight: 1.1, display: "block" }}>{value}</span>
+      {caption ? <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", lineHeight: 1.3, display: "block" }}>{caption}</span> : null}
     </div>
   );
 }
@@ -54,7 +54,11 @@ export function DataAnalysisDashboard({ workspaceId, activeFormId = null, compac
         // Get workspace for activeFormId
         const wsResp = await d1Request("workspaces", { id: workspaceId });
         if (isMounted && wsResp.data) setWorkspaceActiveFormId(activeFormId || wsResp.data.activeFormId || null);
+      } catch (e) {
+        console.warn("DataAnalysis: gagal fetch workspace:", e.message);
+      }
 
+      try {
         // Get forms
         const formsResp = await d1Request("workspace_forms");
         let nextForms = (formsResp.data || []).filter(f => f.workspace_id === workspaceId);
@@ -64,7 +68,11 @@ export function DataAnalysisDashboard({ workspaceId, activeFormId = null, compac
           return { ...f, ...parsed };
         });
         if (isMounted) setForms(nextForms);
+      } catch (e) {
+        console.warn("DataAnalysis: gagal fetch forms:", e.message);
+      }
 
+      try {
         // Get responses
         const responsesResp = await d1Request("workspace_form_responses");
         let nextResponses = (responsesResp.data || []).filter(r => r.workspace_id === workspaceId);
@@ -74,11 +82,21 @@ export function DataAnalysisDashboard({ workspaceId, activeFormId = null, compac
           return { ...r, answers: parsedAnswers };
         });
         if (isMounted) setResponses(nextResponses);
+      } catch (e) {
+        // Graceful fallback: tabel mungkin belum ada di worker versi lama
+        console.warn("DataAnalysis: gagal fetch responses (mungkin worker lama):", e.message);
+        if (isMounted) setResponses([]);
+      }
 
+      try {
         // Get transcripts
         const transResp = await d1Request("workspace_transcripts");
         if (isMounted) setTranscripts((transResp.data || []).filter(t => t.workspace_id === workspaceId));
+      } catch (e) {
+        console.warn("DataAnalysis: gagal fetch transcripts:", e.message);
+      }
 
+      try {
         // Get analysis snapshots
         const analysisResp = await d1Request("workspace_analysis");
         const nextSnapshots = (analysisResp.data || []).filter(a => a.workspace_id === workspaceId);
@@ -91,7 +109,7 @@ export function DataAnalysisDashboard({ workspaceId, activeFormId = null, compac
           }
         }
       } catch (e) {
-        console.error("DataAnalysisDashboard fetch error:", e);
+        console.warn("DataAnalysis: gagal fetch snapshots:", e.message);
       }
     }
 
@@ -292,6 +310,11 @@ Kembangkan hasil analisis dan catatan peneliti tersebut menjadi narasi pembahasa
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
       <style dangerouslySetInnerHTML={{__html: `
+        @media (min-width: 768px) {
+          .analisis-grid {
+            grid-template-columns: minmax(0, 1.4fr) minmax(300px, 0.8fr) !important;
+          }
+        }
         @media print {
           body, html, #__next, main, .container {
             background: white !important;
@@ -327,32 +350,32 @@ Kembangkan hasil analisis dan catatan peneliti tersebut menjadi narasi pembahasa
 
       <div className="no-print" style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: "1rem", alignItems: "center" }}>
         <div>
-          <h3 style={{ fontSize: "1.1rem", margin: 0, fontWeight: 700 }}>Analisis Instrumen dan Respons</h3>
-          <p style={{ margin: "0.35rem 0 0 0", fontSize: "0.85rem" }}>
-            Form aktif: <strong>{activeForm.title}</strong> • Respons terbaca: <strong>{responses.length}</strong>
+          <h3 style={{ fontSize: "1.05rem", margin: 0, fontWeight: 700 }}>Hasil Analisis Statistik</h3>
+          <p style={{ margin: "0.3rem 0 0 0", fontSize: "0.83rem", color: "var(--text-muted)" }}>
+            Kuesioner: <strong>{activeForm.title}</strong> &nbsp;·&nbsp; <strong>{responses.length}</strong> jawaban terbaca
           </p>
         </div>
-        <div style={{ display: "flex", gap: "0.5rem" }}>
+        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
           <button className="btn btn-outline" onClick={handlePrint}>
-            <PremiumIcon name="printer" size={15} />
-            Cetak PDF
+            <PremiumIcon name="fileOutput" size={15} />
+            Ekspor PDF
           </button>
           {variableAnalyses.length > 0 && (
             <button className="btn btn-outline" onClick={handleExportStatsCSV}>
               <PremiumIcon name="download" size={15} />
-              Ekspor Statistik (CSV)
+              Unduh Statistik (CSV)
             </button>
           )}
           <button className="btn btn-primary" onClick={handleSaveSnapshot} disabled={savingSnapshot}>
             <PremiumIcon name="save" size={15} />
-            {savingSnapshot ? "Menyimpan..." : "Simpan Snapshot"}
+            {savingSnapshot ? "Menyimpan..." : "Simpan Hasil"}
           </button>
         </div>
       </div>
 
-      <div className="grid md:grid-cols-4 gap-4">
-        <StatTile label="Respons" value={analysis?.responseCount ?? 0} caption="Data responden yang masuk" tone="primary" />
-        <StatTile label="Butir Numerik" value={analysis?.quantitativeQuestionCount ?? 0} caption="Siap dihitung secara statistik" />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "0.6rem" }}>
+        <StatTile label="Responden" value={analysis?.responseCount ?? 0} caption="Jawaban masuk" tone="primary" />
+        <StatTile label="Butir Skala" value={analysis?.quantitativeQuestionCount ?? 0} caption="Siap dianalisis" />
         <StatTile
           label="Cronbach Alpha"
           value={analysis?.cronbachAlpha ?? 0}
@@ -360,13 +383,13 @@ Kembangkan hasil analisis dan catatan peneliti tersebut menjadi narasi pembahasa
           tone={(analysis?.cronbachAlpha ?? 0) >= 0.6 ? "success" : "warning"}
         />
         {hideQualitative ? (
-          <StatTile label="Variabel" value={activeForm.sections?.length || 0} caption="Variabel penelitian terdaftar" />
+          <StatTile label="Variabel" value={activeForm.sections?.length || 0} caption="Konstruk penelitian" />
         ) : (
-          <StatTile label="Transkrip" value={transcripts.length} caption="Pengayaan kualitatif untuk pembahasan" />
+          <StatTile label="Transkrip" value={transcripts.length} caption="Data kualitatif" />
         )}
       </div>
 
-      <div className={compact ? "" : "grid md:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)] gap-4"}>
+      <div style={compact ? {} : { display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "1rem" }} className={compact ? "" : "analisis-grid"}>
         <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
           <div className="glass-panel" style={{ padding: "1rem", backgroundColor: "var(--surface)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>

@@ -149,6 +149,18 @@ const QUICK_TOOLS = [
     pro: false,
     badge: "NEW",
   },
+  {
+    href: "https://forms.skripzy.id",
+    slug: "form-kuesioner",
+    icon: "fileText",
+    iconColor: "#10B981",
+    iconBg: "rgba(16, 185, 129, 0.1)",
+    title: "Form",
+    desc: "Buat kuesioner online dengan uji statistik otomatis",
+    credit: 5,
+    pro: false,
+    badge: "NEW",
+  },
 ];
 
 // ============================================================

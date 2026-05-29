@@ -1,6 +1,7 @@
 import "./globals.css";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { AuthProvider } from "@/components/providers/AuthProvider";
+import { LenisProvider } from "@/components/providers/LenisProvider";
 
 export const viewport = {
   width: "device-width",
@@ -40,7 +41,9 @@ export default function RootLayout({ children }) {
       <body suppressHydrationWarning>
         <ThemeProvider>
           <AuthProvider>
-            {children}
+            <LenisProvider>
+              {children}
+            </LenisProvider>
           </AuthProvider>
         </ThemeProvider>
       </body>

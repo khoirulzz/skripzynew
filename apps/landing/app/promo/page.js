@@ -123,7 +123,7 @@ export default function PromoPage() {
                 Promo ini dibuat untuk bantu kamu mulai dulu. Pakai untuk merapikan ide, lanjut revisi, atau menyiapkan bahan bimbingan tanpa harus menunggu semuanya sempurna.
               </p>
               <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
-                <Link href="/register" className="btn btn-primary" style={{ borderRadius: 999, padding: "0.92rem 1.4rem", fontWeight: 850 }}>
+                <Link href="https://app.skripzy.id/register" className="btn btn-primary" style={{ borderRadius: 999, padding: "0.92rem 1.4rem", fontWeight: 850 }}>
                   Coba Pakai Promo
                 </Link>
                 <Link href="/pricing" className="btn btn-outline" style={{ borderRadius: 999, padding: "0.92rem 1.4rem", fontWeight: 850, background: "rgba(var(--surface-rgb), 0.56)" }}>

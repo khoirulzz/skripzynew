@@ -12,7 +12,7 @@ const platforms = [
     desc: "Buka Skripzy dari browser dan langsung lanjutkan workspace risetmu. Cocok untuk menulis di laptop kampus, rumah, atau warnet saat darurat.",
     benefits: ["Tidak perlu instalasi", "Cocok untuk Chrome, Edge, Safari, dan Firefox", "Akses dashboard dan tools utama"],
     cta: "Buka Web App",
-    href: "/register",
+    href: "https://app.skripzy.id/register",
     disabled: false,
   },
   {
@@ -22,7 +22,7 @@ const platforms = [
     desc: "Tambahkan Skripzy ke home screen supaya terasa seperti aplikasi. Lebih cepat dibuka saat kamu perlu cek catatan atau revisi singkat.",
     benefits: ["Ikon aplikasi di perangkat", "Lebih cepat balik ke workspace", "Tetap memakai akun yang sama"],
     cta: "Coba dari Browser",
-    href: "/register",
+    href: "https://app.skripzy.id/register",
     disabled: false,
   },
   {
@@ -76,7 +76,7 @@ export default function AppsPage() {
               <p className="landing-copy" style={{ fontSize: "1.1rem", maxWidth: "62ch", marginBottom: "1.5rem" }}>
                 Kadang ide muncul saat tidak sedang duduk manis di meja. Skripzy dibuat supaya catatan, referensi, dan progresmu tetap mudah dijangkau.
               </p>
-              <Link href="/register" className="btn btn-primary" style={{ borderRadius: 999, padding: "0.92rem 1.4rem", fontWeight: 850 }}>
+              <Link href="https://app.skripzy.id/register" className="btn btn-primary" style={{ borderRadius: 999, padding: "0.92rem 1.4rem", fontWeight: 850 }}>
                 Mulai dari Web App
               </Link>
             </div>

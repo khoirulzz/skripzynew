@@ -92,7 +92,7 @@ export default function FeaturesPage() {
               <p className="landing-copy" style={{ fontSize: "1.06rem", marginBottom: "1.5rem" }}>
                 Hari ini kamu mungkin cuma butuh merapikan topik. Minggu depan baru masuk referensi. Menjelang bimbingan, baru fokus ke revisi dan simulasi pertanyaan. Skripzy ikut ritme itu.
               </p>
-              <Link href="/register" className="btn btn-primary" style={{ borderRadius: 999, padding: "0.9rem 1.35rem", fontWeight: 850 }}>
+              <Link href="https://app.skripzy.id/register" className="btn btn-primary" style={{ borderRadius: 999, padding: "0.9rem 1.35rem", fontWeight: 850 }}>
                 Mulai dari Workspace
               </Link>
             </div>

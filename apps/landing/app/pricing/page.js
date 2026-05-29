@@ -92,7 +92,7 @@ export default function PricingPage() {
               <p className="landing-copy" style={{ fontSize: "1.06rem", marginBottom: "1.5rem" }}>
                 Kredit membantu kamu melihat pemakaian AI dengan lebih transparan. Tidak perlu menebak-nebak, setiap fitur punya biaya kredit yang bisa dicek sebelum digunakan.
               </p>
-              <Link href="/register" className="btn btn-primary" style={{ borderRadius: 999, padding: "0.9rem 1.35rem", fontWeight: 800 }}>
+              <Link href="https://app.skripzy.id/register" className="btn btn-primary" style={{ borderRadius: 999, padding: "0.9rem 1.35rem", fontWeight: 800 }}>
                 Mulai dari Free Plan
               </Link>
             </div>
@@ -175,7 +175,7 @@ function PricingCard({ plan }) {
         <p className="landing-copy" style={{ margin: "0.45rem 0 0", fontSize: "0.9rem" }}>{note.helper}</p>
       </div>
 
-      <Link href="/register" className={`btn ${popular ? "btn-primary" : "btn-outline"}`} style={{ width: "100%", padding: "0.9rem", borderRadius: 999, fontWeight: 850, marginBottom: "1.5rem" }}>
+      <Link href="https://app.skripzy.id/register" className={`btn ${popular ? "btn-primary" : "btn-outline"}`} style={{ width: "100%", padding: "0.9rem", borderRadius: 999, fontWeight: 850, marginBottom: "1.5rem" }}>
         {note.cta}
       </Link>
 

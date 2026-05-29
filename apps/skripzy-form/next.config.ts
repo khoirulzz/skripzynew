@@ -7,9 +7,7 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.join(process.cwd(), '../../'),
   },
-  experimental: {
-    outputFileTracingRoot: path.join(process.cwd(), '../../'),
-  },
+  outputFileTracingRoot: path.join(process.cwd(), '../../'),
   typescript: {
     ignoreBuildErrors: false,
   },

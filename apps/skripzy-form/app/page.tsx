@@ -60,6 +60,51 @@ export default function App() {
     setIsAuthenticated(true);
   }, []);
 
+  useEffect(() => {
+    if (appMode === 'dashboard') {
+      const loadMyForms = async () => {
+        try {
+          const wsForms = await d1Request("workspace_forms");
+          if (wsForms && wsForms.data) {
+            const formatted = wsForms.data.map((f: any) => {
+              try {
+                return { template: JSON.parse(f.content), responses: [] };
+              } catch (e) { return null; }
+            }).filter(Boolean);
+            setProjects(formatted);
+          }
+        } catch (e) {
+          console.warn("Belum ada form atau gagal load:", e);
+        }
+      };
+      loadMyForms();
+    }
+  }, [appMode]);
+
+  useEffect(() => {
+    if (appMode !== 'editor' || !template.id) return;
+    setSaveStatus('Menyimpan...');
+    const timer = setTimeout(async () => {
+      try {
+        await d1Request("workspaces", {
+          method: "PATCH",
+          id: template.id,
+          body: { title: template.title || "Formulir Baru", description: template.description }
+        });
+        await d1Request("workspace_forms", {
+          method: "PATCH",
+          id: template.id,
+          body: { content: JSON.stringify(template) }
+        });
+        setSaveStatus('Tersimpan');
+      } catch (e) {
+        console.error("Auto-save failed", e);
+        setSaveStatus('Belum disimpan');
+      }
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, [template, appMode]);
+
   // Show loading while checking auth
   if (isAuthenticated === null) {
     return (
@@ -162,50 +207,9 @@ KEMBALIKAN OUTPUT PURE JSON DENGAN STRUKTUR INI SAJA, TANPA FORMATTING MARKDOWN,
     }
   };
 
-  useEffect(() => {
-    if (appMode === 'dashboard') {
-      const loadMyForms = async () => {
-        try {
-          const wsForms = await d1Request("workspace_forms");
-          if (wsForms && wsForms.data) {
-            const formatted = wsForms.data.map((f: any) => {
-              try {
-                return { template: JSON.parse(f.content), responses: [] };
-              } catch (e) { return null; }
-            }).filter(Boolean);
-            setProjects(formatted);
-          }
-        } catch (e) {
-          console.warn("Belum ada form atau gagal load:", e);
-        }
-      };
-      loadMyForms();
-    }
-  }, [appMode]);
 
-  useEffect(() => {
-    if (appMode !== 'editor' || !template.id) return;
-    setSaveStatus('Menyimpan...');
-    const timer = setTimeout(async () => {
-      try {
-        await d1Request("workspaces", {
-          method: "PATCH",
-          id: template.id,
-          body: { title: template.title || "Formulir Baru", description: template.description }
-        });
-        await d1Request("workspace_forms", {
-          method: "PATCH",
-          id: template.id,
-          body: { content: JSON.stringify(template) }
-        });
-        setSaveStatus('Tersimpan');
-      } catch (e) {
-        console.error("Auto-save failed", e);
-        setSaveStatus('Belum disimpan');
-      }
-    }, 2500);
-    return () => clearTimeout(timer);
-  }, [template, appMode]);
+
+
 
   const createNewProject = async (baseData: FormTemplate) => {
     if (isCreatingProject) return;

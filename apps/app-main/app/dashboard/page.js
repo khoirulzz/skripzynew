@@ -150,7 +150,7 @@ const QUICK_TOOLS = [
     badge: "NEW",
   },
   {
-    href: "https://forms.skripzy.id",
+    href: "/dashboard/tools/form-redirect",
     slug: "form-kuesioner",
     icon: "fileText",
     iconColor: "#10B981",

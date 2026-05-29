@@ -12,17 +12,17 @@ export default function FormRedirectPage() {
     async function syncAndRedirect() {
       if (!auth.currentUser) {
         // Jika belum login, ke halaman login
-        router.push("/login?redirect=http://localhost:3002");
+        router.push("/login?redirect=https://forms.skripzy.id");
         return;
       }
       
       try {
         const token = await auth.currentUser.getIdToken();
-        // Set cookie yang bisa dibaca oleh localhost (atau .skripzy.id di production)
-        document.cookie = `skripzy_token=${token}; path=/; max-age=3600; SameSite=Lax`;
+        // Set cookie yang bisa dibaca oleh semua subdomain *.skripzy.id
+        document.cookie = `skripzy_token=${token}; path=/; max-age=3600; domain=.skripzy.id; SameSite=Lax; Secure`;
         
         // Redirect ke form app
-        window.location.href = "http://localhost:3002";
+        window.location.href = "https://forms.skripzy.id";
       } catch (error) {
         console.error("Failed to sync auth token:", error);
         router.push("/dashboard");

@@ -8,8 +8,8 @@ export function LandingFooter() {
   return (
     <footer style={{ padding: "4rem 0 2.5rem", borderTop: "1px solid var(--border)", background: "rgba(var(--surface-rgb), 0.3)" }}>
       <div className="container">
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "2.5rem", marginBottom: "3rem" }}>
-          <div style={{ gridColumn: "span 2" }}>
+        <div className="footer-grid">
+          <div className="footer-brand">
             <Link href="/" style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1.5rem" }}>
               <Image src="/logo-skripzy.webp" alt="Skripzy" width={32} height={32} />
               <span style={{ fontSize: "1.5rem", fontWeight: 900, letterSpacing: "-0.04em", color: "var(--text-main)" }}>Skripzy</span>
@@ -22,7 +22,7 @@ export function LandingFooter() {
             </div>
           </div>
 
-          <div>
+          <div className="footer-produk">
             <h4 style={{ fontWeight: 800, marginBottom: "1.5rem", color: "var(--text-main)", fontSize: "0.95rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Produk</h4>
             <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
               <Link href="/features" className="footer-link">Fitur</Link>
@@ -32,7 +32,7 @@ export function LandingFooter() {
             </div>
           </div>
 
-          <div>
+          <div className="footer-legal">
             <h4 style={{ fontWeight: 800, marginBottom: "1.5rem", color: "var(--text-main)", fontSize: "0.95rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Legal</h4>
             <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
               <Link href="/terms" className="footer-link">Terms & Conditions</Link>
@@ -45,7 +45,7 @@ export function LandingFooter() {
             </div>
           </div>
 
-          <div>
+          <div className="footer-kontak">
             <h4 style={{ fontWeight: 800, marginBottom: "1.5rem", color: "var(--text-main)", fontSize: "0.95rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Kontak</h4>
             <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
               <Link href="mailto:cs@skripzy.id" className="footer-link footer-contact-link">
@@ -106,6 +106,33 @@ export function LandingFooter() {
           color: var(--primary);
           border-color: rgba(var(--primary-rgb), 0.24);
           background: rgba(var(--primary-rgb), 0.08);
+        }
+        .footer-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+          gap: 2.5rem;
+          margin-bottom: 3rem;
+        }
+        .footer-brand {
+          grid-column: span 2;
+        }
+        @media (max-width: 640px) {
+          .footer-grid {
+            grid-template-columns: 1fr 1fr;
+            column-gap: 1.5rem;
+          }
+          .footer-brand {
+            grid-column: span 2;
+          }
+          .footer-produk {
+            grid-column: span 1;
+          }
+          .footer-legal {
+            grid-column: span 1;
+          }
+          .footer-kontak {
+            grid-column: span 2;
+          }
         }
       `}</style>
     </footer>

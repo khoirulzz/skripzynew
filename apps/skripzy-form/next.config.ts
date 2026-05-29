@@ -1,8 +1,15 @@
 import type {NextConfig} from 'next';
 
+import path from 'path';
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  turbopack: {},
+  turbopack: {
+    root: path.join(process.cwd(), '../../'),
+  },
+  experimental: {
+    outputFileTracingRoot: path.join(process.cwd(), '../../'),
+  },
   typescript: {
     ignoreBuildErrors: false,
   },

@@ -226,6 +226,19 @@ KEMBALIKAN OUTPUT PURE JSON DENGAN STRUKTUR INI SAJA, TANPA FORMATTING MARKDOWN,
     }
   };
 
+  const deleteProject = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm("Apakah Anda yakin ingin menghapus kuesioner ini secara permanen? Data yang dihapus tidak dapat dikembalikan.")) return;
+    
+    try {
+      await d1Request("workspaces", { method: "DELETE", id });
+      await d1Request("workspace_forms", { method: "DELETE", id });
+      setProjects(projects.filter(p => p.template.id !== id));
+    } catch (err: any) {
+      alert("Gagal menghapus kuesioner: " + err.message);
+    }
+  };
+
   const generateData = () => {
     const mock = generateMockResponses(template, Math.floor(Math.random() * 40) + 10);
     setResponses([...responses, ...mock]);
@@ -376,14 +389,21 @@ KEMBALIKAN OUTPUT PURE JSON DENGAN STRUKTUR INI SAJA, TANPA FORMATTING MARKDOWN,
                       setActiveTab('builder');
                       setAnalysisRun(false);
                   }}>
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${THEME_COLORS.find(c => c.id === proj.template.themeColor)?.pale || 'bg-indigo-50'} ${THEME_COLORS.find(c => c.id === proj.template.themeColor)?.text || 'text-indigo-600'}`}>
+                    <div className="flex items-start gap-3">
+                      <div className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center ${THEME_COLORS.find(c => c.id === proj.template.themeColor)?.pale || 'bg-indigo-50'} ${THEME_COLORS.find(c => c.id === proj.template.themeColor)?.text || 'text-indigo-600'}`}>
                         <FileText className="w-5 h-5" />
                       </div>
-                      <div>
-                        <h3 className="font-bold text-slate-800">{proj.template.title || 'Untitled Form'}</h3>
-                        <p className="text-xs text-slate-500">{proj.template.sections.length} Bagian</p>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-bold text-slate-800 truncate">{proj.template.title || 'Untitled Form'}</h3>
+                        <p className="text-xs text-slate-500 mt-0.5">{proj.template.sections?.length || 0} Bagian</p>
                       </div>
+                      <button 
+                        onClick={(e) => deleteProject(proj.template.id, e)} 
+                        className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition shrink-0" 
+                        title="Hapus Kuesioner"
+                      >
+                         <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
                   </div>
                 ))}

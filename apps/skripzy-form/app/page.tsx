@@ -923,10 +923,10 @@ KEMBALIKAN OUTPUT PURE JSON DENGAN STRUKTUR INI SAJA, TANPA FORMATTING MARKDOWN,
               <div className="flex items-center w-full gap-2">
                 <input
                   readOnly
-                  value={`https://forms.skripzy.id/f/${publicSlug}`}
+                  value={`https://forms.skripzy.id/f?id=${publicSlug}`}
                   className="flex-1 bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-mono text-slate-600 outline-none"
                 />
-                <button onClick={() => navigator.clipboard.writeText(`https://forms.skripzy.id/f/${publicSlug}`)} className="p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100" title="Copy Link">
+                <button onClick={() => navigator.clipboard.writeText(`https://forms.skripzy.id/f?id=${publicSlug}`)} className="p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100" title="Copy Link">
                   <Copy className="w-4 h-4" />
                 </button>
               </div>

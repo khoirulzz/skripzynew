@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useEffect, useState, useMemo } from 'react';
-import { usePathname } from 'next/navigation';
+import React, { useEffect, useState, useMemo, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { fetchPublicFormBySlug, submitPublicFormResponse } from '@/lib/api';
 import { CheckCircle2, Loader2, AlertCircle } from 'lucide-react';
 
@@ -13,18 +13,9 @@ const THEME_COLORS = [
   { id: 'slate', hex: 'bg-slate-800', text: 'text-slate-800', border: 'border-slate-800', hover: 'hover:bg-slate-100', pale: 'bg-slate-100/50' },
 ];
 
-export default function PublicFormPage() {
-  const pathname = usePathname();
-
-  // Extract slug from URL: /f/SLUG/ -> SLUG
-  const slug = useMemo(() => {
-    const segments = (pathname || '').split('/').filter(Boolean);
-    // segments = ['f', 'SLUG']
-    if (segments[0] === 'f' && segments[1]) {
-      return segments[1];
-    }
-    return '';
-  }, [pathname]);
+function PublicFormContent() {
+  const searchParams = useSearchParams();
+  const slug = searchParams.get('id');
 
   const [form, setForm] = useState<any>(null);
   const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
@@ -39,7 +30,7 @@ export default function PublicFormPage() {
       setError('Link formulir tidak valid.');
       return;
     }
-    fetchPublicFormBySlug(slug)
+    fetchPublicFormBySlug(slug as string)
       .then((res) => {
         setForm(res.form);
       })
@@ -109,7 +100,7 @@ export default function PublicFormPage() {
     }
 
     try {
-      await submitPublicFormResponse(slug, {
+      await submitPublicFormResponse(slug as string, {
         answers,
         locale: navigator.language
       });
@@ -252,5 +243,20 @@ export default function PublicFormPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function PublicFormPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
+          <p className="text-slate-500 font-medium animate-pulse">Memuat kuesioner...</p>
+        </div>
+      </div>
+    }>
+      <PublicFormContent />
+    </Suspense>
   );
 }

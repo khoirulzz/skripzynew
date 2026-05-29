@@ -352,6 +352,19 @@ function buildOpenAlexDateFilter(yearFrom, yearTo) {
     ].join(",");
 }
 
+const RATE_LIMITS = {
+    "gemini-flash-latest": 20,
+    "gemini-2.5-flash": 20,
+    "gemini-flash-lite-latest": 500
+};
+
+const getApiGroups = (env) => ({
+    group_1: [{ name: "GEMINI_API_KEY_1", key: env.GEMINI_API_KEY_1 }, { name: "GEMINI_API_KEY_2", key: env.GEMINI_API_KEY_2 }],
+    group_2: [{ name: "GEMINI_API_KEY_3", key: env.GEMINI_API_KEY_3 }, { name: "GEMINI_API_KEY_4", key: env.GEMINI_API_KEY_4 }],
+    group_3: [{ name: "GEMINI_API_KEY_5", key: env.GEMINI_API_KEY_5 }, { name: "GEMINI_API_KEY_6", key: env.GEMINI_API_KEY_6 }],
+    group_4: [{ name: "GEMINI_API_KEY_7", key: env.GEMINI_API_KEY_7 }, { name: "GEMINI_API_KEY_8", key: env.GEMINI_API_KEY_8 }]
+});
+
 async function checkLocalRateLimit(env, apiKeyObj, model) {
     const limit = RATE_LIMITS[model] || 1500;
 

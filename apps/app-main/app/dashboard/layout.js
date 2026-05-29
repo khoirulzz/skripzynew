@@ -3,10 +3,9 @@ import PWARegister from "@/components/providers/PWARegister";
 
 export const metadata = {
   title: {
-    template: "%s | Skripzy Dashboard",
     default: "Dashboard | Skripzy",
   },
-  description: "Skripzy Dashboard - Ruang kerja riset akademik Anda.",
+  description: "Skripzy Dashboard - Ruang kerja penelitian Anda.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,

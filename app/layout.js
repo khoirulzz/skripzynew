@@ -13,9 +13,9 @@ export const viewport = {
 export const metadata = {
   title: {
     template: "%s | Skripzy",
-    default: "Skripzy | AI Research OS",
+    default: "Skripzy | AI Workspace Research",
   },
-  description: "Platform all-in-one berbasis AI untuk membantu mahasiswa dari tahap ide penelitian hingga skripsi selesai.",
+  description: "Platform all-in-one berbasis AI untuk membantu mahasiswa dari tahap ide penelitian hingga selesai.",
   icons: {
     icon: "/favicon.ico",
     shortcut: "/favicon.ico",

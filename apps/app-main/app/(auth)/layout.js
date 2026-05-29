@@ -5,10 +5,9 @@ import PWARegister from "@/components/providers/PWARegister";
 
 export const metadata = {
   title: {
-    template: "%s | Skripzy",
     default: "Login | Skripzy",
   },
-  description: "Masuk ke Skripzy - Platform AI Research OS",
+  description: "Masuk ke Skripzy - Platform AI Workspace Research",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,

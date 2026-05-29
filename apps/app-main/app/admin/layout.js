@@ -3,7 +3,6 @@ import PWARegister from "@/components/providers/PWARegister";
 
 export const metadata = {
   title: {
-    template: "%s | Skripzy Admin",
     default: "Admin | Skripzy",
   },
   description: "Skripzy Admin Dashboard",

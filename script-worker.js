@@ -1453,6 +1453,13 @@ const worker = {
             }
         }
 
+        function parsePublicFormSlug(pathname) {
+            const prefix = "/public/forms/";
+            if (!pathname.startsWith(prefix)) return null;
+            const slug = pathname.slice(prefix.length).split('/')[0];
+            return slug || null;
+        }
+
         if (isPublicFormEndpoint) {
             const slug = parsePublicFormSlug(url.pathname);
             if (!slug) {

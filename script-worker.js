@@ -1579,11 +1579,17 @@ const worker = {
                 });
             }
 
+            let currentContent = {};
+            try {
+                currentContent = JSON.parse(existingForm.content);
+            } catch (e) {}
+
             const updatedContent = JSON.stringify({
-                description: snapshot.description || "",
+                ...currentContent,
+                description: snapshot.description || currentContent.description || "",
                 publicSlug: slug,
-                settings: snapshot.settings || {},
-                sections: snapshot.sections || [],
+                settings: snapshot.settings || currentContent.settings || {},
+                sections: snapshot.sections || currentContent.sections || [],
                 publishedAt: snapshot.publishedAt || new Date().toISOString(),
             });
 

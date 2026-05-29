@@ -352,8 +352,7 @@ function buildOpenAlexDateFilter(yearFrom, yearTo) {
     ].join(",");
 }
 
-async function verifyFirebaseToken(idToken, env) {
-    if (!idToken) return null;
+async function checkLocalRateLimit(env, apiKeyObj, model) {
     const limit = RATE_LIMITS[model] || 1500;
 
     try {
@@ -371,6 +370,34 @@ async function verifyFirebaseToken(idToken, env) {
     } catch (e) {
         console.error("Failed to check rate limit", e);
         return true; 
+    }
+}
+
+async function verifyFirebaseToken(idToken, env) {
+    if (!idToken) return null;
+    try {
+        const parts = idToken.split('.');
+        if (parts.length !== 3) return null;
+        
+        let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+        while (base64.length % 4) {
+            base64 += '=';
+        }
+        
+        const jsonString = atob(base64);
+        const utf8String = new TextDecoder().decode(Uint8Array.from(jsonString, c => c.charCodeAt(0)));
+        const payload = JSON.parse(utf8String);
+        
+        if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
+        
+        return { 
+            uid: payload.user_id || payload.sub || payload.uid, 
+            email: payload.email,
+            role: payload.role
+        };
+    } catch (e) {
+        console.error("JWT Decode Error:", e.message);
+        return null;
     }
 }
 

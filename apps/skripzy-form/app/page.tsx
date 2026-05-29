@@ -68,7 +68,10 @@ export default function App() {
           if (wsForms && wsForms.data) {
             const formatted = wsForms.data.map((f: any) => {
               try {
-                return { template: JSON.parse(f.content), responses: [] };
+                const parsed = JSON.parse(f.content);
+                parsed.id = parsed.id || f.id;
+                parsed.title = parsed.title || f.title || "Untitled Form";
+                return { template: parsed, responses: [] };
               } catch (e) { return null; }
             }).filter(Boolean);
             setProjects(formatted);

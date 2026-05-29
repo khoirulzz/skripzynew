@@ -1,0 +1,2 @@
+# SPA fallback: semua path /f/* diarahkan ke /f/index.html
+/f/*  /f/index.html  200

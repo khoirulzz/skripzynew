@@ -1,9 +1,8 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import React, { useEffect, useState, useMemo } from 'react';
+import { usePathname } from 'next/navigation';
 import { fetchPublicFormBySlug, submitPublicFormResponse } from '@/lib/api';
-import { FormTemplate } from '@/lib/types';
 import { CheckCircle2, Loader2, AlertCircle } from 'lucide-react';
 
 const THEME_COLORS = [
@@ -15,8 +14,17 @@ const THEME_COLORS = [
 ];
 
 export default function PublicFormPage() {
-  const params = useParams();
-  const slug = params.slug as string;
+  const pathname = usePathname();
+
+  // Extract slug from URL: /f/SLUG/ -> SLUG
+  const slug = useMemo(() => {
+    const segments = (pathname || '').split('/').filter(Boolean);
+    // segments = ['f', 'SLUG']
+    if (segments[0] === 'f' && segments[1]) {
+      return segments[1];
+    }
+    return '';
+  }, [pathname]);
 
   const [form, setForm] = useState<any>(null);
   const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
@@ -26,7 +34,11 @@ export default function PublicFormPage() {
   const [submitted, setSubmitted] = useState(false);
 
   useEffect(() => {
-    if (!slug) return;
+    if (!slug) {
+      setLoading(false);
+      setError('Link formulir tidak valid.');
+      return;
+    }
     fetchPublicFormBySlug(slug)
       .then((res) => {
         setForm(res.form);
@@ -86,7 +98,6 @@ export default function PublicFormPage() {
     e.preventDefault();
     setSubmitting(true);
     
-    // Validasi sederhana: cek wajib
     for (const section of form.sections) {
       for (const item of section.items) {
         if (item.required && (!answers[item.id] || answers[item.id] === '')) {
@@ -113,7 +124,6 @@ export default function PublicFormPage() {
   return (
     <div className="min-h-screen bg-slate-50 py-8 px-4 sm:px-6 md:py-12">
       <div className="max-w-3xl mx-auto space-y-6">
-        {/* Header */}
         <div className={`bg-white rounded-3xl shadow-sm border border-slate-200 p-6 md:p-10 relative overflow-hidden`}>
           <div className={`absolute top-0 left-0 w-full h-3 ${theme.hex}`}></div>
           <h1 className="text-2xl md:text-3xl font-display font-bold text-slate-800 mb-3">{form.title}</h1>

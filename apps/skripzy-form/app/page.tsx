@@ -64,14 +64,32 @@ export default function App() {
     if (appMode === 'dashboard') {
       const loadMyForms = async () => {
         try {
-          const wsForms = await d1Request("workspace_forms");
+          const [wsForms, wsResponses] = await Promise.all([
+            d1Request("workspace_forms").catch(() => ({ data: [] })),
+            d1Request("workspace_form_responses").catch(() => ({ data: [] }))
+          ]);
+          
           if (wsForms && wsForms.data) {
             const formatted = wsForms.data.map((f: any) => {
               try {
                 const parsed = JSON.parse(f.content);
                 parsed.id = parsed.id || f.id;
                 parsed.title = parsed.title || f.title || "Untitled Form";
-                return { template: parsed, responses: [] };
+                
+                // Map responses for this form
+                const formResponses = (wsResponses.data || [])
+                  .filter((r: any) => r.form_id === f.id)
+                  .map((r: any) => {
+                    try {
+                      return {
+                        id: r.id,
+                        timestamp: r.created_at || new Date().toISOString(),
+                        answers: typeof r.answers === 'string' ? JSON.parse(r.answers) : r.answers,
+                      };
+                    } catch (e) { return null; }
+                  }).filter(Boolean);
+                  
+                return { template: parsed, responses: formResponses };
               } catch (e) { return null; }
             }).filter(Boolean);
             setProjects(formatted);
@@ -270,9 +288,16 @@ KEMBALIKAN OUTPUT PURE JSON DENGAN STRUKTUR INI SAJA, TANPA FORMATTING MARKDOWN,
     }
   };
 
-  const generateData = () => {
-    const mock = generateMockResponses(template, Math.floor(Math.random() * 40) + 10);
-    setResponses([...responses, ...mock]);
+  const deleteResponse = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm("Hapus data responden ini? Tindakan ini tidak dapat dibatalkan.")) return;
+
+    try {
+      await d1Request("workspace_form_responses", { method: "DELETE", id });
+      setResponses(responses.filter(r => r.id !== id));
+    } catch (err: any) {
+      alert("Gagal menghapus respons: " + err.message);
+    }
   };
 
   const saveToProjects = async () => {
@@ -815,12 +840,6 @@ KEMBALIKAN OUTPUT PURE JSON DENGAN STRUKTUR INI SAJA, TANPA FORMATTING MARKDOWN,
                       </div>
                       <div className="h-8 w-px bg-slate-200 mx-1"></div>
                       <button
-                        onClick={generateData}
-                        className="flex items-center px-3 py-1.5 bg-indigo-50 border border-indigo-200 rounded-lg text-xs font-semibold text-indigo-700 hover:bg-indigo-100 shadow-sm shrink-0 transition"
-                      >
-                        Simulasi Data
-                      </button>
-                      <button
                         onClick={() => exportToCSV(template, responses, 'data_responden.csv')}
                         className="flex items-center px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-sm shrink-0 transition"
                       >
@@ -842,6 +861,7 @@ KEMBALIKAN OUTPUT PURE JSON DENGAN STRUKTUR INI SAJA, TANPA FORMATTING MARKDOWN,
                               </th>
                             ))
                           )}
+                          <th className="px-4 whitespace-nowrap bg-slate-50 sticky right-0 z-10 text-center w-20">Aksi</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50 text-slate-700">
@@ -850,19 +870,28 @@ KEMBALIKAN OUTPUT PURE JSON DENGAN STRUKTUR INI SAJA, TANPA FORMATTING MARKDOWN,
                         ) : (
                           responses.map((res) => (
                             <tr key={res.id} className="h-12 hover:bg-slate-50 transition-colors">
-                              <td className="px-4 font-mono text-xs font-semibold bg-white sticky left-0 z-10 border-r border-slate-50">{res.id.split('_')[1] ? `R#${res.id.split('_')[1]}` : res.id}</td>
-                              <td className="px-4 whitespace-nowrap text-slate-500 text-xs">{new Date(res.timestamp).toLocaleDateString()}</td>
+                              <td className="px-4 font-mono text-[10px] md:text-xs font-semibold bg-white sticky left-0 z-10 border-r border-slate-50">{res.id.split('_')[1] ? `R#${res.id.split('_')[1]}` : res.id.slice(0, 8)}</td>
+                              <td className="px-4 whitespace-nowrap text-slate-500 text-[10px] md:text-xs">{new Date(res.timestamp || Date.now()).toLocaleDateString()}</td>
                               {template.sections.filter(s => s.type !== 'info').flatMap(v =>
                                 v.items.map(item => {
                                   const val = res.answers[item.id];
                                   const displayVal = Array.isArray(val) ? val.join(', ') : val;
                                   return (
-                                    <td key={item.id} className={`px-4 truncate max-w-[150px] ${v.type === 'variable' ? 'text-center bg-indigo-50/20 font-mono text-xs' : 'text-xs'}`}>
+                                    <td key={item.id} className={`px-4 truncate max-w-[150px] ${v.type === 'variable' ? 'text-center bg-indigo-50/20 font-mono text-[10px] md:text-xs' : 'text-[10px] md:text-xs'}`}>
                                       {displayVal || '-'}
                                     </td>
                                   )
                                 })
                               )}
+                              <td className="px-4 bg-white sticky right-0 z-10 border-l border-slate-50 text-center">
+                                <button
+                                  onClick={(e) => deleteResponse(res.id, e)}
+                                  className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition"
+                                  title="Hapus Respons"
+                                >
+                                  <Trash2 className="w-4 h-4 mx-auto" />
+                                </button>
+                              </td>
                             </tr>
                           ))
                         )}

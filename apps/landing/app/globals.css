@@ -65,7 +65,7 @@
 }
 
 html {
-  scroll-behavior: smooth;
+  scroll-behavior: auto !important;
   overflow-x: hidden;
   /* Prevent horizontal scroll at root level (critical for iOS Safari) */
 }

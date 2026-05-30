@@ -147,6 +147,9 @@ export default function SimulasiSidangPage() {
   const restartTimerRef = useRef(null);
   const chatEndRef = useRef(null);
   const [isMobile, setIsMobile] = useState(false);
+  const documentUploadRef = useRef(false);
+  const startSessionRef = useRef(false);
+  const sendMessageRef = useRef(false);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -337,6 +340,7 @@ export default function SimulasiSidangPage() {
   };
 
   const handleDocumentUpload = async (e) => {
+    if (documentUploadRef.current) return;
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -346,6 +350,7 @@ export default function SimulasiSidangPage() {
     }
 
     setSetupLoading(true);
+    documentUploadRef.current = true;
     setSetupError("");
     setDocName(file.name);
     setSessionInsight(null);
@@ -387,15 +392,18 @@ ${contextText.slice(0, 20000)}
       setExtractionStatus("");
     } finally {
       setSetupLoading(false);
+      documentUploadRef.current = false;
     }
   };
 
   const handleStartSession = async (e) => {
     e.preventDefault();
+    if (startSessionRef.current) return;
     if (!skripsiTitle.trim()) { setSetupError("Judul penelitian wajib diisi."); return; }
     if (credits < sessionCost) { setSetupError(`Kredit tidak cukup. Butuh ${sessionCost} credit.`); return; }
 
     setSetupLoading(true);
+    startSessionRef.current = true;
     setSetupError("");
     setExtractionStatus("Menyiapkan ruang sidang, harap tunggu...");
 
@@ -462,6 +470,7 @@ Gunakan insight ini untuk bertanya spesifik.`;
     } finally {
       setSetupLoading(false);
       setExtractionStatus("");
+      startSessionRef.current = false;
     }
   };
 
@@ -503,9 +512,11 @@ Gunakan insight ini untuk bertanya spesifik.`;
 
   const handleSendMessage = async (e) => {
     e?.preventDefault();
+    if (sendMessageRef.current) return;
     if (!currentInput.trim() || chatLoading || isFinished) return;
 
     const userMessage = currentInput.trim();
+    sendMessageRef.current = true;
     stopListening();
     setCurrentInput("");
     if (window.currentAudio) window.currentAudio.pause();
@@ -571,6 +582,7 @@ Gunakan insight ini untuk bertanya spesifik.`;
       alert("Error: " + err.message);
     } finally {
       setChatLoading(false);
+      sendMessageRef.current = false;
     }
   };
 

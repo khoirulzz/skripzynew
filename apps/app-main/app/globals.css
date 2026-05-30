@@ -1941,3 +1941,11 @@ a {
   81.81% { transform: translate(-24px, 0); }
 }
 
+/* Custom Workspace Card Wave Animation */
+.workspace-card {
+  position: relative !important;
+  overflow: hidden !important;
+}
+.workspace-card:hover .wave-svg {
+  transform: scale(1.15) translate(4px, 4px) rotate(-2deg);
+}

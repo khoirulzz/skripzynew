@@ -6,7 +6,7 @@ import { useAuth } from "@/components/providers/AuthProvider";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
-import LoadingSpinner from "@/components/ui/LoadingSpinner";
+import DefaultSpinner from "@/components/ui/DefaultSpinner";
 import { extractTextFromPDF } from "@/lib/pdfText";
 import { generateWorkspaceChapter } from "@/lib/workspacePublicApi";
 import { createWorkspacePayload, JURNAL_IMRAD_TEMPLATE } from "@/lib/workspaceDefaults";
@@ -277,7 +277,7 @@ ${pdfText.substring(0, 30000)} // Potong teks agar tidak melebihi token
                   </button>
                   <button type="button" className="btn btn-primary" onClick={processTemplate} disabled={!file || loading}>
                     {loading ? (
-                      <><LoadingSpinner size={16} className="text-white" /> {statusText || "Memproses..."}</>
+                      <><DefaultSpinner size="small" color="white" /> {statusText || "Memproses..."}</>
                     ) : (
                       <><PremiumIcon name="sparkles" size={16} /> Ekstrak Struktur</>
                     )}
@@ -338,7 +338,7 @@ ${pdfText.substring(0, 30000)} // Potong teks agar tidak melebihi token
                 </button>
                 <button type="button" className="btn btn-primary" onClick={finalizeWorkspace} disabled={loading || sections.length === 0}>
                   {loading ? (
-                    <><LoadingSpinner size={16} className="text-white" /> Membuat Workspace...</>
+                    <><DefaultSpinner size="small" color="white" /> Membuat Workspace...</>
                   ) : (
                     <><PremiumIcon name="check" size={16} /> Buat Workspace Sekarang</>
                   )}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import ReactMarkdown from "react-markdown";
 import { callGemini, MODELS } from "@/lib/callWorker";
@@ -56,6 +56,7 @@ function Gauge({ value, isMobile }) {
 }
 
 export default function AIDetectorPage() {
+  const clickRef = useRef(false);
   const { user, userData } = useAuth();
   const { toolMap } = useBillingCatalog();
   const plan = userData?.plan || "free";
@@ -79,11 +80,13 @@ export default function AIDetectorPage() {
   const canAfford = credits >= creditCost;
 
   const handleCheck = async () => {
+    if (clickRef.current) return;
     if (!user || !input.trim()) return;
     if (!canAfford) { setError(`Kredit tidak cukup. Butuh ${creditCost} credit.`); return; }
     if (input.length > charLimit) { setError(`Teks melebihi batas ${charLimit} karakter.`); return; }
 
     setLoading(true);
+    clickRef.current = true;
     setError("");
     setResult(null);
 
@@ -111,6 +114,7 @@ export default function AIDetectorPage() {
       setError(err.message || "Terjadi kesalahan saat menganalisis teks.");
     } finally {
       setLoading(false);
+      clickRef.current = false;
     }
   };
 

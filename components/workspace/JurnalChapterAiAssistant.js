@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef } from "react";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { useAuth } from "@/components/providers/AuthProvider";
@@ -23,6 +23,9 @@ export function JurnalChapterAiAssistant({
   notes = "",
   floating = false,
   offsetRight = 16,
+  rootContext = {},
+  isMobile = false,
+  onTriggerContextFill,
 }) {
   const { user, userData, refreshUserData } = useAuth();
   const { toolMap } = useBillingCatalog();
@@ -30,6 +33,8 @@ export function JurnalChapterAiAssistant({
   const [isGenerating, setIsGenerating] = useState(false);
   const [instruction, setInstruction] = useState("");
   const [status, setStatus] = useState("");
+  const [isBtnHovered, setIsBtnHovered] = useState(false);
+  const isGeneratingRef = useRef(false);
 
   const chapter = (workspaceContext?.journalSections || [])[activeChapter] || { key: "unknown", label: "Bagian Jurnal", promptContext: "Susun draft ilmiah." };
   
@@ -44,7 +49,13 @@ export function JurnalChapterAiAssistant({
   const selectedReferenceIds = selectedReferences.map((item) => item.id);
   const creditBalance = userData?.credits ?? 0;
 
+  // Check if context has been filled
+  const isContextEmpty = useMemo(() => {
+    return !rootContext.rumusanMasalah && !rootContext.fenomenaUmum && !rootContext.faktaLapangan;
+  }, [rootContext]);
+
   const handleGenerate = async () => {
+    if (isGeneratingRef.current) return;
     if (!canGenerate || creditBalance < generationCost) {
       setStatus(`Kredit tidak cukup. Butuh ${generationCost} kredit.`);
       return;
@@ -52,6 +63,7 @@ export function JurnalChapterAiAssistant({
 
     setStatus("");
     setIsGenerating(true);
+    isGeneratingRef.current = true;
 
     try {
       await deductCredits(user.uid, generationCost);
@@ -96,11 +108,17 @@ ${config.objective}
 FOKUS PENULISAN:
 ${config.focus}
 
-KONTEKS WORKSPACE:
+KONTEKS WORKSPACE (BRAIN ROOT):
 - Judul penelitian: ${workspaceContext.title || "Tanpa judul"}
 - Topik/latar belakang singkat: ${workspaceContext.topic || "Belum ada topik"}
 - Metodologi: ${workspaceContext.methodologyType || "kuantitatif"}
 - Status dokumen: ${workspaceContext.status || "Draft"}
+- Fenomena Umum: ${rootContext.fenomenaUmum || "Belum ada"}
+- Fakta/Permasalahan Lapangan: ${rootContext.faktaLapangan || "Belum ada"}
+- Rumusan Masalah: ${rootContext.rumusanMasalah || "Belum ada"}
+- Metode Penelitian Utama: ${rootContext.metode || "Belum ada"}
+${rootContext.gapAnalysis ? `- Gap Analysis: ${rootContext.gapAnalysis}` : ""}
+${rootContext.kebaruanNovelty ? `- Kebaruan / Novelty: ${rootContext.kebaruanNovelty}` : ""}
 
 KONTEN BAB SAAT INI:
 ${workspaceContext[chapter.key] || "(masih kosong)"}
@@ -153,6 +171,7 @@ ${instruction || "Tidak ada arahan tambahan."}
       setStatus(error.message || "Gagal menghasilkan draft AI.");
     } finally {
       setIsGenerating(false);
+      isGeneratingRef.current = false;
     }
   };
 
@@ -175,10 +194,10 @@ ${instruction || "Tidak ada arahan tambahan."}
     maxWidth: "calc(100vw - 1.25rem)",
     maxHeight: "min(78vh, 560px)",
     overflowY: "auto",
-    padding: "1rem",
+    padding: isMobile ? "0.75rem" : "1rem",
     display: "flex",
     flexDirection: "column",
-    gap: "0.85rem",
+    gap: isMobile ? "0.65rem" : "0.85rem",
     backgroundColor: "var(--surface)",
     boxShadow: "var(--shadow-lg)",
   };
@@ -188,16 +207,56 @@ ${instruction || "Tidak ada arahan tambahan."}
       {!isOpen ? (
         <button
           className="btn btn-primary"
+          onMouseEnter={() => setIsBtnHovered(true)}
+          onMouseLeave={() => setIsBtnHovered(false)}
           style={{
             borderRadius: "999px",
-            padding: floating ? "0.85rem 1rem" : "0.75rem",
             boxShadow: "0 12px 24px rgba(79,70,229,0.28)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "0.4rem",
+            height: "46px",
+            cursor: "pointer",
+            transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+            overflow: "hidden",
+            whiteSpace: "nowrap",
+            outline: "none",
+            border: "none",
+            ...(floating
+              ? {
+                  width: isBtnHovered ? "130px" : "46px",
+                  paddingLeft: isBtnHovered ? "0.95rem" : "0",
+                  paddingRight: isBtnHovered ? "0.95rem" : "0",
+                }
+              : {
+                  padding: "0.75rem 1.2rem",
+                })
           }}
-          onClick={() => setIsOpen(true)}
+          onClick={() => {
+            setIsOpen(true);
+            setIsBtnHovered(false);
+          }}
           title="Workspace AI Writer"
         >
-          <PremiumIcon name="sparkles" size={18} />
-          {floating ? "AI Bab" : null}
+          <PremiumIcon name="sparkles" size={18} style={{ flexShrink: 0 }} />
+          {floating && (
+            <span
+              style={{
+                opacity: isBtnHovered ? 1 : 0,
+                width: isBtnHovered ? "auto" : "0px",
+                transform: isBtnHovered ? "scale(1)" : "scale(0.85)",
+                transition: "opacity 0.2s ease, transform 0.2s ease, width 0.25s ease",
+                fontSize: "0.82rem",
+                fontWeight: 700,
+                pointerEvents: "none",
+                display: "inline-block",
+                verticalAlign: "middle"
+              }}
+            >
+              AI Bab
+            </span>
+          )}
         </button>
       ) : (
         <div className="glass-panel workspace-scroll" style={panelStyle}>
@@ -213,56 +272,92 @@ ${instruction || "Tidak ada arahan tambahan."}
             </button>
           </div>
 
-          <div style={{ padding: "0.75rem", borderRadius: "10px", backgroundColor: "var(--background)", border: "1px solid var(--border)", fontSize: "0.82rem" }}>
-            <div><strong>Target:</strong> {chapter.label}</div>
-            <div style={{ marginTop: "0.35rem" }}><strong>Pedoman:</strong> {chapter.promptContext || "Tidak ada pedoman spesifik."}</div>
-            
-            <div style={{ marginTop: "0.5rem", padding: "0.4rem 0.6rem", backgroundColor: "rgba(16, 185, 129, 0.1)", borderRadius: "6px", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              <PremiumIcon name="database" size={14} className="text-success" />
-              <span>
-                <strong>Sumber Data: </strong> 
-                {selectedReferences.length > 0 
-                  ? `${selectedReferences.length} referensi dipilih` 
-                  : "Auto-RAG (Semua referensi workspace)"}
-              </span>
+          {isContextEmpty ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: "1rem", alignItems: "center", textAlign: "center", padding: "1.5rem 0.5rem" }}>
+              <div style={{ 
+                width: "48px", 
+                height: "48px", 
+                borderRadius: "50%", 
+                backgroundColor: "rgba(79, 70, 229, 0.08)", 
+                color: "var(--primary)", 
+                display: "flex", 
+                alignItems: "center", 
+                justifyContent: "center",
+                boxShadow: "0 8px 16px rgba(79,70,229,0.05)"
+              }}>
+                <PremiumIcon name="brainCircuit" size={24} />
+              </div>
+              <h5 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 800, color: "var(--text-main)" }}>Isi Konteks Dulu</h5>
+              <p style={{ margin: 0, fontSize: "0.78rem", color: "var(--text-muted)", lineHeight: 1.5 }}>
+                Lengkapi Konteks Utama (Brain Root) terlebih dahulu agar AI memahami arah penelitian Jurnal Anda.
+              </p>
+              <button 
+                className="btn btn-primary" 
+                style={{ width: "100%", padding: "0.6rem", fontSize: "0.8rem", marginTop: "0.5rem", borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.35rem" }}
+                onClick={() => {
+                  setIsOpen(false);
+                  if (onTriggerContextFill) onTriggerContextFill();
+                }}
+              >
+                <PremiumIcon name="edit3" size={14} />
+                <span>Lengkapi Konteks</span>
+              </button>
             </div>
-            
-            <div style={{ marginTop: "0.5rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span><strong>Biaya:</strong> {generationCost} kredit</span>
-              <span style={{ fontSize: "0.7rem", backgroundColor: "var(--primary-light)", color: "var(--primary)", padding: "0.2rem 0.5rem", borderRadius: "4px", fontWeight: "bold" }}>
-                🧠 Context Ready
-              </span>
-            </div>
-          </div>
+          ) : (
+            <>
+              <div style={{ padding: isMobile ? "0.6rem" : "0.75rem", borderRadius: "10px", backgroundColor: "var(--background)", border: "1px solid var(--border)", fontSize: isMobile ? "0.74rem" : "0.82rem" }}>
+                <div><strong>Target:</strong> {chapter.label}</div>
+                <div style={{ marginTop: "0.35rem" }}><strong>Pedoman:</strong> {chapter.promptContext || "Tidak ada pedoman spesifik."}</div>
+                
+                <div style={{ marginTop: "0.5rem", padding: isMobile ? "0.3rem 0.5rem" : "0.4rem 0.6rem", backgroundColor: "rgba(16, 185, 129, 0.1)", borderRadius: "6px", display: "flex", alignItems: "center", gap: "0.5rem", fontSize: isMobile ? "0.68rem" : "0.74rem" }}>
+                  <PremiumIcon name="database" size={14} className="text-success" />
+                  <span>
+                    <strong>Sumber Data: </strong> 
+                    {selectedReferences.length > 0 
+                      ? `${selectedReferences.length} referensi dipilih` 
+                      : "Auto-RAG (Semua referensi workspace)"}
+                  </span>
+                </div>
+                
+                <div style={{ marginTop: "0.5rem", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: isMobile ? "0.72rem" : "0.78rem" }}>
+                  <span><strong>Biaya:</strong> {generationCost} kredit</span>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", fontSize: "0.7rem", backgroundColor: "var(--primary-light)", color: "var(--primary)", padding: "0.2rem 0.5rem", borderRadius: "4px", fontWeight: "bold" }}>
+                    <PremiumIcon name="brainCircuit" size={12} />
+                    <span>Context Ready</span>
+                  </span>
+                </div>
+              </div>
 
-          <textarea
-            className="form-textarea"
-            rows={4}
-            placeholder="Tambahkan instruksi khusus, misalnya fokuskan pada research gap, gaya penulisan, atau struktur subbab tertentu..."
-            value={instruction}
-            onChange={(event) => setInstruction(event.target.value)}
-            disabled={isGenerating}
-            style={{ opacity: isGenerating ? 0.6 : 1, cursor: isGenerating ? "not-allowed" : "text" }}
-          />
+              <textarea
+                className="form-textarea"
+                rows={isMobile ? 3 : 4}
+                placeholder="Tambahkan instruksi khusus, misalnya fokuskan pada research gap, gaya penulisan, atau struktur subbab tertentu..."
+                value={instruction}
+                onChange={(event) => setInstruction(event.target.value)}
+                disabled={isGenerating}
+                style={{ opacity: isGenerating ? 0.6 : 1, cursor: isGenerating ? "not-allowed" : "text", fontSize: isMobile ? "0.74rem" : "0.8rem" }}
+              />
 
-          {status ? (
-            <div
-              style={{
-                padding: "0.75rem",
-                borderRadius: "10px",
-                backgroundColor: status.includes("berhasil") ? "rgba(16,185,129,0.12)" : "rgba(79,70,229,0.08)",
-                color: status.includes("berhasil") ? "var(--success)" : "var(--text-main)",
-                fontSize: "0.8rem",
-              }}
-            >
-              {status}
-            </div>
-          ) : null}
+              {status ? (
+                <div
+                  style={{
+                    padding: isMobile ? "0.6rem" : "0.75rem",
+                    borderRadius: "10px",
+                    backgroundColor: status.includes("berhasil") ? "rgba(16,185,129,0.12)" : "rgba(79,70,229,0.08)",
+                    color: status.includes("berhasil") ? "var(--success)" : "var(--text-main)",
+                    fontSize: isMobile ? "0.74rem" : "0.8rem",
+                  }}
+                >
+                  {status}
+                </div>
+              ) : null}
 
-          <button className="btn btn-primary" onClick={() => void handleGenerate()} disabled={isGenerating || !canGenerate}>
-            {isGenerating ? <LoadingSpinner size={15} className="text-white mr-2" /> : <PremiumIcon name="sparkles" size={15} />}
-            {isGenerating ? "Menyusun Draft..." : "Generate Draft"}
-          </button>
+              <button className="btn btn-primary" onClick={() => void handleGenerate()} disabled={isGenerating || !canGenerate}>
+                {isGenerating ? <LoadingSpinner size={15} className="text-white mr-2" /> : <PremiumIcon name="sparkles" size={15} />}
+                {isGenerating ? "Menyusun Draft..." : "Generate Draft"}
+              </button>
+            </>
+          )}
         </div>
       )}
     </div>

@@ -22,13 +22,15 @@ export function Header({ onMenuClick = null, isMobile = false }) {
 
   return (
     <header
-      className="glass-panel"
       style={{
         display: "flex",
         justifyContent: "space-between",
         alignItems: "center",
-        padding: isMobile ? "0.4rem 0.6rem" : "0.875rem 1.5rem",
-        borderBottom: "1px solid rgba(79,70,229,0.12)",
+        padding: isMobile ? "0.4rem 0.6rem" : "1.75rem 2rem 1rem 2rem",
+        borderBottom: "none",
+        backgroundColor: "transparent",
+        boxShadow: "none",
+        backdropFilter: "none",
         gap: "0.5rem",
         flexShrink: 0,
         position: "sticky",
@@ -60,64 +62,86 @@ export function Header({ onMenuClick = null, isMobile = false }) {
           </div>
         )}
 
-        {/* Welcome text â€” hidden on mobile to save space */}
+        {/* Welcome text — hidden on mobile to save space */}
         {!isMobile && (
-          <h2
-            style={{
-              fontSize: "1rem",
-              margin: 0,
-              fontWeight: 600,
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              color: "var(--text-main)",
-            }}
-          >
-            Selamat datang, {userData?.namaLengkap?.split(" ")[0] || "Peneliti"}
-          </h2>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
+            <h2
+              style={{
+                fontSize: "1.5rem",
+                margin: 0,
+                fontWeight: 750,
+                color: "var(--text-main)",
+                letterSpacing: "-0.02em",
+                lineHeight: 1.2,
+              }}
+            >
+              Selamat datang, {userData?.namaLengkap?.split(" ")[0] || "Khoirul"} 👋
+            </h2>
+            <p
+              style={{
+                fontSize: "0.85rem",
+                margin: 0,
+                color: "var(--text-muted)",
+                fontWeight: 400,
+                lineHeight: 1.2,
+              }}
+            >
+              Siap selesaikan skripsimu hari ini?
+            </p>
+          </div>
         )}
       </div>
 
-      {/* â”€â”€ Right: Credits + Theme + Profile â”€â”€ */}
-      <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexShrink: 0 }}>
+      {/* —— Right: Credits + Theme + Profile —— */}
+      <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexShrink: 0 }}>
         {/* Credit badge */}
-        <div
+        <Link
+          href="/dashboard/langganan"
           style={{
+            textDecoration: "none",
             display: "flex",
             alignItems: "center",
-            gap: "0.3rem",
-            padding: isMobile ? "0.35rem 0.6rem" : "0.45rem 0.8rem",
-            background: "linear-gradient(135deg, rgba(79,70,229,0.1), rgba(59,130,246,0.1))",
+            gap: "0.4rem",
+            padding: isMobile ? "0.3rem 0.6rem" : "0.45rem 0.9rem",
+            backgroundColor: "rgba(79, 70, 229, 0.05)",
             borderRadius: 999,
-            fontSize: isMobile ? "0.75rem" : "0.8rem",
+            fontSize: isMobile ? "0.75rem" : "0.82rem",
             fontWeight: 800,
             color: "var(--primary)",
-            border: "1px solid rgba(79,70,229,0.2)",
-            boxShadow: "0 4px 12px rgba(79,70,229,0.08)",
+            border: "1.5px solid rgba(79, 70, 229, 0.18)",
+            boxShadow: "0 4px 12px rgba(79, 70, 229, 0.06)",
+            transition: "all 0.2s ease",
+            cursor: "pointer",
           }}
+          onMouseEnter={e => {
+            e.currentTarget.style.backgroundColor = "rgba(79, 70, 229, 0.08)";
+            e.currentTarget.style.transform = "translateY(-1px)";
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.backgroundColor = "rgba(79, 70, 229, 0.05)";
+            e.currentTarget.style.transform = "translateY(0)";
+          }}
+          title="Top Up Credits"
         >
-          <PremiumIcon name="coins" size={isMobile ? 13 : 15} style={{ color: "var(--primary)" }} />
-          <span>{userData?.credits || 0}{!isMobile && " Credits"}</span>
-          <Link
-            href="/dashboard/langganan"
-            className="btn btn-primary"
-            title="Top Up Credits"
+          <div
             style={{
-              padding: "0.2rem 0.45rem",
-              fontSize: "0.7rem",
-              marginLeft: "0.1rem",
+              width: "16px",
+              height: "16px",
               borderRadius: "50%",
-              minWidth: "auto",
-              height: isMobile ? "20px" : "auto",
-              lineHeight: 1,
-              display: "inline-flex",
+              backgroundColor: "var(--primary)",
+              display: "flex",
               alignItems: "center",
               justifyContent: "center",
+              color: "white",
+              fontSize: "0.7rem",
+              fontWeight: 800,
             }}
           >
             +
-          </Link>
-        </div>
+          </div>
+          <span>{userData?.credits || 0} Credits</span>
+          <PremiumIcon name="chevronDown" size={12} style={{ color: "var(--primary)", marginLeft: "0.1rem" }} />
+        </Link>
 
         <NotificationsPopover isMobile={isMobile} />
         {!isMobile && <ThemeToggle />}

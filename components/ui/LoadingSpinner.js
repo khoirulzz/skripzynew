@@ -1,28 +1,30 @@
 import React from 'react';
+import DefaultSpinner from './DefaultSpinner';
 
+/**
+ * LoadingSpinner (Legacy Component Wrapper)
+ * Dibuat demi backward-compatibility. Sekarang secara internal merender
+ * DefaultSpinner (Premium Infinity SVG) agar visual konsisten di seluruh aplikasi.
+ */
 const LoadingSpinner = ({ size = 40, className = "" }) => {
+  // Petakan class warna text-* Tailwind lama ke prop warna di DefaultSpinner jika eksplisit.
+  let color = 'currentColor';
+  if (className.includes('text-white')) {
+    color = 'white';
+  } else if (className.includes('text-primary')) {
+    color = '#037ef3';
+  } else if (className.includes('text-success')) {
+    color = '#10b981';
+  } else if (className.includes('text-danger')) {
+    color = '#ef4444';
+  }
+
   return (
-    <div className={`flex items-center justify-center ${className}`}>
-      <svg
-        width={size}
-        height={size}
-        viewBox="-13 -13 45 45"
-        xmlns="http://www.w3.org/2000/svg"
-        className="loading-spinner-svg"
-      >
-        <g>
-          <circle className="box5631" cx="13" cy="1" r="5" />
-          <circle className="box5631" cx="13" cy="1" r="5" />
-          <circle className="box5631" cx="25" cy="25" r="5" />
-          <circle className="box5631" cx="13" cy="13" r="5" />
-          <circle className="box5631" cx="13" cy="13" r="5" />
-          <circle className="box5631" cx="25" cy="13" r="5" />
-          <circle className="box5631" cx="1" cy="25" r="5" />
-          <circle className="box5631" cx="13" cy="25" r="5" />
-          <circle className="box5631" cx="25" cy="25" r="5" />
-        </g>
-      </svg>
-    </div>
+    <DefaultSpinner
+      sizePixel={size}
+      color={color}
+      className={className}
+    />
   );
 };
 

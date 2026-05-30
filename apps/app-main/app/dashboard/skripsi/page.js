@@ -5,7 +5,7 @@ import { d1Request } from "@/lib/d1Client";
 
 import { useAuth } from "@/components/providers/AuthProvider";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
-import LoadingSpinner from "@/components/ui/LoadingSpinner";
+import DefaultSpinner from "@/components/ui/DefaultSpinner";
 import Link from "next/link";
 import { WorkspaceModal } from "@/components/workspace/WorkspaceModal";
 
@@ -76,7 +76,7 @@ export default function SkripsiListPage() {
 
       {loading ? (
         <div style={{ display: "flex", justifyContent: "center", padding: "3rem" }}>
-          <LoadingSpinner size={32} className="text-primary" />
+          <DefaultSpinner size="small" />
         </div>
       ) : workspaces.length === 0 ? (
         <div className="glass-panel" style={{ padding: "4rem 2rem", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}>

@@ -43,6 +43,8 @@ export function DataAnalysisDashboard({ workspaceId, activeFormId = null, compac
   const [selectedVarYId, setSelectedVarYId] = useState("");
   
   const notesHydratedRef = useRef(false);
+  const isInterpretingRef = useRef(false);
+  const isSavingRef = useRef(false);
   const generationCost = toolMap["chapter-generation"]?.creditCost ?? 2;
 
   useEffect(() => {
@@ -160,8 +162,9 @@ export function DataAnalysisDashboard({ workspaceId, activeFormId = null, compac
   }, [activeForm, analysis, transcripts]);
 
   const handleSaveSnapshot = async () => {
-    if (!activeForm || !analysis) return;
+    if (isSavingRef.current || !activeForm || !analysis) return;
     setSavingSnapshot(true);
+    isSavingRef.current = true;
 
     try {
       const id = crypto.randomUUID();
@@ -195,11 +198,12 @@ export function DataAnalysisDashboard({ workspaceId, activeFormId = null, compac
       console.error("Gagal menyimpan snapshot analisis:", error);
     } finally {
       setSavingSnapshot(false);
+      isSavingRef.current = false;
     }
   };
 
   const handleInterpretToBabIV = async () => {
-    if (!user || !workspaceId || !onInsertContent) return;
+    if (isInterpretingRef.current || !user || !workspaceId || !onInsertContent) return;
     const creditBalance = userData?.credits ?? 0;
     
     if (creditBalance < generationCost) {
@@ -209,6 +213,7 @@ export function DataAnalysisDashboard({ workspaceId, activeFormId = null, compac
 
     setInterpretStatus("");
     setIsInterpreting(true);
+    isInterpretingRef.current = true;
 
     try {
       await deductCredits(user.uid, generationCost);
@@ -247,6 +252,7 @@ Kembangkan hasil analisis dan catatan peneliti tersebut menjadi narasi pembahasa
       setInterpretStatus(error.message || "Gagal menginterpretasikan data.");
     } finally {
       setIsInterpreting(false);
+      isInterpretingRef.current = false;
     }
   };
 

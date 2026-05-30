@@ -136,6 +136,8 @@ export default function ReferensiCerdasPage() {
   const [summaries, setSummaries] = useState({});
   const [loadingSum, setLoadingSum] = useState({});
   const [isMobile, setIsMobile] = useState(false);
+  const searchRef = useRef(false);
+  const summarizeRef = useRef({});
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -146,9 +148,11 @@ export default function ReferensiCerdasPage() {
 
   const handleSearch = async (e) => {
     e.preventDefault();
+    if (searchRef.current) return;
     if (!query.trim()) return;
 
     setLoading(true);
+    searchRef.current = true;
     setError("");
     setSearchMessage("");
     setPapers([]);
@@ -173,11 +177,13 @@ export default function ReferensiCerdasPage() {
       setError(getErrorMessage(err));
     } finally {
       setLoading(false);
+      searchRef.current = false;
     }
   };
 
   const handleSummarize = async (paper) => {
     if (!user) return;
+    if (summarizeRef.current[paper.id]) return;
     if (credits < summaryCost) {
       alert(`Kredit tidak cukup. Butuh ${summaryCost} credit.`);
       return;
@@ -188,6 +194,7 @@ export default function ReferensiCerdasPage() {
     }
 
     setLoadingSum(prev => ({ ...prev, [paper.id]: true }));
+    summarizeRef.current[paper.id] = true;
     try {
       await deductCredits(user.uid, summaryCost);
 
@@ -207,6 +214,7 @@ export default function ReferensiCerdasPage() {
       alert("Gagal meringkas abstrak: " + err.message);
     } finally {
       setLoadingSum(prev => ({ ...prev, [paper.id]: false }));
+      summarizeRef.current[paper.id] = false;
     }
   };
 

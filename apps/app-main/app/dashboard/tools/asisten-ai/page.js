@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import ReactMarkdown from "react-markdown";
 import { callGemini, MODELS } from "@/lib/callWorker";
@@ -14,6 +14,8 @@ import Link from "next/link";
 const API_GROUP = "group_2"; // Group untuk Asisten AI
 
 export default function AsistenAIPage() {
+  const loadingJudulRef = useRef(false);
+  const loadingBgRef = useRef(false);
   const { user, userData } = useAuth();
   const { toolMap } = useBillingCatalog();
   const titleCost = toolMap["asisten-ai-judul"]?.creditCost ?? 2;
@@ -49,10 +51,12 @@ export default function AsistenAIPage() {
 
   // ── Fungsi Generator Judul ─────────────────────────────────
   const handleGenerateJudul = async () => {
+    if (loadingJudulRef.current) return;
     if (!user || !topic.trim()) return;
     if (credits < titleCost) { setErrorJudul(`Kredit tidak cukup. Butuh ${titleCost} credit.`); return; }
 
     setLoadingJudul(true);
+    loadingJudulRef.current = true;
     setErrorJudul("");
     setResultJudul("");
     setApiAttemptJudul("core");
@@ -124,15 +128,18 @@ Gunakan heading (###), list (-), dan bold (**) secara tepat agar mudah dibaca.`;
       setErrorJudul(err.message || "Gagal generate judul.");
     } finally {
       setLoadingJudul(false);
+      loadingJudulRef.current = false;
     }
   };
 
   // ── Fungsi Latar Belakang ─────────────────────────────────
   const handleGenerateBg = async () => {
+    if (loadingBgRef.current) return;
     if (!user || !bgTitle.trim() || !bgPhenomenon.trim() || !bgProblem.trim()) return;
     if (credits < backgroundCost) { setErrorBg(`Kredit tidak cukup. Butuh ${backgroundCost} credit.`); return; }
 
     setLoadingBg(true);
+    loadingBgRef.current = true;
     setErrorBg("");
     setResultBg("");
     setApiAttemptBg("core");
@@ -211,6 +218,7 @@ Berikan hasil murni dalam format Markdown yang rapi. Tanpa markdown block dan ka
       setErrorBg(err.message || "Gagal menyusun latar belakang.");
     } finally {
       setLoadingBg(false);
+      loadingBgRef.current = false;
     }
   };
 

@@ -1,11 +1,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { AuthGuard } from "@/components/auth/AuthGuard";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 
 export default function DashboardLayout({ children }) {
+  const pathname = usePathname();
+  const isEditorPage = pathname?.includes("/skripsi/edit") || pathname?.includes("/jurnal/edit");
+
   // Desktop: controls sidebar collapse (icon-only vs full)
   const [isDesktopCollapsed, setIsDesktopCollapsed] = useState(false);
   // Mobile: controls drawer open/close
@@ -18,6 +22,14 @@ export default function DashboardLayout({ children }) {
     checkMobile();
     window.addEventListener("resize", checkMobile);
     return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
+  // Auto-collapse main desktop sidebar after 3 seconds on initial load
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsDesktopCollapsed(true);
+    }, 3000);
+    return () => clearTimeout(timer);
   }, []);
 
   // Close mobile drawer on route-like navigation
@@ -61,6 +73,9 @@ export default function DashboardLayout({ children }) {
               boxShadow: "4px 0 24px rgba(0,0,0,0.18)",
               transform: isMobileOpen ? "translateX(0)" : "translateX(-100%)",
               transition: "transform 0.3s cubic-bezier(0.4,0,0.2,1)",
+              background: "transparent",
+              backdropFilter: "none",
+              WebkitBackdropFilter: "none",
             }}
           >
             <Sidebar isCollapsed={false} toggleCollapse={closeMobile} isMobile={true} />
@@ -90,10 +105,12 @@ export default function DashboardLayout({ children }) {
 
         <main style={{ flex: 1, display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
           {/* Pass mobile toggle or desktop collapse toggle so Header can render the hamburger */}
-          <Header
-            onMenuClick={isMobile ? () => setIsMobileOpen((prev) => !prev) : null}
-            isMobile={isMobile}
-          />
+          {!isEditorPage && (
+            <Header
+              onMenuClick={isMobile ? () => setIsMobileOpen((prev) => !prev) : null}
+              isMobile={isMobile}
+            />
+          )}
           <div style={{ padding: isMobile ? "0.75rem" : "1.5rem", overflowY: "auto", flex: 1, position: "relative" }}>
             {/* Content wrapper */}
             <div style={{ position: "relative", zIndex: 1 }}>

@@ -16,7 +16,7 @@ import React from 'react';
 const DefaultSpinner = ({
   size = 'medium',
   sizePixel = null,
-  color = '#037ef3',
+  color = 'currentColor',
   className = '',
   style = {},
 }) => {
@@ -32,9 +32,21 @@ const DefaultSpinner = ({
   // Use custom pixel size if provided, otherwise use mapped size
   const actualSize = sizePixel || sizeMap[size] || sizeMap.medium;
 
+  // Check if we should use Tailwind text color class or custom color
+  const hasTailwindColor = /\btext-\w+/.test(className);
+  
+  let strokeColor = '#037ef3';
+  if (color && color !== 'currentColor') {
+    strokeColor = color;
+  } else if (color === 'currentColor' && hasTailwindColor) {
+    strokeColor = 'currentColor';
+  }
+
+  const defaultColorClass = strokeColor === 'currentColor' ? '' : (strokeColor === '#037ef3' ? 'text-[#037ef3]' : '');
+
   return (
     <div
-      className={`flex items-center justify-center ${className}`}
+      className={`flex items-center justify-center ${defaultColorClass} ${className}`}
       style={style}
     >
       <svg
@@ -54,13 +66,13 @@ const DefaultSpinner = ({
             style={{
               transform: 'scale(0.8)',
               transformOrigin: '50px 50px',
-              animation: 'spinnerDash 1.5s ease-in-out infinite',
+              animation: 'spinnerDash 1.2s linear infinite',
             }}
             strokeLinecap="round"
             d="M24.3 30C11.4 30 5 43.3 5 50s6.4 20 19.3 20c19.3 0 32.1-40 51.4-40 C88.6 30 95 43.3 95 50s-6.4 20-19.3 20C56.4 70 43.6 30 24.3 30z"
             strokeDasharray="192.4416961669922 64.14723205566406"
             strokeWidth="8"
-            stroke={color}
+            stroke={strokeColor}
             fill="none"
           />
         </g>
@@ -80,11 +92,8 @@ const DefaultSpinner = ({
           0% {
             stroke-dashoffset: 0;
           }
-          50% {
-            stroke-dashoffset: 192.4416961669922;
-          }
           100% {
-            stroke-dashoffset: 384.8833923339844;
+            stroke-dashoffset: 256.58892822265625;
           }
         }
 

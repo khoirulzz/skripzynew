@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import ReactMarkdown from "react-markdown";
 import { callGemini } from "@/lib/callWorker";
@@ -59,6 +59,7 @@ function ScoreGauge({ skor }) {
 }
 
 export default function CekGrammarPage() {
+  const clickRef = useRef(false);
   const { user, userData } = useAuth();
   const { toolMap } = useBillingCatalog();
   const [input, setInput]       = useState("");
@@ -81,10 +82,12 @@ export default function CekGrammarPage() {
   const canAfford = credits >= creditCost;
 
   const handleCheck = async () => {
+    if (clickRef.current) return;
     if (!user || !input.trim()) return;
     if (!canAfford) { setError(`Kredit tidak cukup. Butuh ${creditCost} credit.`); return; }
 
     setLoading(true);
+    clickRef.current = true;
     setError("");
     setResult(null);
 
@@ -113,6 +116,7 @@ export default function CekGrammarPage() {
       setError(err.message || "Terjadi kesalahan. Silakan coba lagi.");
     } finally {
       setLoading(false);
+      clickRef.current = false;
     }
   };
 

@@ -8,7 +8,7 @@ import {
   BarChart2, MessageSquare, Volume, Upload, AlertCircle, Radio, BookMarked, Mic, Wand2,
   Menu, LayoutTemplate, Activity, Layers, Search, Edit, Copy, Trash, Globe, Circle, Type, ChevronDownSquare, PieChart, DownloadCloud, BrainCircuit, Box, CheckCircle, Coins, ChartNoAxesCombined, SquarePen, BarChart3, Users, Tag, Gift, LogOut, Loader,
   Calendar, Inbox, Ticket, LayoutDashboard, EllipsisVertical, RefreshCw, Minimize2, ArrowRight, FileOutput, AlertTriangle, Eye, Wallet, ChevronLeft, Clock3, Pause, Play, XCircle, Download, UploadCloud, Pencil, Strikethrough, Undo, Redo, AlignLeft, AlignCenter, AlignRight, AlignJustify, Underline, Eraser, Highlighter, Subscript as SubscriptIcon, Superscript as SuperscriptIcon, Palette, Heart, MessageCircleMore,
-  Key, Mail, Building, Camera, MessageCircle, Shield, ShieldCheck, ExternalLink, Smartphone, Info, Hash, Link, Link2Off
+  Key, Mail, Building, Table, Image, Camera, MessageCircle, Shield, ShieldCheck, ExternalLink, Smartphone, Info, Hash, Link, Link2Off
 } from "lucide-react";
 
 // Social Icons Fallbacks (Lucide removed brand icons)
@@ -151,6 +151,8 @@ const icons = {
   hash: Hash,
   link: Link,
   link2Off: Link2Off,
+  table: Table,
+  image: Image,
 };
 
 export function PremiumIcon({ name, size = 24, className = "", ...rest }) {

@@ -93,6 +93,9 @@ export function Sidebar({ isCollapsed = false, toggleCollapse, isMobile = false 
         borderRight: "1px solid rgba(79,70,229,0.12)",
         overflow: "hidden",
         padding: "0 0.5rem 1.5rem",
+        background: "transparent",
+        backdropFilter: "none",
+        WebkitBackdropFilter: "none",
       }}
     >
       {/* â”€â”€ Sidebar Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}

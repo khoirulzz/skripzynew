@@ -10,6 +10,12 @@ import { Subscript } from "@tiptap/extension-subscript";
 import { Superscript } from "@tiptap/extension-superscript";
 import { TextStyle } from "@tiptap/extension-text-style";
 import { Color } from "@tiptap/extension-color";
+import { Underline } from "@tiptap/extension-underline";
+import { Image } from "@tiptap/extension-image";
+import { Table } from "@tiptap/extension-table";
+import { TableRow } from "@tiptap/extension-table-row";
+import { TableCell } from "@tiptap/extension-table-cell";
+import { TableHeader } from "@tiptap/extension-table-header";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
@@ -264,9 +270,48 @@ export function TiptapEditor({
   const [isTouchDevice, setIsTouchDevice] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [mobileAiBarVisible, setMobileAiBarVisible] = useState(false);
+  const [showTableMenu, setShowTableMenu] = useState(false);
 
   // Capture editor ref for use inside callbacks without causing re-renders
   const editorRef = useRef(null);
+
+  const handleImageUpload = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new window.Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let width = img.width;
+        let height = img.height;
+        const maxDim = 800;
+
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const compressedBase64 = canvas.toDataURL("image/jpeg", 0.7);
+        if (editorRef.current) {
+          editorRef.current.chain().focus().setImage({ src: compressedBase64 }).run();
+        }
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
 
   useEffect(() => {
     setIsTouchDevice("ontouchstart" in window || navigator.maxTouchPoints > 0);
@@ -348,6 +393,12 @@ export function TiptapEditor({
       Superscript,
       TextStyle,
       Color,
+      Underline,
+      Image.configure({ allowBase64: true }),
+      Table.configure({ resizable: true }),
+      TableRow,
+      TableHeader,
+      TableCell,
     ],
     content: content || "",
     onUpdate: ({ editor }) => {
@@ -470,6 +521,119 @@ export function TiptapEditor({
           <PremiumIcon name="quote" size={15} />
         </ToolbarBtn>
         <div style={{ width: "1px", height: "20px", backgroundColor: "var(--border)", margin: "0 4px" }} />
+        
+        {/* Table Tool */}
+        <div style={{ position: "relative", display: "inline-block" }}>
+          <ToolbarBtn 
+            title="Tabel" 
+            active={editor.isActive("table")} 
+            onClick={() => {
+              if (editor.isActive("table")) {
+                setShowTableMenu(!showTableMenu);
+              } else {
+                editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+              }
+            }}
+          >
+            <PremiumIcon name="table" size={15} />
+          </ToolbarBtn>
+          {editor.isActive("table") && showTableMenu && (
+            <>
+              <div 
+                style={{ position: "fixed", inset: 0, zIndex: 90 }} 
+                onClick={() => setShowTableMenu(false)} 
+              />
+              <div className="glass-panel" style={{
+                position: "absolute",
+                top: "110%",
+                left: 0,
+                zIndex: 100,
+                padding: "0.4rem",
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.25rem",
+                minWidth: "160px",
+                boxShadow: "var(--shadow-lg)",
+                backgroundColor: "var(--surface)",
+              }}>
+                <button 
+                  className="btn btn-ghost" 
+                  style={{ justifyContent: "flex-start", fontSize: "0.75rem", padding: "0.3rem 0.5rem", width: "100%" }} 
+                  onClick={() => { editor.chain().focus().addRowBefore().run(); setShowTableMenu(false); }}
+                >
+                  <PremiumIcon name="chevronUp" size={12} style={{ marginRight: "0.4rem" }} />
+                  <span>Tambah Baris Atas</span>
+                </button>
+                <button 
+                  className="btn btn-ghost" 
+                  style={{ justifyContent: "flex-start", fontSize: "0.75rem", padding: "0.3rem 0.5rem", width: "100%" }} 
+                  onClick={() => { editor.chain().focus().addRowAfter().run(); setShowTableMenu(false); }}
+                >
+                  <PremiumIcon name="chevronDown" size={12} style={{ marginRight: "0.4rem" }} />
+                  <span>Tambah Baris Bawah</span>
+                </button>
+                <button 
+                  className="btn btn-ghost" 
+                  style={{ justifyContent: "flex-start", fontSize: "0.75rem", padding: "0.3rem 0.5rem", width: "100%" }} 
+                  onClick={() => { editor.chain().focus().addColumnBefore().run(); setShowTableMenu(false); }}
+                >
+                  <PremiumIcon name="chevronLeft" size={12} style={{ marginRight: "0.4rem" }} />
+                  <span>Tambah Kolom Kiri</span>
+                </button>
+                <button 
+                  className="btn btn-ghost" 
+                  style={{ justifyContent: "flex-start", fontSize: "0.75rem", padding: "0.3rem 0.5rem", width: "100%" }} 
+                  onClick={() => { editor.chain().focus().addColumnAfter().run(); setShowTableMenu(false); }}
+                >
+                  <PremiumIcon name="chevronRight" size={12} style={{ marginRight: "0.4rem" }} />
+                  <span>Tambah Kolom Kanan</span>
+                </button>
+                <div style={{ height: "1px", backgroundColor: "var(--border)", margin: "2px 0" }} />
+                <button 
+                  className="btn btn-ghost text-danger" 
+                  style={{ justifyContent: "flex-start", fontSize: "0.75rem", padding: "0.3rem 0.5rem", width: "100%" }} 
+                  onClick={() => { editor.chain().focus().deleteRow().run(); setShowTableMenu(false); }}
+                >
+                  <PremiumIcon name="trash" size={12} style={{ marginRight: "0.4rem" }} />
+                  <span>Hapus Baris</span>
+                </button>
+                <button 
+                  className="btn btn-ghost text-danger" 
+                  style={{ justifyContent: "flex-start", fontSize: "0.75rem", padding: "0.3rem 0.5rem", width: "100%" }} 
+                  onClick={() => { editor.chain().focus().deleteColumn().run(); setShowTableMenu(false); }}
+                >
+                  <PremiumIcon name="trash" size={12} style={{ marginRight: "0.4rem" }} />
+                  <span>Hapus Kolom</span>
+                </button>
+                <button 
+                  className="btn btn-ghost text-danger" 
+                  style={{ justifyContent: "flex-start", fontSize: "0.75rem", padding: "0.3rem 0.5rem", width: "100%" }} 
+                  onClick={() => { editor.chain().focus().deleteTable().run(); setShowTableMenu(false); }}
+                >
+                  <PremiumIcon name="trash2" size={12} style={{ marginRight: "0.4rem" }} />
+                  <span>Hapus Tabel</span>
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Image Tool */}
+        <label 
+          title="Sisipkan Gambar" 
+          style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", width: "32px", height: "32px", borderRadius: "6px", transition: "all 0.15s ease", color: "var(--text-muted)" }} 
+          onMouseEnter={e => e.currentTarget.style.background = "var(--surface-hover)"} 
+          onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+        >
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handleImageUpload}
+            style={{ position: "absolute", opacity: 0, width: 0, height: 0 }}
+          />
+          <PremiumIcon name="image" size={15} />
+        </label>
+        <div style={{ width: "1px", height: "20px", backgroundColor: "var(--border)", margin: "0 4px" }} />
         {/* AI Menu trigger */}
         <div style={{ position: "relative" }}>
           <button
@@ -532,9 +696,45 @@ export function TiptapEditor({
         </div>
       )}
 
-      {/* Editor Content */}
-      <div style={{ flex: 1, overflowY: "auto", padding: isMobile ? "1rem" : "2rem", position: "relative" }}>
-        
+      {/* Wrapper for scroll container and loader */}
+      <div style={{ flex: 1, position: "relative", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+        {/* Editor Content */}
+        <div style={{ flex: 1, overflowY: "auto", padding: isMobile ? "1rem" : "2rem" }}>
+          {/* BubbleMenu — only on non-touch (desktop) */}
+          {!isTouchDevice && (
+            <BubbleMenu
+              editor={editor}
+              tippyOptions={{ 
+                duration: 150, 
+                interactive: true,
+                boundary: "viewport",
+                maxWidth: "min(400px, 90vw)"
+              }}
+              className="glass-panel"
+              style={{
+                display: "flex",
+                gap: "0.2rem",
+                padding: "0.4rem",
+                borderRadius: "8px",
+                boxShadow: "var(--shadow-lg)",
+                border: "1px solid var(--border)",
+                backgroundColor: "var(--surface)",
+                alignItems: "center",
+                position: "relative",
+                flexWrap: "wrap",
+              }}
+            >
+              <AiActionButtons
+                onAction={onAiAction}
+                isProcessing={isAiProcessing}
+                showCustomInstruction={showCustomInstruction}
+                onToggleCustomInstruction={toggleCustomInstruction}
+              />
+            </BubbleMenu>
+          )}
+          <EditorContent editor={editor} className={isAiProcessing ? "tiptap-ai-refactoring" : ""} />
+        </div>
+
         {/* ANIMASI AI MEMPROSES */}
         {isAiProcessing && (
           <div style={{
@@ -543,55 +743,48 @@ export function TiptapEditor({
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundColor: "rgba(var(--background-rgb), 0.4)",
-            backdropFilter: "blur(2px)",
-            zIndex: 10,
+            zIndex: 50,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             flexDirection: "column",
-            gap: "0.5rem"
+            gap: "0.5rem",
+            pointerEvents: "auto"
           }}>
-            <div style={{ padding: "0.75rem 1.25rem", backgroundColor: "var(--surface)", border: "1px solid var(--primary)", borderRadius: "var(--radius-full)", boxShadow: "0 0 15px rgba(99,102,241,0.3)", display: "flex", alignItems: "center", gap: "0.75rem", color: "var(--primary)", fontWeight: 600 }}>
+            {/* Blurry Backdrop Overlay */}
+            <div style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: "rgba(var(--background-rgb), 0.4)",
+              backdropFilter: "blur(2px)",
+              WebkitBackdropFilter: "blur(2px)",
+              zIndex: 1
+            }} />
+
+            {/* Content Container (On top of blur) */}
+            <div style={{
+              position: "relative",
+              zIndex: 2,
+              padding: "0.75rem 1.25rem",
+              backgroundColor: "var(--surface)",
+              border: "1px solid var(--primary)",
+              borderRadius: "var(--radius-full)",
+              boxShadow: "0 0 15px rgba(99,102,241,0.3)",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.75rem",
+              color: "var(--primary)",
+              fontWeight: 600
+            }}>
               <PremiumIcon name="sparkles" size={18} className="animate-pulse" />
               AI sedang memperbaiki teks...
               <LoadingSpinner size={16} className="text-primary" />
             </div>
           </div>
         )}
-        {/* BubbleMenu — only on non-touch (desktop) */}
-        {!isTouchDevice && (
-          <BubbleMenu
-            editor={editor}
-            tippyOptions={{ 
-              duration: 150, 
-              interactive: true,
-              boundary: "viewport",
-              maxWidth: "min(400px, 90vw)"
-            }}
-            className="glass-panel"
-            style={{
-              display: "flex",
-              gap: "0.2rem",
-              padding: "0.4rem",
-              borderRadius: "8px",
-              boxShadow: "var(--shadow-lg)",
-              border: "1px solid var(--border)",
-              backgroundColor: "var(--surface)",
-              alignItems: "center",
-              position: "relative",
-              flexWrap: "wrap",
-            }}
-          >
-            <AiActionButtons
-              onAction={onAiAction}
-              isProcessing={isAiProcessing}
-              showCustomInstruction={showCustomInstruction}
-              onToggleCustomInstruction={toggleCustomInstruction}
-            />
-          </BubbleMenu>
-        )}
-        <EditorContent editor={editor} className={isAiProcessing ? "tiptap-ai-refactoring" : ""} />
       </div>
 
       <style jsx global>{`

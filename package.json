@@ -21,6 +21,7 @@
     "@next/swc-win32-x64-msvc": "16.2.4"
   },
   "dependencies": {
+    "@reduxjs/toolkit": "^2.12.0",
     "@tiptap/extension-bubble-menu": "^3.23.6",
     "@tiptap/extension-color": "^3.23.6",
     "@tiptap/extension-highlight": "^3.23.6",
@@ -50,6 +51,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/json-schema": "^7.0.15",
     "eslint": "^9",
     "eslint-config-next": "16.2.4",
     "tailwindcss": "^4"

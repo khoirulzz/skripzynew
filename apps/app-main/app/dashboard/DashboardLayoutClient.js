@@ -61,7 +61,6 @@ export default function DashboardLayout({ children }) {
         {/* -- MOBILE: Sliding sidebar drawer -- */}
         {isMobile && (
           <div
-            className="glass-panel"
             style={{
               position: "fixed",
               left: 0,
@@ -69,13 +68,9 @@ export default function DashboardLayout({ children }) {
               bottom: 0,
               zIndex: 50,
               width: "260px",
-              borderRight: "1px solid rgba(79,70,229,0.12)",
               boxShadow: "4px 0 24px rgba(0,0,0,0.18)",
               transform: isMobileOpen ? "translateX(0)" : "translateX(-100%)",
               transition: "transform 0.3s cubic-bezier(0.4,0,0.2,1)",
-              background: "transparent",
-              backdropFilter: "none",
-              WebkitBackdropFilter: "none",
             }}
           >
             <Sidebar isCollapsed={false} toggleCollapse={closeMobile} isMobile={true} />

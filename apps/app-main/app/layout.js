@@ -16,20 +16,30 @@ export const metadata = {
     default: "Skripzy | AI Workspace Research",
   },
   description: "Platform all-in-one berbasis AI untuk membantu mahasiswa dari tahap ide penelitian hingga skripsi selesai.",
+  manifest: "/manifest.json",
   icons: {
     icon: "/favicon.ico",
     shortcut: "/favicon.ico",
     apple: "/apple-touch-icon.png",
   },
   metadataBase: new URL('https://skripzy.id'),
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Skripzy",
+  },
 };
 
 export default function RootLayout({ children }) {
   return (
     <html lang="id" suppressHydrationWarning>
       <head>
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="Skripzy" />
         <meta name="theme-color" content="#000000" />
         <meta name="msapplication-TileColor" content="#000000" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
         <link rel="icon" type="image/x-icon" href="/favicon.ico" />
         <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
         <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />

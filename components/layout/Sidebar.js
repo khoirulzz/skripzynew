@@ -92,7 +92,9 @@ export function Sidebar({ isCollapsed = false, toggleCollapse, isMobile = false 
         flexDirection: "column",
         borderRight: "1px solid rgba(79,70,229,0.12)",
         overflow: "hidden",
-        padding: "0 0.5rem 1.5rem",
+        padding: isMobile
+          ? "calc(env(safe-area-inset-top, 0px) + 0.5rem) 0.5rem calc(env(safe-area-inset-bottom, 0px) + 1.5rem) 0.5rem"
+          : "0 0.5rem 1.5rem",
         background: isMobile ? undefined : "transparent",
         backdropFilter: isMobile ? undefined : "none",
         WebkitBackdropFilter: isMobile ? undefined : "none",

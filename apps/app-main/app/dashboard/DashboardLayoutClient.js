@@ -98,7 +98,16 @@ export default function DashboardLayout({ children }) {
           </div>
         )}
 
-        <main style={{ flex: 1, display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
+        <main
+          style={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            height: "100vh",
+            overflow: "hidden",
+            paddingTop: isMobile && isEditorPage ? "env(safe-area-inset-top, 0px)" : "0px",
+          }}
+        >
           {/* Pass mobile toggle or desktop collapse toggle so Header can render the hamburger */}
           {!isEditorPage && (
             <Header
@@ -106,7 +115,14 @@ export default function DashboardLayout({ children }) {
               isMobile={isMobile}
             />
           )}
-          <div style={{ padding: isMobile ? "0.75rem" : "1.5rem", overflowY: "auto", flex: 1, position: "relative" }}>
+          <div
+            style={{
+              padding: isMobile ? "0.75rem 0.75rem calc(env(safe-area-inset-bottom, 0px) + 0.75rem) 0.75rem" : "1.5rem",
+              overflowY: "auto",
+              flex: 1,
+              position: "relative",
+            }}
+          >
             {/* Content wrapper */}
             <div style={{ position: "relative", zIndex: 1 }}>
               {children}

@@ -233,9 +233,21 @@ Berikan hasil murni dalam format Markdown yang rapi. Tanpa markdown block dan ka
             <p style={{ margin: "0.1rem 0 0 0", fontSize: isMobile ? "0.65rem" : "0.75rem", color: "var(--text-muted)" }}>Bantuan cerdas untuk ide & draf penelitian</p>
           </div>
         </div>
-        <div style={{ marginLeft: isMobile ? 0 : "auto", display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.75rem", fontWeight: 600 }}>
-          <span className="text-muted">Kredit Anda:</span>
-          <span style={{ color: "var(--text-main)" }}>{credits}</span>
+        <div style={{ 
+          marginLeft: isMobile ? 0 : "auto", 
+          display: "flex", 
+          alignItems: "center", 
+          gap: "0.5rem", 
+          padding: "0.4rem 0.85rem", 
+          backgroundColor: "var(--surface-hover)", 
+          borderRadius: "var(--radius-lg)", 
+          fontSize: "0.75rem", 
+          fontWeight: 600, 
+          whiteSpace: "nowrap" 
+        }}>
+          <PremiumIcon name="zap" size={14} style={{ color: "var(--primary)" }} />
+          <span className="text-muted">Kredit:</span>
+          <span style={{ color: "var(--text-main)" }}>{credits.toLocaleString('id-ID')}</span>
         </div>
       </div>
 

@@ -91,13 +91,30 @@ export function ReferenceManager({ workspaceId, currentChapterKey = null, onClos
   const [selectedIds, setSelectedIds] = useState([]);
   const [uploadingId, setUploadingId] = useState("");
   const [uploadLabel, setUploadLabel] = useState("");
-  const [manualOpen, setManualOpen] = useState(false);
   const [manualReference, setManualReference] = useState(createManualReferenceState());
+  const [manualFile, setManualFile] = useState(null);
   const [expandedReferenceIds, setExpandedReferenceIds] = useState([]);
   const [expandedNoteIds, setExpandedNoteIds] = useState([]);
   const [noteDrafts, setNoteDrafts] = useState({});
   const [previewReference, setPreviewReference] = useState(null);
   const [isMobile, setIsMobile] = useState(false);
+
+  // Hub sub-tabs: "search" (Cari), "manual" (Tambah Manual), "notebook" (Impor Notebook)
+  const [activeRefTab, setActiveRefTab] = useState("search");
+
+  // Notebook states
+  const [notebooks, setNotebooks] = useState([]);
+  const [selectedNotebookId, setSelectedNotebookId] = useState("");
+  const [notebookDocs, setNotebookDocs] = useState([]);
+  const [loadingNotebooks, setLoadingNotebooks] = useState(false);
+  const [loadingNotebookDocs, setLoadingNotebookDocs] = useState(false);
+
+  // Plan limit checks
+  const LIMITS = { free: 5, pro: 15, plus: Infinity };
+  const plan = userData?.plan || "free";
+  const limit = LIMITS[plan] || 5;
+  const pdfReferences = useMemo(() => references.filter(r => !!r.pdfUrl), [references]);
+  const pdfCount = pdfReferences.length;
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -109,6 +126,79 @@ export function ReferenceManager({ workspaceId, currentChapterKey = null, onClos
   // Credit cost configuration (default 1 credit per search)
   const REFERENCE_SEARCH_COST = toolMap["referensi-ringkas"]?.creditCost ?? 1;
   const creditBalance = userData?.credits ?? 0;
+
+  // Fetch notebooks list (for Pro/Plus)
+  const fetchNotebooks = async () => {
+    if (plan === "free") return;
+    setLoadingNotebooks(true);
+    try {
+      const resp = await d1Request("notebooks");
+      setNotebooks(resp.data || []);
+    } catch (err) {
+      console.error("Gagal mengambil notebook:", err);
+    } finally {
+      setLoadingNotebooks(false);
+    }
+  };
+
+  // Fetch documents inside selected notebook
+  const fetchNotebookDocs = async (notebookId) => {
+    setSelectedNotebookId(notebookId);
+    if (!notebookId) {
+      setNotebookDocs([]);
+      return;
+    }
+    setLoadingNotebookDocs(true);
+    try {
+      const docRes = await d1Request("document_metadata");
+      if (docRes && docRes.data) {
+        const docs = docRes.data.filter(d => d.notebook_id === notebookId);
+        setNotebookDocs(docs);
+      }
+    } catch (err) {
+      console.error("Gagal mengambil dokumen notebook:", err);
+    } finally {
+      setLoadingNotebookDocs(false);
+    }
+  };
+
+  // Import document from notebook to workspace references
+  const handleImportNotebookDoc = async (doc) => {
+    if (pdfCount >= limit) {
+      alert(`Batas unggah PDF terlampaui. Plan ${plan.toUpperCase()} hanya memperbolehkan maksimal ${limit} referensi PDF.`);
+      return;
+    }
+
+    const payload = {
+      id: doc.id, // Keep the same ID so RAG vector chunks match automatically
+      title: doc.title || doc.document_title || "Tanpa Judul",
+      authorString: doc.author || "",
+      authors: parseAuthors(doc.author || ""),
+      year: doc.year || "",
+      url: doc.url || doc.cloudinary_url || "",
+      displayUrl: doc.url || doc.cloudinary_url || "",
+      venue: "",
+      abstract: doc.summary || "",
+      citationApa: `${doc.author || "Penulis"} (${doc.year || "tanpa tahun"}). ${doc.title || doc.document_title}.`,
+      chapterKeys: currentChapterKey ? [currentChapterKey] : [],
+      notes: "",
+      hasFullText: true,
+      pdfUrl: doc.url || doc.cloudinary_url || "",
+      indexedAt: new Date().toISOString(),
+      chunkCount: 10,
+      fingerprint: `doc_id:${doc.id}`,
+      sourceType: "notebook_import",
+    };
+
+    const existingReference = findExistingReference(payload);
+    if (existingReference) {
+      alert("Referensi ini sudah diimpor ke workspace.");
+      return;
+    }
+
+    await saveReference(payload);
+    alert(`Jurnal "${payload.title}" berhasil diimpor dari notebook.`);
+  };
 
   useEffect(() => {
     if (!workspaceId) return;
@@ -219,7 +309,7 @@ export function ReferenceManager({ workspaceId, currentChapterKey = null, onClos
   };
 
   const saveReference = async (payload) => {
-    const id = crypto.randomUUID();
+    const id = payload.id || crypto.randomUUID();
     await d1Request("workspace_references", {
       method: "POST",
       body: {
@@ -278,13 +368,23 @@ export function ReferenceManager({ workspaceId, currentChapterKey = null, onClos
 
   const handleManualSubmit = async (event) => {
     event.preventDefault();
-    if (!manualReference.title.trim()) {
-      setError("Judul referensi manual wajib diisi.");
-      return;
+    let title = manualReference.title.trim();
+    const file = manualFile;
+
+    if (!title) {
+      if (file) {
+        title = file.name.replace(/\.[^/.]+$/, ""); // strip extension
+      } else {
+        setError("Judul wajib diisi atau unggah file PDF.");
+        return;
+      }
     }
 
+    const refId = crypto.randomUUID();
     const payload = {
+      id: refId,
       ...manualReference,
+      title: title,
       authorString: manualReference.authorString.trim(),
       authors: parseAuthors(manualReference.authorString),
       year: manualReference.year.trim(),
@@ -292,14 +392,14 @@ export function ReferenceManager({ workspaceId, currentChapterKey = null, onClos
       displayUrl: manualReference.url.trim(),
       venue: manualReference.venue.trim(),
       abstract: manualReference.abstract.trim(),
-      citationApa: `${manualReference.authorString || "Penulis"} (${manualReference.year || "tanpa tahun"}). ${manualReference.title}. ${manualReference.venue || "Sumber pribadi"}.`,
+      citationApa: `${manualReference.authorString || "Penulis"} (${manualReference.year || "tanpa tahun"}). ${title}. ${manualReference.venue || "Sumber pribadi"}.`,
       chapterKeys: currentChapterKey ? [currentChapterKey] : [],
       notes: "",
-      hasFullText: false,
+      hasFullText: !!file,
       pdfUrl: "",
       indexedAt: null,
       chunkCount: 0,
-      fingerprint: buildReferenceFingerprint(manualReference),
+      fingerprint: `manual:${refId}`,
       sourceType: "manual",
     };
 
@@ -310,9 +410,15 @@ export function ReferenceManager({ workspaceId, currentChapterKey = null, onClos
     }
 
     await saveReference(payload);
+
+    if (file) {
+      void handleUploadPdf(payload, file);
+    }
+
     setManualReference(createManualReferenceState());
-    setManualOpen(false);
+    setManualFile(null);
     setError("");
+    setActiveRefTab("search");
   };
 
   const toggleSelected = (referenceId) => {
@@ -368,6 +474,15 @@ export function ReferenceManager({ workspaceId, currentChapterKey = null, onClos
 
   const handleUploadPdf = async (reference, file) => {
     if (!file || !user) return;
+
+    // Check if references with PDF already reach limit
+    const pdfReferences = references.filter(r => !!r.pdfUrl);
+    const pdfCount = pdfReferences.length;
+    if (pdfCount >= limit && !reference.pdfUrl) {
+      alert(`Batas unggah PDF terlampaui. Plan ${plan.toUpperCase()} hanya memperbolehkan maksimal ${limit} referensi PDF.`);
+      return;
+    }
+
     setUploadingId(reference.id);
     setUploadLabel("Mengekstrak PDF...");
 
@@ -481,10 +596,10 @@ export function ReferenceManager({ workspaceId, currentChapterKey = null, onClos
                   <span className="hide-mobile">APA</span>
                 </button>
                 <div style={{ width: "1px", height: "20px", backgroundColor: "var(--border)", margin: "0 0.25rem" }} className="hide-mobile" />
-                <button className={`btn ${manualOpen ? "btn-primary" : "btn-outline"}`} onClick={() => setManualOpen((current) => !current)}>
-                  <PremiumIcon name={manualOpen ? "x" : "plus"} size={14} />
-                  {manualOpen ? (isMobile ? "Batal" : "Tutup Manual") : (isMobile ? "Manual" : "Tambah Manual")}
-                </button>
+                <div style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.3rem 0.65rem", backgroundColor: "var(--background)", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", fontSize: "0.75rem", fontWeight: 700 }}>
+                  <PremiumIcon name="fileText" size={13} style={{ color: "var(--primary)" }} />
+                  <span>PDF: {pdfCount} / {limit === Infinity ? "∞" : limit}</span>
+                </div>
               </>
             ) : null}
             {onClose ? (
@@ -495,72 +610,201 @@ export function ReferenceManager({ workspaceId, currentChapterKey = null, onClos
           </div>
         </div>
 
-        <form onSubmit={handleSearch} style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : (compact ? "1fr" : "minmax(0,1fr) 160px auto"), gap: "0.65rem" }}>
-          <input
-            type="text"
-            className="form-input"
-            value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value)}
-            placeholder="Cari referensi ilmiah..."
-          />
-          {!compact && !isMobile ? (
-            <select className="form-input" value={yearRange} onChange={(event) => setYearRange(event.target.value)}>
-              <option value="3">3 tahun</option>
-              <option value="5">5 tahun</option>
-              <option value="10">10 tahun</option>
-              <option value="all">Semua</option>
-            </select>
-          ) : null}
-          <button className="btn btn-primary" type="submit" disabled={searching || !searchTerm.trim()} style={{ width: isMobile ? "100%" : "auto" }}>
-            <PremiumIcon name="search" size={14} />
-            {searching ? "Mencari..." : "Cari"}
-          </button>
-        </form>
+        {/* Tab Headers (Cari, Manual, Notebook) */}
+        {!compact && (
+          <div style={{ display: "flex", gap: "0.4rem", borderBottom: "1px solid var(--border)", paddingBottom: "0.4rem", marginBottom: "0.9rem", overflowX: "auto" }}>
+            <button type="button" className="btn btn-ghost" style={{ borderBottom: activeRefTab === "search" ? "2px solid var(--primary)" : "2px solid transparent", color: activeRefTab === "search" ? "var(--primary)" : "var(--text-muted)", borderRadius: 0, padding: "0.3rem 0.6rem" }} onClick={() => setActiveRefTab("search")}>
+              Cari Jurnal
+            </button>
+            <button type="button" className="btn btn-ghost" style={{ borderBottom: activeRefTab === "manual" ? "2px solid var(--primary)" : "2px solid transparent", color: activeRefTab === "manual" ? "var(--primary)" : "var(--text-muted)", borderRadius: 0, padding: "0.3rem 0.6rem" }} onClick={() => setActiveRefTab("manual")}>
+              Tambah Manual
+            </button>
+            <button type="button" className="btn btn-ghost" style={{ borderBottom: activeRefTab === "notebook" ? "2px solid var(--primary)" : "2px solid transparent", color: activeRefTab === "notebook" ? "var(--primary)" : "var(--text-muted)", borderRadius: 0, padding: "0.3rem 0.6rem" }} onClick={() => { setActiveRefTab("notebook"); void fetchNotebooks(); }}>
+              Impor Notebook
+            </button>
+          </div>
+        )}
 
-        {manualOpen && !compact ? (
-          <form onSubmit={handleManualSubmit} className="glass-panel" style={{ marginTop: "0.9rem", padding: "1rem", backgroundColor: "var(--background)" }}>
+        {/* Tab 1: Cari Jurnal */}
+        {activeRefTab === "search" && (
+          <form onSubmit={handleSearch} style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : (compact ? "1fr" : "minmax(0,1fr) 160px auto"), gap: "0.65rem" }}>
+            <input
+              type="text"
+              className="form-input"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Cari referensi ilmiah..."
+            />
+            {!compact && !isMobile ? (
+              <select className="form-input" value={yearRange} onChange={(event) => setYearRange(event.target.value)}>
+                <option value="3">3 tahun</option>
+                <option value="5">5 tahun</option>
+                <option value="10">10 tahun</option>
+                <option value="all">Semua</option>
+              </select>
+            ) : null}
+            <button className="btn btn-primary" type="submit" disabled={searching || !searchTerm.trim()} style={{ width: isMobile ? "100%" : "auto" }}>
+              <PremiumIcon name="search" size={14} />
+              {searching ? "Mencari..." : "Cari"}
+            </button>
+          </form>
+        )}
+
+        {/* Tab 2: Tambah Manual */}
+        {activeRefTab === "manual" && !compact && (
+          <form onSubmit={handleManualSubmit} className="glass-panel" style={{ padding: "1rem", backgroundColor: "var(--background)" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", marginBottom: "0.85rem" }}>
               <div>
                 <h4 style={{ fontSize: "0.94rem", margin: 0 }}>Tambah Referensi Manual</h4>
-                <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.78rem" }}>Masukkan jurnal atau sumber referensi milik Anda sendiri.</p>
+                <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.78rem" }}>Masukkan jurnal atau sumber referensi milik Anda sendiri (semua isian bersifat opsional).</p>
               </div>
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "0.75rem" }}>
               <div className="form-group" style={{ margin: 0, gridColumn: "1 / -1" }}>
-                <label className="form-label">Judul Referensi</label>
-                <input className="form-input" value={manualReference.title} onChange={(event) => setManualReference((current) => ({ ...current, title: event.target.value }))} />
+                <label className="form-label">Judul Referensi (Opsional jika upload PDF)</label>
+                <input className="form-input" value={manualReference.title} onChange={(event) => setManualReference((current) => ({ ...current, title: event.target.value }))} placeholder="Nama file PDF akan digunakan sebagai judul jika dikosongkan" />
               </div>
               <div className="form-group" style={{ margin: 0 }}>
-                <label className="form-label">Penulis</label>
+                <label className="form-label">Penulis (Opsional)</label>
                 <input className="form-input" value={manualReference.authorString} onChange={(event) => setManualReference((current) => ({ ...current, authorString: event.target.value }))} placeholder="Pisahkan dengan koma" />
               </div>
               <div className="form-group" style={{ margin: 0 }}>
-                <label className="form-label">Tahun</label>
-                <input className="form-input" value={manualReference.year} onChange={(event) => setManualReference((current) => ({ ...current, year: event.target.value }))} placeholder="2025" />
+                <label className="form-label">Tahun (Opsional)</label>
+                <input className="form-input" value={manualReference.year} onChange={(event) => setManualReference((current) => ({ ...current, year: event.target.value }))} placeholder="2026" />
               </div>
               <div className="form-group" style={{ margin: 0 }}>
-                <label className="form-label">Jurnal / Venue</label>
+                <label className="form-label">Jurnal / Venue (Opsional)</label>
                 <input className="form-input" value={manualReference.venue} onChange={(event) => setManualReference((current) => ({ ...current, venue: event.target.value }))} />
               </div>
               <div className="form-group" style={{ margin: 0 }}>
-                <label className="form-label">URL</label>
+                <label className="form-label">URL (Opsional)</label>
                 <input className="form-input" value={manualReference.url} onChange={(event) => setManualReference((current) => ({ ...current, url: event.target.value }))} placeholder="https://..." />
               </div>
               <div className="form-group" style={{ margin: 0, gridColumn: "1 / -1" }}>
-                <label className="form-label">Abstrak / Catatan Singkat</label>
-                <textarea className="form-textarea" rows={3} value={manualReference.abstract} onChange={(event) => setManualReference((current) => ({ ...current, abstract: event.target.value }))} />
+                <label className="form-label">Abstrak / Catatan Singkat (Opsional)</label>
+                <textarea className="form-textarea" rows={2} value={manualReference.abstract} onChange={(event) => setManualReference((current) => ({ ...current, abstract: event.target.value }))} />
+              </div>
+              <div className="form-group" style={{ margin: 0, gridColumn: "1 / -1" }}>
+                <label className="form-label">Unggah File PDF (Opsional)</label>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                  <label className="btn btn-outline" style={{ cursor: "pointer", margin: 0 }}>
+                    <PremiumIcon name="uploadCloud" size={14} />
+                    <span>{manualFile ? manualFile.name : "Pilih PDF"}</span>
+                    <input
+                      type="file"
+                      accept=".pdf"
+                      style={{ display: "none" }}
+                      onChange={(event) => setManualFile(event.target.files?.[0] || null)}
+                    />
+                  </label>
+                  {manualFile && (
+                    <button type="button" className="btn btn-ghost" style={{ padding: "0.35rem", color: "var(--danger)" }} onClick={() => setManualFile(null)}>
+                      <PremiumIcon name="trash" size={14} />
+                    </button>
+                  )}
+                </div>
+                <small style={{ color: "var(--text-muted)", fontSize: "0.7rem", display: "block", marginTop: "0.2rem" }}>
+                  * PDF diindeks dengan pembagian 2000 karakter (~350 kata) per chunk untuk pencarian RAG.
+                </small>
               </div>
             </div>
 
             <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "0.85rem" }}>
               <button className="btn btn-primary" type="submit">
                 <PremiumIcon name="plus" size={14} />
-                Simpan Referensi
+                Simpan & Upload
               </button>
             </div>
           </form>
-        ) : null}
+        )}
+
+        {/* Tab 3: Impor Notebook */}
+        {activeRefTab === "notebook" && !compact && (
+          <div className="glass-panel" style={{ padding: "1rem", backgroundColor: "var(--background)" }}>
+            <h4 style={{ fontSize: "0.94rem", margin: 0 }}>Impor Jurnal dari Notebook</h4>
+            <p style={{ margin: "0.25rem 0 0.75rem 0", fontSize: "0.78rem", color: "var(--text-muted)" }}>
+              Impor referensi yang sudah Anda unggah di projek Notebook Anda.
+            </p>
+
+            {plan === "free" ? (
+              <div style={{ padding: "1rem", borderRadius: "10px", backgroundColor: "rgba(79, 70, 229, 0.04)", border: "1px solid rgba(79, 70, 229, 0.1)", textAlign: "center" }}>
+                <p style={{ fontSize: "0.82rem", margin: 0 }}>
+                  Fitur Impor Notebook eksklusif untuk pengguna <strong>PRO</strong> atau <strong>PLUS</strong>.
+                </p>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+                {loadingNotebooks ? (
+                  <div style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>Memuat daftar notebook...</div>
+                ) : notebooks.length === 0 ? (
+                  <div style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>Tidak ada projek notebook ditemukan.</div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label">Pilih Notebook</label>
+                      <select
+                        className="form-input"
+                        value={selectedNotebookId}
+                        onChange={(e) => {
+                          void fetchNotebookDocs(e.target.value);
+                        }}
+                      >
+                        <option value="">-- Pilih Notebook --</option>
+                        {notebooks.map((nb) => (
+                          <option key={nb.id} value={nb.id}>
+                            {nb.title}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {selectedNotebookId && (
+                      <div style={{ marginTop: "0.5rem" }}>
+                        <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--primary)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.5rem" }}>
+                          DAFTAR DOKUMEN NOTEBOOK:
+                        </div>
+                        {loadingNotebookDocs ? (
+                          <div style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>Memuat dokumen...</div>
+                        ) : notebookDocs.length === 0 ? (
+                          <div style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>Tidak ada dokumen di notebook ini.</div>
+                        ) : (
+                          <div className="workspace-scroll" style={{ display: "flex", flexDirection: "column", gap: "0.5rem", maxHeight: "200px", overflowY: "auto" }}>
+                            {notebookDocs.map((doc) => {
+                              const alreadyImported = references.some((r) => r.id === doc.id || r.pdfUrl === doc.cloudinary_url);
+                              return (
+                                <div key={doc.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem", padding: "0.6rem 0.75rem", borderRadius: "8px", border: "1px solid var(--border)", backgroundColor: "var(--surface)" }}>
+                                  <div style={{ minWidth: 0, flex: 1 }}>
+                                    <div style={{ fontSize: "0.82rem", fontWeight: 600, color: "var(--text-main)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                      {doc.document_title}
+                                    </div>
+                                    <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginTop: "0.15rem" }}>
+                                      {doc.author || "Tanpa Penulis"} | {doc.year || "Tanpa Tahun"}
+                                    </div>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    className={`btn ${alreadyImported ? "btn-outline" : "btn-primary"}`}
+                                    style={{ padding: "0.3rem 0.6rem", fontSize: "0.72rem" }}
+                                    disabled={alreadyImported}
+                                    onClick={() => void handleImportNotebookDoc(doc)}
+                                  >
+                                    <PremiumIcon name={alreadyImported ? "check" : "plus"} size={12} />
+                                    {alreadyImported ? "Ada" : "Impor"}
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {error ? (
           <div style={{ marginTop: "0.75rem", padding: "0.75rem", borderRadius: "10px", backgroundColor: "rgba(239,68,68,0.08)", color: "var(--danger)", fontSize: "0.82rem" }}>

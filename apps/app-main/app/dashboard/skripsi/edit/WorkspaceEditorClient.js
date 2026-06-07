@@ -15,6 +15,7 @@ import { DataHub } from "@/components/workspace/DataHub";
 import { DataAnalysisDashboard } from "@/components/workspace/DataAnalysisDashboard";
 import { WorkspaceNotesPanel } from "@/components/workspace/WorkspaceNotesPanel";
 import { CHAPTERS, WORKSPACE_TABS, calculateWorkspaceProgress, stripHtml, serializeLocalImages, deserializeLocalImages } from "@/lib/workspaceDefaults";
+import { exportToDocx } from "@/lib/docxExport";
 
 function StatusBadge({ status }) {
   const tone =
@@ -402,126 +403,35 @@ export default function WorkspaceEditorPage() {
     [contentBuffer, isSaving]
   );
 
-  const handleExportWord = (exportAll = false) => {
+  const handleExportWord = async (exportAll = false) => {
     if (!workspace) return;
 
-    let bodyHtml = "";
+    const sections = [];
     if (exportAll) {
-      CHAPTERS.forEach((chapter, index) => {
+      CHAPTERS.forEach((chapter) => {
         const rawHtml = contentBuffer[chapter.key] || "";
         const deserializedHtml = deserializeLocalImages(rawHtml);
-        const titleHtml = `<h1 style="text-align: center; text-transform: uppercase; font-family: 'Times New Roman'; font-weight: bold; font-size: 14pt; margin-bottom: 18pt;">${chapter.longLabel}</h1>`;
-
-        if (index > 0) {
-          bodyHtml += `<div style="page-break-before: always; mso-break-type: section-break;">${titleHtml}${deserializedHtml}</div>`;
-        } else {
-          bodyHtml += `<div>${titleHtml}${deserializedHtml}</div>`;
-        }
+        sections.push({
+          title: chapter.longLabel,
+          html: deserializedHtml
+        });
       });
     } else {
       const chapter = CHAPTERS[activeChapter];
       const rawHtml = contentBuffer[chapter.key] || "";
       const deserializedHtml = deserializeLocalImages(rawHtml);
-      const titleHtml = `<h1 style="text-align: center; text-transform: uppercase; font-family: 'Times New Roman'; font-weight: bold; font-size: 14pt; margin-bottom: 18pt;">${chapter.longLabel}</h1>`;
-      bodyHtml = `<div>${titleHtml}${deserializedHtml}</div>`;
+      sections.push({
+        title: chapter.longLabel,
+        html: deserializedHtml
+      });
     }
 
-    const htmlContent = `
-<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
-<head>
-<meta charset="utf-8">
-<title>${workspace.title || "Ekspor Word"}</title>
-<!--[if gte mso 9]>
-<xml>
-<w:WordDocument>
-  <w:View>Print</w:View>
-  <w:Zoom>100</w:Zoom>
-  <w:DoNotOptimizeForBrowser/>
-</w:WordDocument>
-</xml>
-<![endif]-->
-<style>
-@page {
-  size: 21cm 29.7cm; /* A4 */
-  margin: 4cm 3cm 3cm 4cm; /* Top 4cm, Right 3cm, Bottom 3cm, Left 4cm */
-}
-body {
-  font-family: 'Times New Roman', Times, serif;
-  font-size: 12pt;
-  line-height: 1.5;
-  color: #000000;
-}
-p {
-  margin-top: 0;
-  margin-bottom: 12pt;
-  text-align: justify;
-  text-indent: 1.25cm;
-  line-height: 1.5;
-}
-h1 {
-  font-family: 'Times New Roman', Times, serif;
-  font-size: 14pt;
-  text-align: center;
-  text-transform: uppercase;
-  font-weight: bold;
-  margin-top: 0;
-  margin-bottom: 18pt;
-  page-break-after: avoid;
-}
-h2 {
-  font-family: 'Times New Roman', Times, serif;
-  font-size: 12pt;
-  text-align: justify;
-  font-weight: bold;
-  margin-top: 18pt;
-  margin-bottom: 6pt;
-  page-break-after: avoid;
-}
-h3 {
-  font-family: 'Times New Roman', Times, serif;
-  font-size: 12pt;
-  text-align: justify;
-  font-weight: bold;
-  font-style: italic;
-  margin-top: 12pt;
-  margin-bottom: 6pt;
-  page-break-after: avoid;
-}
-table {
-  border-collapse: collapse;
-  width: 100%;
-  margin: 12pt 0;
-}
-th, td {
-  border: 1px solid #000000;
-  padding: 6pt;
-  font-size: 11pt;
-}
-img {
-  max-width: 100%;
-  height: auto;
-}
-</style>
-</head>
-<body>
-<div class="Section1">
-${bodyHtml}
-</div>
-</body>
-</html>
-`;
-
-    const blob = new Blob(['\ufeff' + htmlContent], { type: 'application/msword' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = exportAll
-      ? `${workspace.title || "Skripsi"}_Lengkap.doc`
-      : `${workspace.title || "Skripsi"}_${CHAPTERS[activeChapter].label}.doc`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    try {
+      await exportToDocx(workspace.title || "Skripsi", sections);
+    } catch (err) {
+      console.error("Gagal ekspor ke DOCX:", err);
+      alert("Gagal mengekspor dokumen ke DOCX.");
+    }
   };
 
   const handleSaveContext = async (newRoot, newChapter) => {
@@ -529,14 +439,13 @@ ${bodyHtml}
     try {
       // Save Root Context
       const rootId = `root_context_${id}`;
-      const rootCheck = await d1Request("workspace_notes", { method: "GET", id: rootId });
-      if (rootCheck && rootCheck.data) {
+      try {
         await d1Request("workspace_notes", {
           method: "PATCH",
           id: rootId,
           body: { content: JSON.stringify(newRoot) }
         });
-      } else {
+      } catch {
         await d1Request("workspace_notes", {
           method: "POST",
           body: {
@@ -551,14 +460,13 @@ ${bodyHtml}
       // Save Chapter Context for active chapter
       const chKey = CHAPTERS[activeChapter].key;
       const chId = `chapter_context_${chKey}_${id}`;
-      const chCheck = await d1Request("workspace_notes", { method: "GET", id: chId });
-      if (chCheck && chCheck.data) {
+      try {
         await d1Request("workspace_notes", {
           method: "PATCH",
           id: chId,
           body: { content: JSON.stringify(newChapter) }
         });
-      } else {
+      } catch {
         await d1Request("workspace_notes", {
           method: "POST",
           body: {
@@ -629,12 +537,30 @@ ${bodyHtml}
       }
     };
 
+    const handleAnchorClick = (event) => {
+      if (window.isSkripzyWorkspaceDirty) {
+        const anchor = event.target.closest("a");
+        if (anchor && anchor.href && !anchor.href.startsWith("#") && !anchor.href.includes("javascript:void") && !anchor.href.startsWith("mailto:") && !anchor.href.startsWith("tel:")) {
+          const isSamePage = anchor.href === window.location.href;
+          if (!isSamePage) {
+            const confirmed = window.confirm("Ada perubahan yang belum disimpan. Anda yakin ingin meninggalkan halaman ini?");
+            if (!confirmed) {
+              event.preventDefault();
+              event.stopPropagation();
+            }
+          }
+        }
+      }
+    };
+
     window.addEventListener("keydown", handler);
     window.addEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("click", handleAnchorClick, true);
     return () => {
       window.isSkripzyWorkspaceDirty = false;
       window.removeEventListener("keydown", handler);
       window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("click", handleAnchorClick, true);
     };
   }, [contentBuffer, persistWorkspace, saveState, isEditingContext]);
 
@@ -926,7 +852,7 @@ ${bodyHtml}
       <div
         style={{
           padding: isSm 
-            ? "calc(env(safe-area-inset-top, 0px) + 0.5rem) 0.75rem 0.5rem" 
+            ? "calc(max(env(safe-area-inset-top, 0px), 24px) + 0.5rem) 0.75rem 0.5rem" 
             : "calc(env(safe-area-inset-top, 0px) + 0.75rem) 1rem 0.75rem",
           borderBottom: "1px solid var(--border)",
           backgroundColor: "color-mix(in srgb, var(--surface) 92%, transparent)",

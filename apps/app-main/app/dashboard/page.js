@@ -150,7 +150,8 @@ const QUICK_TOOLS = [
     desc: "Olah data kuesioner, wawancara, dan observasi",
     credit: 0,
     pro: false,
-    badge: "NEW",
+    badge: "COMING SOON",
+    disabled: true,
   },
   {
     href: "/dashboard/tools/form-redirect",
@@ -191,6 +192,19 @@ function FreeBadge() {
       letterSpacing: "0.05em",
     }}>
       FREE
+    </span>
+  );
+}
+
+function ComingSoonBadge() {
+  return (
+    <span style={{
+      fontSize: "0.6rem", padding: "2px 7px",
+      background: "linear-gradient(135deg, #F59E0B, #EF4444)",
+      color: "white", borderRadius: "10px", fontWeight: 700,
+      letterSpacing: "0.05em",
+    }}>
+      COMING SOON
     </span>
   );
 }
@@ -308,6 +322,8 @@ function WorkspaceCard({ item, plan, isMobile }) {
 
 function QuickToolCard({ tool, plan, isMobile }) {
   const isLocked = tool.pro && plan === "free";
+  const isDisabled = tool.disabled;
+  const isInactive = isLocked || isDisabled;
   const inner = (
     <div
       className={isMobile ? "native-card" : "glass-panel"}
@@ -315,22 +331,24 @@ function QuickToolCard({ tool, plan, isMobile }) {
         padding: isMobile ? "1.25rem 1rem" : "1.75rem",
         display: "flex", flexDirection: "row", alignItems: "center", gap: isMobile ? "1rem" : "1.25rem",
         borderRadius: isMobile ? "16px" : "24px",
-        cursor: isLocked ? "not-allowed" : "pointer",
-        opacity: isLocked ? 0.65 : 1,
+        cursor: isInactive ? "not-allowed" : "pointer",
+        opacity: isInactive ? 0.5 : 1,
         transition: "all 0.3s ease",
         height: "100%",
         backgroundColor: "var(--surface)",
         border: "1px solid var(--border)",
       }}
       onMouseEnter={e => {
-        if (!isLocked) {
+        if (!isInactive) {
           e.currentTarget.style.transform = "translateY(-4px)";
           e.currentTarget.style.boxShadow = "0 20px 25px -5px rgba(0,0,0,0.05)";
         }
       }}
       onMouseLeave={e => {
-        e.currentTarget.style.transform = "translateY(0)";
-        e.currentTarget.style.boxShadow = "";
+        if (!isInactive) {
+          e.currentTarget.style.transform = "translateY(0)";
+          e.currentTarget.style.boxShadow = "";
+        }
       }}
     >
       {/* Icon container */}
@@ -346,14 +364,14 @@ function QuickToolCard({ tool, plan, isMobile }) {
       <div style={{ display: "flex", flexDirection: "column", gap: "0.2rem", flex: 1 }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
           <h4 style={{ fontSize: isMobile ? "0.85rem" : "1rem", margin: 0, color: "var(--text-main)", fontWeight: 700 }}>{tool.title}</h4>
-          {tool.pro ? <ProBadge /> : <FreeBadge />}
+          {isDisabled ? <ComingSoonBadge /> : (tool.pro ? <ProBadge /> : <FreeBadge />)}
         </div>
         <p style={{ fontSize: isMobile ? "0.65rem" : "0.85rem", margin: 0, lineHeight: 1.4, color: "var(--text-muted)" }}>{tool.desc}</p>
       </div>
     </div>
   );
 
-  if (isLocked) return inner;
+  if (isInactive) return inner;
   return <Link href={tool.href} style={{ display: "block", textDecoration: "none" }}>{inner}</Link>;
 }
 

@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { d1Request } from "@/lib/d1Client";
 import { deductCredits, refundCredits } from "@/lib/credits";
 import { useBillingCatalog } from "@/lib/useBillingCatalog";
 import { CHAPTERS, summarizeTranscriptThemes } from "@/lib/workspaceDefaults";
@@ -67,6 +68,26 @@ export function ChapterAiAssistant({
   const [status, setStatus] = useState("");
   const [isBtnHovered, setIsBtnHovered] = useState(false);
   const isGeneratingRef = useRef(false);
+  const [thematicAnalysis, setThematicAnalysis] = useState("");
+
+  useEffect(() => {
+    if (!workspaceContext?.id) return;
+    let isMounted = true;
+    async function fetchThematic() {
+      try {
+        const res = await d1Request("workspace_notes", { method: "GET", id: `thematic_analysis_${workspaceContext.id}` });
+        if (isMounted && res && res.data) {
+          setThematicAnalysis(res.data.content || "");
+        }
+      } catch (err) {
+        console.error("Gagal mengambil thematic analysis:", err);
+      }
+    }
+    fetchThematic();
+    return () => {
+      isMounted = false;
+    };
+  }, [workspaceContext?.id]);
 
   const chapter = CHAPTERS[activeChapter];
   const generationCost = toolMap["chapter-generation"]?.creditCost ?? 2;
@@ -129,6 +150,8 @@ ATURAN KELUARAN:
 - Gunakan hanya elemen: <h2>, <h3>, <p>, <ul>, <ol>, <li>, <strong>, <em>.
 - Tulis dalam bahasa Indonesia akademik yang rapi, mengalir, ilmiah, dan tidak kaku.
 - Jika konteks referensi tersedia, gunakan kutipan & sitasi yang relevan untuk memperkaya isi secara konkret.
+- Kutipan/sitasi harus ditulis dalam format Penulis (Tahun) atau (Penulis, Tahun) secara konsisten dan akurat sesuai referensi terpilih. Jangan gunakan format sitasi angka seperti [1] atau format lainnya.
+- PENTING: Terapkan prinsip anti-halusinasi yang ketat. Jika suatu informasi tidak terdapat dalam referensi/sumber yang terunggah, nyatakan secara jujur bahwa informasi tersebut tidak ada, dan hanya tulis fakta yang benar-benar tercantum dalam data referensi.
 - Jangan mengada-ada data kuantitatif; jika data tidak cukup, tulis secara hati-hati, netral, dan logis.
 
 KONTEKS UTAMA PENELITIAN (BRAIN ROOT):
@@ -150,6 +173,7 @@ ${workspaceContext[chapter.key] || "(masih kosong)"}
 ${activeForm ? `FORM AKTIF / INSTRUMEN RESIDU:\n${JSON.stringify(activeForm, null, 2)}` : ""}
 ${latestAnalysis ? `SNAPSHOT ANALISIS TERAKHIR:\n${JSON.stringify(latestAnalysis, null, 2)}` : ""}
 ${transcriptSummary ? `RINGKASAN TRANSKRIP WAWANCARA:\n${transcriptSummary}` : ""}
+${activeChapter === 3 && thematicAnalysis ? `POIN-POIN TEMATIK HASIL ANALISIS DATA (Angket, Wawancara, Observasi):\n${thematicAnalysis}\n` : ""}
 
 REFERENSI TERPILIH:
 ${selectedReferenceSummary || "Belum ada referensi yang ditandai untuk bab ini."}

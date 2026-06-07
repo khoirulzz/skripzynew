@@ -7,29 +7,47 @@ import { FormBuilder } from "./FormBuilder";
 import { DataAnalysisDashboard } from "./DataAnalysisDashboard";
 import { TranscriptManager } from "./TranscriptManager";
 import { FORM_STATUSES, createEmptyForm, createId, flattenFormQuestions } from "@/lib/workspaceDefaults";
-import { ChevronLeft, Loader2 } from "lucide-react";
+import { ChevronLeft, Loader2, Play } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { generateWorkspaceChapter } from "@/lib/workspacePublicApi";
 import Link from "next/link";
 
+const WORKER_URL = process.env.NEXT_PUBLIC_WORKER_URL || "https://apikey.skripzy-app.workers.dev";
+const WORKER_SECRET = process.env.NEXT_PUBLIC_WORKER_SECRET || "skripzy1234";
+
 export function DataHub({ workspaceId, hideQualitative = false }) {
-  const { user } = useAuth();
+  const { user, userData, refreshUserData } = useAuth();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState(hideQualitative ? "builder" : "kuesioner");
+  
+  // Set initial tab based on qualitative mode
+  const [activeTab, setActiveTab] = useState(hideQualitative ? "builder" : "angket");
+  
   const [forms, setForms] = useState([]);
   const [responses, setResponses] = useState([]);
+  const [transcripts, setTranscripts] = useState([]);
+  const [offlineFiles, setOfflineFiles] = useState([]);
+  const [csvPreview, setCsvPreview] = useState(null);
+  
   const [activeFormId, setActiveFormId] = useState(null);
   const [editingFormId, setEditingFormId] = useState(null);
   const [workspace, setWorkspace] = useState(null);
   const [copied, setCopied] = useState(false);
+  
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [loadingCsvPreview, setLoadingCsvPreview] = useState(false);
+  const [analyzingTematik, setAnalyzingTematik] = useState(false);
+  const [thematicAnalysisHtml, setThematicAnalysisHtml] = useState("");
+  const [showQuantAnalysis, setShowQuantAnalysis] = useState(false);
+  
   const creatingDefaultRef = useRef(false);
 
   useEffect(() => {
     if (!workspaceId) return;
     let isMounted = true;
 
-    async function fetchWorkspaceAndForms() {
-      // Fetch workspace
+    async function fetchAllData() {
+      // 1. Fetch workspace info
       try {
         const wsResp = await d1Request("workspaces", { id: workspaceId });
         if (isMounted && wsResp.data) {
@@ -40,11 +58,10 @@ export function DataHub({ workspaceId, hideQualitative = false }) {
         console.warn("DataHub: gagal fetch workspace:", e.message);
       }
 
-      // Fetch forms
+      // 2. Fetch forms
       try {
         const formsResp = await d1Request("workspace_forms");
         let nextForms = (formsResp.data || []).filter(f => f.workspace_id === workspaceId);
-        // Parse JSON content if stored as string
         nextForms = nextForms.map(f => {
           let parsed = {};
           try { parsed = typeof f.content === "string" ? JSON.parse(f.content) : (f.content || {}); } catch {}
@@ -54,7 +71,7 @@ export function DataHub({ workspaceId, hideQualitative = false }) {
         
         if (isMounted) setForms(nextForms);
 
-        // Auto create form if empty
+        // Auto create form if empty (only for quantitative notebook workspace)
         if (isMounted && nextForms.length === 0 && hideQualitative && !creatingDefaultRef.current) {
           creatingDefaultRef.current = true;
           const formId = createId("form");
@@ -98,7 +115,7 @@ export function DataHub({ workspaceId, hideQualitative = false }) {
         console.warn("DataHub: gagal fetch forms:", e.message);
       }
 
-      // Fetch responses — isolated so error di sini tidak block yang lain
+      // 3. Fetch responses
       try {
         const responsesResp = await d1Request("workspace_form_responses");
         let nextResponses = (responsesResp.data || []).filter(r => r.workspace_id === workspaceId);
@@ -109,14 +126,64 @@ export function DataHub({ workspaceId, hideQualitative = false }) {
         });
         if (isMounted) setResponses(nextResponses);
       } catch (e) {
-        // Bisa terjadi bila worker lama tidak memiliki endpoint ini atau token expired
         console.warn("DataHub: gagal fetch responses:", e.message);
         if (isMounted) setResponses([]);
       }
+
+      // 4. Fetch transcripts if qualitative allowed
+      if (!hideQualitative) {
+        try {
+          const transResp = await d1Request("workspace_transcripts");
+          const rawTrans = transResp.data || [];
+          const parsedTrans = rawTrans.filter(t => t.workspace_id === workspaceId).map(t => {
+            let parsedContent = { role: "", interviewDate: "", tags: [], excerpt: "", category: "wawancara", text: t.content || "" };
+            try {
+              if (t.content && t.content.trim().startsWith("{")) {
+                const parsed = JSON.parse(t.content);
+                parsedContent = {
+                  role: parsed.role || "",
+                  interviewDate: parsed.interviewDate || "",
+                  tags: parsed.tags || [],
+                  excerpt: parsed.excerpt || "",
+                  category: parsed.category || "wawancara",
+                  text: parsed.text || "",
+                };
+              }
+            } catch {}
+            return { ...t, ...parsedContent };
+          });
+          if (isMounted) setTranscripts(parsedTrans);
+        } catch (e) {
+          console.warn("DataHub: gagal fetch transcripts:", e.message);
+        }
+
+        // 5. Fetch offline angket files metadata from workspace_notes
+        try {
+          const noteId = `angket_files_${workspaceId}`;
+          const filesCheck = await d1Request("workspace_notes", { method: "GET", id: noteId });
+          if (isMounted && filesCheck && filesCheck.data) {
+            const parsedFiles = JSON.parse(filesCheck.data.content || "[]");
+            setOfflineFiles(parsedFiles);
+          }
+        } catch (e) {
+          console.warn("DataHub: gagal fetch offline files:", e.message);
+        }
+
+        // 6. Fetch thematic analysis results
+        try {
+          const noteId = `thematic_analysis_${workspaceId}`;
+          const analysisCheck = await d1Request("workspace_notes", { method: "GET", id: noteId });
+          if (isMounted && analysisCheck && analysisCheck.data) {
+            setThematicAnalysisHtml(analysisCheck.data.content || "");
+          }
+        } catch (e) {
+          console.warn("DataHub: gagal fetch thematic analysis:", e.message);
+        }
+      }
     }
 
-    fetchWorkspaceAndForms();
-    const interval = setInterval(fetchWorkspaceAndForms, 8000);
+    fetchAllData();
+    const interval = setInterval(fetchAllData, 8000);
     return () => { isMounted = false; clearInterval(interval); };
   }, [workspaceId, hideQualitative]);
 
@@ -167,16 +234,18 @@ export function DataHub({ workspaceId, hideQualitative = false }) {
       ];
     }
     return [
-      { key: "kuesioner", label: "Kuesioner", icon: "layoutTemplate" },
+      { key: "angket", label: "Angket & Tabulasi", icon: "layoutTemplate" },
       { key: "wawancara", label: "Wawancara", icon: "mic" },
-      { key: "analisis", label: "Analisis", icon: "barChart3" },
+      { key: "observasi", label: "Observasi", icon: "eye" },
+      { key: "analisis", label: "Analisis & AI Tematik", icon: "barChart3" },
     ];
   }, [hideQualitative]);
 
   const activeFormQuestions = useMemo(() => {
-    if (!activeForm) return [];
-    return flattenFormQuestions(activeForm).filter((q) => q.type !== "sectionText");
-  }, [activeForm]);
+    const mainForm = hideQualitative ? forms[0] : forms.find(f => f.id === activeFormId);
+    if (!mainForm) return [];
+    return flattenFormQuestions(mainForm).filter((q) => q.type !== "sectionText");
+  }, [activeFormId, forms, hideQualitative]);
 
   const getFormattedAnswer = (resp, q) => {
     const val = resp.answers?.[q.id];
@@ -186,7 +255,8 @@ export function DataHub({ workspaceId, hideQualitative = false }) {
   };
 
   const handleExportCSV = () => {
-    if (!activeForm || !responses.length || !activeFormQuestions.length) return;
+    const mainForm = hideQualitative ? forms[0] : forms.find(f => f.id === activeFormId);
+    if (!mainForm || !responses.length || !activeFormQuestions.length) return;
     
     const headers = ["No", "Waktu Pengisian", ...activeFormQuestions.map(q => q.variableKey ? `[${q.variableKey}] ${q.label}` : q.label)];
     
@@ -218,7 +288,7 @@ export function DataHub({ workspaceId, hideQualitative = false }) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", `tabulasi_${activeForm.title.toLowerCase().replace(/\s+/g, "_")}.csv`);
+    link.setAttribute("download", `tabulasi_${mainForm.title.toLowerCase().replace(/\s+/g, "_")}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -242,12 +312,279 @@ export function DataHub({ workspaceId, hideQualitative = false }) {
   }, [responses.length, targetRespondents]);
 
   const activeFormPublicUrl = useMemo(() => {
-    const active = forms[0];
+    const active = hideQualitative ? forms[0] : forms.find(f => f.id === activeFormId);
     if (active && active.status === "published" && active.publicSlug) {
       return `${window.location.origin}/form?slug=${active.publicSlug}`;
     }
     return "";
-  }, [forms]);
+  }, [forms, activeFormId, hideQualitative]);
+
+  const handleUploadAngketFile = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setUploadingFile(true);
+    try {
+      // 1. Dapatkan signature Cloudinary
+      const signatureResponse = await fetch(`${WORKER_URL}/api/cloudinary-sign`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-skripzy-secret": WORKER_SECRET,
+        },
+        body: JSON.stringify({ folder: "Angket" }),
+      });
+
+      if (!signatureResponse.ok) {
+        throw new Error("Gagal mendapatkan signature Cloudinary.");
+      }
+
+      const { signature, timestamp, apiKey, cloudName } = await signatureResponse.json();
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("signature", signature);
+      formData.append("timestamp", timestamp);
+      formData.append("api_key", apiKey);
+      formData.append("folder", "Angket");
+
+      // 2. Upload ke Cloudinary
+      const uploadResponse = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/raw/upload`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error("Upload file tabulasi ke Cloudinary gagal.");
+      }
+
+      const uploadData = await uploadResponse.json();
+      const fileUrl = uploadData.secure_url;
+
+      // 3. Simpan metadata ke workspace_notes (angket_files_${workspaceId})
+      const noteId = `angket_files_${workspaceId}`;
+      const checkRes = await d1Request("workspace_notes", { method: "GET", id: noteId });
+      
+      let currentFiles = [];
+      if (checkRes && checkRes.data) {
+        try {
+          currentFiles = JSON.parse(checkRes.data.content || "[]");
+        } catch {
+          currentFiles = [];
+        }
+      }
+
+      const newFileObj = {
+        id: crypto.randomUUID(),
+        name: file.name,
+        url: fileUrl,
+        uploadedAt: new Date().toISOString(),
+        size: file.size,
+      };
+
+      const nextFiles = [...currentFiles, newFileObj];
+      const contentPayload = JSON.stringify(nextFiles);
+
+      if (checkRes && checkRes.data) {
+        await d1Request("workspace_notes", {
+          method: "PATCH",
+          id: noteId,
+          body: { content: contentPayload }
+        });
+      } else {
+        await d1Request("workspace_notes", {
+          method: "POST",
+          body: {
+            id: noteId,
+            workspace_id: workspaceId,
+            content: contentPayload,
+          }
+        });
+      }
+
+      setOfflineFiles(nextFiles);
+
+      // 4. Jika CSV, parse client-side
+      if (file.name.endsWith(".csv")) {
+        const csvText = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (e) => resolve(e.target.result || "");
+          reader.onerror = (e) => reject(new Error("Gagal membaca file CSV."));
+          reader.readAsText(file);
+        });
+        parseAndSetCsvPreview(csvText);
+      } else {
+        setCsvPreview(null);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Gagal mengunggah file: " + err.message);
+    } finally {
+      setUploadingFile(false);
+      event.target.value = "";
+    }
+  };
+
+  const handleDeleteAngketFile = async (fileId) => {
+    const confirmed = window.confirm("Hapus file tabulasi angket ini?");
+    if (!confirmed) return;
+
+    const noteId = `angket_files_${workspaceId}`;
+    const nextFiles = offlineFiles.filter(f => f.id !== fileId);
+    const contentPayload = JSON.stringify(nextFiles);
+
+    await d1Request("workspace_notes", {
+      method: "PATCH",
+      id: noteId,
+      body: { content: contentPayload }
+    });
+
+    setOfflineFiles(nextFiles);
+    setCsvPreview(null);
+  };
+
+  const handleLoadCsvPreview = async (file) => {
+    if (!file.name.endsWith(".csv")) {
+      setCsvPreview(null);
+      return;
+    }
+    setLoadingCsvPreview(true);
+    try {
+      const response = await fetch(file.url);
+      const text = await response.text();
+      parseAndSetCsvPreview(text);
+    } catch (err) {
+      console.error("Gagal load CSV preview:", err);
+      alert("Gagal memuat pratinjau CSV.");
+    } finally {
+      setLoadingCsvPreview(false);
+    }
+  };
+
+  const parseAndSetCsvPreview = (text) => {
+    const lines = text.split(/\r?\n/).filter(line => line.trim() !== "");
+    const result = lines.map(line => {
+      const row = [];
+      let insideQuote = false;
+      let entry = "";
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        if (char === '"') {
+          insideQuote = !insideQuote;
+        } else if (char === ',' && !insideQuote) {
+          row.push(entry.trim());
+          entry = "";
+        } else {
+          entry += char;
+        }
+      }
+      row.push(entry.trim());
+      return row;
+    });
+
+    if (result.length > 0) {
+      setCsvPreview({
+        headers: result[0],
+        rows: result.slice(1, 11), // 10 baris pertama
+        totalRows: result.length - 1,
+      });
+    }
+  };
+
+  // Thematic Analysis Generation using Gemini (via generateWorkspaceChapter)
+  const handleTriggerThematicAnalysis = async () => {
+    const creditCost = 2; // Charge 2 credits for AI analysis
+    const creditBalance = userData?.credits ?? 0;
+    
+    if (creditBalance < creditCost) {
+      alert(`Kredit Anda tidak mencukupi untuk melakukan analisis tematik AI. Dibutuhkan ${creditCost} kredit, sisa kredit Anda adalah ${creditBalance}.`);
+      return;
+    }
+
+    const confirmed = window.confirm(`Mulai analisis tematik AI? Ini akan menggunakan ${creditCost} kredit Anda.`);
+    if (!confirmed) return;
+
+    setAnalyzingTematik(true);
+    try {
+      // Gunting / filter transkrip
+      const wawancaraList = transcripts.filter(t => t.category === "wawancara");
+      const observasiList = transcripts.filter(t => t.category === "observasi");
+
+      // Kurangi kredit
+      await d1Request("credits/deduct", {
+        method: "POST",
+        body: { amount: creditCost, reason: "Analisis AI Tematik" }
+      }).catch(() => {});
+      await refreshUserData();
+
+      const prompt = `
+Anda adalah ahli analisis data kualitatif dan kuantitatif (mixed methods) untuk penulisan karya ilmiah/skripsi/jurnal.
+Lakukan analisis tematik mendalam terhadap data-data penelitian yang dikumpulkan di bawah ini untuk menghasilkan **Poin-Poin Tematik Pembahasan** yang komprehensif.
+
+INFORMASI PENELITIAN:
+- Judul: ${workspace?.title || "Tanpa Judul"}
+- Topik: ${workspace?.topic || "Tanpa Topik"}
+
+DATA ANGKET / KUESIONER:
+- Jumlah Butir Pernyataan: ${activeFormQuestions.length}
+- Jumlah Responden: ${responses.length}
+${offlineFiles.length > 0 ? `- File Tabulasi Angket Terunggah: ${offlineFiles.map(f => f.name).join(", ")}` : ""}
+
+DATA WAWANCARA:
+${wawancaraList.map((w, idx) => `[Wawancara ${idx + 1}] Informan: ${w.title}, Peran: ${w.role}, Tanggal: ${w.interviewDate}\nTag Tema: ${w.tags.join(", ")}\nKutipan Penting: "${w.excerpt}"\nIsi: ${w.text.slice(0, 1000)}...`).join("\n\n") || "Tidak ada data wawancara."}
+
+DATA OBSERVASI:
+${observasiList.map((o, idx) => `[Observasi ${idx + 1}] Lokasi/Subjek: ${o.role}, Judul: ${o.title}, Tanggal: ${o.interviewDate}\nTag Tema: ${o.tags.join(", ")}\nKutipan Penting: "${o.excerpt}"\nIsi: ${o.text.slice(0, 1000)}...`).join("\n\n") || "Tidak ada data observasi."}
+
+TUGAS ANDA:
+1. Hubungkan temuan dari data Kuesioner (Angket), Wawancara, dan Observasi.
+2. Identifikasi minimal 3 tema besar pembahasan yang paling relevan dan menonjol.
+3. Untuk setiap tema, berikan:
+   - Deskripsi penjelasan tema secara akademis.
+   - Dukungan data konkret (kutipan wawancara atau fakta observasi).
+   - Hubungan logis antardata (misal: bagaimana hasil wawancara menjelaskan temuan angket).
+4. Sajikan hasil analisis dalam format HTML yang terstruktur rapi (gunakan <h3>, <p>, <ul>, <li>, <strong>) agar siap disalin atau dibaca oleh AI Copilot untuk menyusun Bab IV (Hasil & Pembahasan).
+5. Tulis dalam bahasa Indonesia akademik yang sangat profesional, objektif, dan mendalam. HINDARI bahasa pengantar tambahan seperti "Baik, berikut adalah analisis..." - berikan langsung isi analisisnya dalam format HTML.
+`.trim();
+
+      const result = await generateWorkspaceChapter({
+        prompt,
+        group: "group_1,group_2",
+        model: "gemini-2.5-flash",
+        temperature: 0.6,
+      });
+
+      const generatedHtml = result.text || "";
+
+      // Simpan ke workspace_notes under ID thematic_analysis_${workspaceId}
+      const noteId = `thematic_analysis_${workspaceId}`;
+      const checkRes = await d1Request("workspace_notes", { method: "GET", id: noteId });
+
+      if (checkRes && checkRes.data) {
+        await d1Request("workspace_notes", {
+          method: "PATCH",
+          id: noteId,
+          body: { content: generatedHtml }
+        });
+      } else {
+        await d1Request("workspace_notes", {
+          method: "POST",
+          body: {
+            id: noteId,
+            workspace_id: workspaceId,
+            content: generatedHtml,
+          }
+        });
+      }
+
+      setThematicAnalysisHtml(generatedHtml);
+      alert("Analisis Tematik AI selesai dibuat dan disimpan.");
+    } catch (err) {
+      console.error(err);
+      alert("Gagal melakukan analisis tematik: " + err.message);
+    } finally {
+      setAnalyzingTematik(false);
+    }
+  };
 
   // Quantitative/Quick Tools Layout
   if (hideQualitative) {
@@ -384,7 +721,7 @@ export function DataHub({ workspaceId, hideQualitative = false }) {
 
         {activeTab === "data" && (
           <div className="techy-card" style={{ padding: "1.5rem", backgroundColor: "var(--surface)", borderTop: "4px solid var(--primary)" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyBetween: "space-between", justifyContent: "space-between", gap: "1rem", marginBottom: "1.5rem", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem", marginBottom: "1.5rem", flexWrap: "wrap" }}>
               <div>
                 <h3 style={{ fontSize: "1.05rem", margin: 0, fontWeight: 700 }}>Jawaban Responden</h3>
                 <p style={{ margin: "0.3rem 0 0 0", fontSize: "0.85rem", color: "var(--text-muted)" }}>
@@ -450,30 +787,22 @@ export function DataHub({ workspaceId, hideQualitative = false }) {
     );
   }
 
-  // Regular Skripsi/Jurnal Layout
+  // Regular Skripsi/Jurnal Layout (With Angket upload, Wawancara/Observasi categorised managers, and AI thematic Analysis)
   return (
     <div className="animate-fade-in" style={{ padding: "1.5rem", maxWidth: "1400px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "1rem" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
         <div>
           <h1 style={{ fontSize: "1.35rem", fontWeight: 700, margin: 0, display: "flex", gap: "0.7rem", alignItems: "center" }}>
             <PremiumIcon name="database" size={28} className="text-primary" />
-            Manajemen Data Penelitian
+            Manajemen Data & Analisis
           </h1>
-          <p style={{ margin: "0.35rem 0 0 0", fontSize: "0.92rem" }}>
-            Kelola form kuesioner, transkrip wawancara, dan snapshot analisis dalam satu ruang kerja.
+          <p style={{ margin: "0.35rem 0 0 0", fontSize: "0.92rem", color: "var(--text-muted)" }}>
+            Kelola angket, transkrip wawancara, observasi, dan lakukan analisis data tematik berbasis AI.
           </p>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.65rem", flexWrap: "wrap" }}>
-          <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
-            Form aktif: <strong style={{ color: "var(--text-main)" }}>{forms.find((item) => item.id === activeFormId)?.title || "Belum dipilih"}</strong>
-          </span>
-          <button className="btn btn-primary" onClick={handleCreateForm}>
-            <PremiumIcon name="plus" size={16} />
-            Form Baru
-          </button>
         </div>
       </div>
 
+      {/* Tabs */}
       <div style={{ display: "flex", gap: "0.75rem", borderBottom: "1px solid var(--border)", paddingBottom: "0.2rem", overflowX: "auto" }}>
         {tabs.map((tab) => (
           <button
@@ -495,80 +824,49 @@ export function DataHub({ workspaceId, hideQualitative = false }) {
         ))}
       </div>
 
-      {activeTab === "kuesioner" ? (
-        <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "1.5rem" }}>
+      {/* Tab CONTENT: ANGKET & TABULASI */}
+      {activeTab === "angket" && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: "1.5rem", alignItems: "start" }}>
+          
+          {/* Bagian Utama: Kelola Form Online */}
           <div className="techy-card" style={{ padding: "1.5rem", backgroundColor: "var(--surface)", borderTop: "4px solid var(--primary)" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem", marginBottom: "1.5rem", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem", marginBottom: "1.25rem" }}>
               <div>
-                <h3 style={{ fontSize: "1.15rem", margin: 0, fontWeight: 700 }}>Daftar Instrumen Penelitian</h3>
-                <p style={{ margin: "0.4rem 0 0 0", fontSize: "0.88rem", color: "var(--text-muted)" }}>Kelola draft instrumen, kelompokkan berdasarkan variabel/section, dan aktifkan satu form untuk responden.</p>
+                <h3 style={{ fontSize: "1.05rem", margin: 0, fontWeight: 700 }}>Instrumen Angket Online</h3>
+                <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.82rem", color: "var(--text-muted)" }}>Kumpulkan data responden secara online menggunakan instrumen kuesioner.</p>
               </div>
+              <button className="btn btn-primary" onClick={handleCreateForm} style={{ padding: "0.4rem 0.8rem", fontSize: "0.78rem" }}>
+                <PremiumIcon name="plus" size={14} />
+                <span>Form Baru</span>
+              </button>
             </div>
 
             {forms.length === 0 ? (
-              <div style={{ padding: "3rem 1.5rem", border: "2px dashed var(--border)", borderRadius: "16px", textAlign: "center", backgroundColor: "rgba(var(--surface-rgb), 0.5)" }}>
-                <PremiumIcon name="layoutTemplate" size={42} className="text-muted" style={{ margin: "0 auto 1rem", opacity: 0.5 }} />
-                <h4 style={{ margin: 0, fontSize: "1.1rem" }}>Belum Ada Instrumen</h4>
-                <p style={{ margin: "0.5rem 0 0 0", fontSize: "0.9rem", color: "var(--text-muted)" }}>Mulai dengan membuat instrumen penelitian baru yang terstruktur.</p>
+              <div style={{ padding: "2.5rem 1rem", border: "2px dashed var(--border)", borderRadius: "12px", textAlign: "center", color: "var(--text-muted)", fontSize: "0.85rem" }}>
+                Belum ada instrumen online dibuat. Klik "Form Baru" untuk mulai merancang.
               </div>
             ) : (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "1.25rem" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
                 {forms.map((item) => {
                   const isActive = item.id === activeFormId;
                   return (
-                    <div 
-                      key={item.id} 
-                      className="techy-card" 
-                      style={{ 
-                        padding: "1.25rem", 
-                        border: isActive ? "2px solid var(--primary)" : "1px solid var(--border)", 
-                        backgroundColor: isActive ? "rgba(var(--primary-rgb), 0.03)" : "var(--surface)",
-                        display: "flex",
-                        flexDirection: "column",
-                        position: "relative",
-                        overflow: "hidden"
-                      }}
-                    >
-                      {isActive && (
-                        <div style={{ position: "absolute", top: 0, right: 0, padding: "0.25rem 0.75rem", backgroundColor: "var(--primary)", color: "white", fontSize: "0.7rem", fontWeight: 700, borderBottomLeftRadius: "8px" }}>
-                          AKTIF
+                    <div key={item.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem", padding: "0.85rem", border: isActive ? "1.5px solid var(--primary)" : "1px solid var(--border)", borderRadius: "10px", backgroundColor: isActive ? "var(--primary-light)" : "var(--background)" }}>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                          <span style={{ fontSize: "0.84rem", fontWeight: 700, color: "var(--text-main)" }}>{item.title}</span>
+                          {isActive && <span style={{ fontSize: "0.65rem", padding: "0.1rem 0.4rem", borderRadius: "4px", backgroundColor: "var(--primary)", color: "white", fontWeight: 700 }}>AKTIF</span>}
                         </div>
-                      )}
-                      
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", alignItems: "flex-start", marginBottom: "1rem" }}>
-                        <div style={{ paddingRight: isActive ? "2rem" : "0" }}>
-                          <h4 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700, color: "var(--text-main)", lineHeight: 1.3 }}>{item.title}</h4>
-                          <p style={{ margin: "0.4rem 0 0 0", fontSize: "0.85rem", lineHeight: 1.6, color: "var(--text-muted)", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-                            {item.description || "Deskripsi instrumen belum diisi."}
-                          </p>
+                        <div style={{ fontSize: "0.74rem", color: "var(--text-muted)", marginTop: "0.2rem" }}>
+                          {item.sections?.length || 0} variabel • {item.sections?.reduce((sum, s) => sum + (s.questions?.length || 0), 0) || 0} butir pernyataan
                         </div>
                       </div>
-
-                      <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem", fontSize: "0.8rem", color: "var(--text-muted)", backgroundColor: "rgba(var(--surface-rgb), 0.5)", padding: "0.75rem", borderRadius: "8px", border: "1px solid rgba(var(--border), 0.5)", flexGrow: 1 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                          <PremiumIcon name="layers" size={14} className="text-primary" />
-                          <span><strong>{item.sections?.length || 0}</strong> variabel/bagian</span>
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                          <PremiumIcon name="list" size={14} className="text-primary" />
-                          <span><strong>{item.sections?.reduce((sum, section) => sum + (section.questions?.length || 0), 0) || 0}</strong> butir pernyataan</span>
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.25rem", color: item.publicSlug ? "var(--text-main)" : "inherit" }}>
-                          <PremiumIcon name={item.publicSlug ? "link" : "link2Off"} size={14} className={item.publicSlug ? "text-success" : ""} />
-                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {item.publicSlug ? `/form?slug=${item.publicSlug}` : "Belum punya link publik"}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div style={{ display: "flex", gap: "0.5rem", marginTop: "1.25rem", flexWrap: "wrap" }}>
-                        <button className="btn btn-primary" style={{ flexGrow: 1 }} onClick={() => setEditingFormId(item.id)}>
-                          <PremiumIcon name="edit3" size={14} />
-                          Builder
+                      <div style={{ display: "flex", gap: "0.35rem" }}>
+                        <button className="btn btn-outline" style={{ padding: "0.3rem 0.6rem", fontSize: "0.74rem" }} onClick={() => setEditingFormId(item.id)}>
+                          <PremiumIcon name="edit3" size={12} />
+                          <span>Edit</span>
                         </button>
                         {!isActive && (
-                          <button className="btn btn-outline" style={{ flexGrow: 1 }} onClick={() => void handleActivateForm(item.id)}>
-                            <PremiumIcon name="checkCircle" size={14} />
+                          <button className="btn btn-ghost" style={{ padding: "0.3rem 0.6rem", fontSize: "0.74rem" }} onClick={() => void handleActivateForm(item.id)}>
                             Aktifkan
                           </button>
                         )}
@@ -578,13 +876,261 @@ export function DataHub({ workspaceId, hideQualitative = false }) {
                 })}
               </div>
             )}
+
+            {/* Responses preview if any */}
+            {responses.length > 0 && (
+              <div style={{ marginTop: "2rem" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+                  <h4 style={{ fontSize: "0.94rem", fontWeight: 700, margin: 0 }}>Tabel Data Responden Online ({responses.length})</h4>
+                  <button className="btn btn-outline" onClick={handleExportCSV} style={{ padding: "0.3rem 0.6rem", fontSize: "0.74rem" }}>
+                    <PremiumIcon name="download" size={13} />
+                    <span>Ekspor CSV</span>
+                  </button>
+                </div>
+                <div style={{ overflowX: "auto", border: "1px solid var(--border)", borderRadius: "10px", maxHeight: "250px" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.78rem" }}>
+                    <thead>
+                      <tr style={{ backgroundColor: "var(--surface)", borderBottom: "1px solid var(--border)", textAlign: "left" }}>
+                        <th style={{ padding: "0.5rem 0.75rem", width: "40px" }}>No</th>
+                        {activeFormQuestions.slice(0, 4).map(q => (
+                          <th key={q.id} style={{ padding: "0.5rem 0.75rem", minWidth: "120px" }}>{q.variableKey || q.label}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {responses.slice(0, 5).map((resp, idx) => (
+                        <tr key={resp.id} style={{ borderBottom: "1px solid var(--border)" }}>
+                          <td style={{ padding: "0.5rem 0.75rem", color: "var(--text-muted)" }}>{idx + 1}</td>
+                          {activeFormQuestions.slice(0, 4).map(q => (
+                            <td key={q.id} style={{ padding: "0.5rem 0.75rem" }}>{getFormattedAnswer(resp, q)}</td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Bagian Samping: Upload Tabulasi Offline (Excel/CSV) */}
+          <div className="glass-panel" style={{ padding: "1.25rem", backgroundColor: "var(--surface)", display: "flex", flexDirection: "column", gap: "1rem" }}>
+            <div>
+              <h3 style={{ fontSize: "0.96rem", margin: 0, fontWeight: 700 }}>Tabulasi Offline</h3>
+              <p style={{ margin: "0.2rem 0 0 0", fontSize: "0.74rem", color: "var(--text-muted)", lineHeight: 1.3 }}>Unggah file tabulasi Excel (.xlsx/.xls) atau CSV dari survei offline.</p>
+            </div>
+
+            <label className="btn btn-primary" style={{ cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.4rem", padding: "0.5rem", fontSize: "0.8rem", margin: 0 }}>
+              <PremiumIcon name="uploadCloud" size={15} />
+              <span>{uploadingFile ? "Mengunggah..." : "Unggah Tabulasi (.xlsx / .csv)"}</span>
+              <input
+                type="file"
+                accept=".csv, .xlsx, .xls"
+                onChange={handleUploadAngketFile}
+                disabled={uploadingFile}
+                style={{ display: "none" }}
+              />
+            </label>
+
+            {offlineFiles.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem", marginTop: "0.5rem" }}>
+                <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>File Terunggah ({offlineFiles.length}):</div>
+                {offlineFiles.map(file => (
+                  <div key={file.id} style={{ padding: "0.6rem 0.75rem", border: "1px solid var(--border)", borderRadius: "8px", backgroundColor: "var(--background)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem" }}>
+                    <div style={{ minWidth: 0, flex: 1, cursor: "pointer" }} onClick={() => void handleLoadCsvPreview(file)} title="Klik untuk pratinjau CSV">
+                      <div style={{ fontSize: "0.78rem", fontWeight: 700, color: file.name.endsWith(".csv") ? "var(--primary)" : "var(--text-main)", textDecoration: file.name.endsWith(".csv") ? "underline" : "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {file.name}
+                      </div>
+                      <div style={{ fontSize: "0.68rem", color: "var(--text-muted)", marginTop: "0.1rem" }}>
+                        {(file.size / 1024).toFixed(1)} KB • {new Date(file.uploadedAt).toLocaleDateString("id-ID")}
+                      </div>
+                    </div>
+                    <button className="btn btn-ghost" style={{ padding: "0.25rem", color: "var(--danger)" }} onClick={() => void handleDeleteAngketFile(file.id)}>
+                      <PremiumIcon name="trash" size={13} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* CSV Client-side Preview Table */}
+            {loadingCsvPreview && <div style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}>Memuat pratinjau data...</div>}
+            {csvPreview && (
+              <div style={{ marginTop: "0.5rem", border: "1px solid var(--border)", borderRadius: "8px", padding: "0.6rem", backgroundColor: "var(--background)" }}>
+                <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--primary)", marginBottom: "0.4rem" }}>PRATINJAU DATA CSV ({csvPreview.totalRows} baris):</div>
+                <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: "150px" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.68rem" }}>
+                    <thead>
+                      <tr style={{ backgroundColor: "var(--surface)", borderBottom: "1px solid var(--border)" }}>
+                        {csvPreview.headers.map((h, i) => (
+                          <th key={i} style={{ padding: "0.3rem", textAlign: "left", whiteSpace: "nowrap" }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {csvPreview.rows.map((row, ri) => (
+                        <tr key={ri} style={{ borderBottom: "1px solid var(--border)" }}>
+                          {row.map((cell, ci) => (
+                            <td key={ci} style={{ padding: "0.3rem", whiteSpace: "nowrap" }}>{cell}</td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         </div>
-      ) : null}
+      )}
 
-      {!hideQualitative && activeTab === "wawancara" ? <TranscriptManager workspaceId={workspaceId} /> : null}
-      {activeTab === "analisis" ? <DataAnalysisDashboard workspaceId={workspaceId} activeFormId={activeFormId} /> : null}
+      {/* Tab CONTENT: WAWANCARA */}
+      {activeTab === "wawancara" && (
+        <TranscriptManager workspaceId={workspaceId} category="wawancara" />
+      )}
 
+      {/* Tab CONTENT: OBSERVASI */}
+      {activeTab === "observasi" && (
+        <TranscriptManager workspaceId={workspaceId} category="observasi" />
+      )}
+
+      {/* Tab CONTENT: ANALISIS DATA (AI Tematik & Statistik Kuantitatif) */}
+      {activeTab === "analisis" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+          
+          {/* Row 1: Ringkasan Sumber Data & AI Analysis Trigger */}
+          <div style={{ display: "grid", gridTemplateColumns: "360px 1fr", gap: "1.5rem", alignItems: "start" }}>
+            
+            {/* Samping Kiri: Ringkasan Sumber Data */}
+            <div className="glass-panel" style={{ padding: "1.25rem", backgroundColor: "var(--surface)", display: "flex", flexDirection: "column", gap: "1rem" }}>
+              <h3 style={{ fontSize: "0.96rem", margin: 0, fontWeight: 700 }}>Ringkasan Sumber Data</h3>
+              
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                <div style={{ padding: "0.75rem", borderRadius: "8px", border: "1px solid var(--border)", backgroundColor: "var(--background)", display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                  <div style={{ padding: "0.4rem", borderRadius: "6px", backgroundColor: "rgba(99, 102, 241, 0.12)", color: "var(--primary)" }}>
+                    <PremiumIcon name="layoutTemplate" size={16} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "0.82rem", fontWeight: 700 }}>Kuesioner / Angket</div>
+                    <div style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>
+                      {responses.length} responden online • {offlineFiles.length} file tabulasi
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ padding: "0.75rem", borderRadius: "8px", border: "1px solid var(--border)", backgroundColor: "var(--background)", display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                  <div style={{ padding: "0.4rem", borderRadius: "6px", backgroundColor: "rgba(16, 185, 129, 0.12)", color: "var(--success)" }}>
+                    <PremiumIcon name="mic" size={16} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "0.82rem", fontWeight: 700 }}>Wawancara</div>
+                    <div style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>
+                      {transcripts.filter(t => t.category === "wawancara").length} transkrip terdaftar
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ padding: "0.75rem", borderRadius: "8px", border: "1px solid var(--border)", backgroundColor: "var(--background)", display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                  <div style={{ padding: "0.4rem", borderRadius: "6px", backgroundColor: "rgba(245, 158, 11, 0.12)", color: "#d97706" }}>
+                    <PremiumIcon name="eye" size={16} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "0.82rem", fontWeight: 700 }}>Observasi</div>
+                    <div style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>
+                      {transcripts.filter(t => t.category === "observasi").length} catatan lapangan
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <button 
+                className="btn btn-primary" 
+                onClick={handleTriggerThematicAnalysis} 
+                disabled={analyzingTematik}
+                style={{ width: "100%", padding: "0.6rem", fontSize: "0.82rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.4rem", marginTop: "0.5rem" }}
+              >
+                {analyzingTematik ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin text-white" />
+                    <span>Menganalisis Data...</span>
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-3.5 h-3.5 fill-current" />
+                    <span>Mulai Analisis AI Tematik</span>
+                  </>
+                )}
+              </button>
+              <small style={{ color: "var(--text-muted)", fontSize: "0.68rem", textAlign: "center", display: "block" }}>
+                * Analisis AI Tematik membutuhkan 2 kredit per proses.
+              </small>
+            </div>
+
+            {/* Kanan Utama: Hasil Analisis AI Tematik */}
+            <div className="techy-card" style={{ padding: "1.5rem", backgroundColor: "var(--surface)", minHeight: "260px", borderTop: "4px solid var(--primary)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border)", paddingBottom: "0.75rem", marginBottom: "1rem" }}>
+                <div>
+                  <h3 style={{ fontSize: "1.05rem", margin: 0, fontWeight: 700 }}>Poin-Poin Tematik Pembahasan AI</h3>
+                  <p style={{ margin: "0.2rem 0 0 0", fontSize: "0.78rem", color: "var(--text-muted)" }}>Hasil sintesis kuesioner, wawancara, dan observasi oleh model Gemini.</p>
+                </div>
+                {thematicAnalysisHtml && (
+                  <button 
+                    className="btn btn-outline" 
+                    onClick={() => {
+                      navigator.clipboard.writeText(thematicAnalysisHtml);
+                      alert("Teks analisis tematik berhasil disalin ke clipboard!");
+                    }}
+                    style={{ padding: "0.35rem 0.65rem", fontSize: "0.74rem" }}
+                  >
+                    <PremiumIcon name="copy" size={13} />
+                    <span>Salin Hasil</span>
+                  </button>
+                )}
+              </div>
+
+              {thematicAnalysisHtml ? (
+                <div 
+                  className="workspace-scroll" 
+                  style={{ fontSize: "0.85rem", lineHeight: 1.6, maxHeight: "380px", overflowY: "auto", paddingRight: "0.5rem" }}
+                  dangerouslySetInnerHTML={{ __html: thematicAnalysisHtml }}
+                />
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", alignItems: "center", justifyContent: "center", height: "220px", color: "var(--text-muted)", textAlign: "center" }}>
+                  <PremiumIcon name="sparkles" size={36} style={{ opacity: 0.35 }} />
+                  <p style={{ fontSize: "0.84rem", margin: 0, maxWidth: "340px" }}>
+                    Belum ada hasil analisis. Klik tombol <strong>"Mulai Analisis AI Tematik"</strong> di sebelah kiri untuk menghasilkan poin pembahasan terpadu.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Row 2: Statistik Kuantitatif (Toggleable) */}
+          <div className="techy-card" style={{ padding: "1.25rem", backgroundColor: "var(--surface)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <h4 style={{ fontSize: "0.96rem", fontWeight: 700, margin: 0 }}>Modul Analisis Statistik Kuantitatif</h4>
+                <p style={{ margin: "0.2rem 0 0 0", fontSize: "0.78rem", color: "var(--text-muted)" }}>Tampilkan instrumen numerik, uji validitas (Cronbach's Alpha), dan analisis regresi responses online.</p>
+              </div>
+              <button 
+                className="btn btn-outline" 
+                onClick={() => setShowQuantAnalysis(!showQuantAnalysis)}
+                style={{ padding: "0.4rem 0.75rem", fontSize: "0.78rem" }}
+              >
+                <span>{showQuantAnalysis ? "Sembunyikan Modul" : "Tampilkan Modul"}</span>
+              </button>
+            </div>
+
+            {showQuantAnalysis && (
+              <div style={{ marginTop: "1.5rem", borderTop: "1px solid var(--border)", paddingTop: "1.25rem" }}>
+                <DataAnalysisDashboard workspaceId={workspaceId} activeFormId={activeFormId} />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Form Builder Modal for inline edits */}
       {activeForm && !hideQualitative ? (
         <div style={{ position: "fixed", inset: 0, zIndex: 100, backgroundColor: "rgba(11,15,25,0.58)", backdropFilter: "blur(6px)" }}>
           <FormBuilder

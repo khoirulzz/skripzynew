@@ -47,7 +47,14 @@ export function Sidebar({ isCollapsed = false, toggleCollapse, isMobile = false 
         key={item.path}
         href={item.path}
         title={isCollapsed ? item.name : undefined}
-        onClick={() => {
+        onClick={(e) => {
+          if (window.isSkripzyWorkspaceDirty) {
+            if (!window.confirm("Ada perubahan yang belum disimpan. Anda yakin ingin keluar?")) {
+              e.preventDefault();
+              return;
+            }
+            window.isSkripzyWorkspaceDirty = false;
+          }
           if (isMobile && toggleCollapse) {
             toggleCollapse();
           }
@@ -181,7 +188,14 @@ export function Sidebar({ isCollapsed = false, toggleCollapse, isMobile = false 
             fontSize: isMobile ? "0.8rem" : "0.9rem",
             borderRadius: "var(--radius-sm)",
           }}
-          onClick={() => {
+          onClick={(e) => {
+            if (window.isSkripzyWorkspaceDirty) {
+              if (!window.confirm("Ada perubahan yang belum disimpan. Anda yakin ingin keluar?")) {
+                e.preventDefault();
+                return;
+              }
+              window.isSkripzyWorkspaceDirty = false;
+            }
             if (isMobile && toggleCollapse) toggleCollapse();
           }}
         >

@@ -529,13 +529,14 @@ ${bodyHtml}
     try {
       // Save Root Context
       const rootId = `root_context_${id}`;
-      try {
+      const rootCheck = await d1Request("workspace_notes", { method: "GET", id: rootId });
+      if (rootCheck && rootCheck.data) {
         await d1Request("workspace_notes", {
           method: "PATCH",
           id: rootId,
           body: { content: JSON.stringify(newRoot) }
         });
-      } catch {
+      } else {
         await d1Request("workspace_notes", {
           method: "POST",
           body: {
@@ -550,13 +551,14 @@ ${bodyHtml}
       // Save Chapter Context for active chapter
       const chKey = CHAPTERS[activeChapter].key;
       const chId = `chapter_context_${chKey}_${id}`;
-      try {
+      const chCheck = await d1Request("workspace_notes", { method: "GET", id: chId });
+      if (chCheck && chCheck.data) {
         await d1Request("workspace_notes", {
           method: "PATCH",
           id: chId,
           body: { content: JSON.stringify(newChapter) }
         });
-      } catch {
+      } else {
         await d1Request("workspace_notes", {
           method: "POST",
           body: {
@@ -607,6 +609,12 @@ ${bodyHtml}
   }, [activeChapter, activeForm?.id, latestAnalysis?.responseCount, progress, references.length, workspace?.id]);
 
   useEffect(() => {
+    if (saveState === "dirty" || isEditingContext) {
+      window.isSkripzyWorkspaceDirty = true;
+    } else {
+      window.isSkripzyWorkspaceDirty = false;
+    }
+
     const handler = (event) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
         event.preventDefault();
@@ -615,7 +623,7 @@ ${bodyHtml}
     };
 
     const handleBeforeUnload = (e) => {
-      if (saveState === "dirty") {
+      if (saveState === "dirty" || isEditingContext) {
         e.preventDefault();
         e.returnValue = "";
       }
@@ -624,10 +632,11 @@ ${bodyHtml}
     window.addEventListener("keydown", handler);
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => {
+      window.isSkripzyWorkspaceDirty = false;
       window.removeEventListener("keydown", handler);
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
-  }, [contentBuffer, persistWorkspace, saveState]);
+  }, [contentBuffer, persistWorkspace, saveState, isEditingContext]);
 
   const handleStatusChange = async (status) => {
     if (!workspace) return;
@@ -913,21 +922,23 @@ ${bodyHtml}
   );
 
   return (
-    <div style={{ margin: "-1.5rem", minHeight: "calc(100vh - 72px)", backgroundColor: "var(--background)" }}>
+    <div style={{ margin: isMobile ? "-0.75rem" : "-1.5rem", minHeight: "calc(100vh - 72px)", backgroundColor: "var(--background)" }}>
       <div
         style={{
-          padding: isSm ? "0.5rem 0.75rem" : "0.75rem 1rem",
+          padding: isSm 
+            ? "calc(env(safe-area-inset-top, 0px) + 0.5rem) 0.75rem 0.5rem" 
+            : "calc(env(safe-area-inset-top, 0px) + 0.75rem) 1rem 0.75rem",
           borderBottom: "1px solid var(--border)",
           backgroundColor: "color-mix(in srgb, var(--surface) 92%, transparent)",
           backdropFilter: "blur(10px)",
           position: "sticky",
-          top: "-1.5rem",
+          top: isMobile ? "-0.75rem" : "-1.5rem",
           zIndex: 40,
         }}
       >
         <div style={{ display: "flex", flexDirection: isXs ? "column" : "row", flexWrap: "wrap", justifyContent: "space-between", gap: isXs ? "0.6rem" : "0.9rem", alignItems: isXs ? "stretch" : "center" }}>
           <div style={{ minWidth: 0, flex: isSm ? "auto" : "1 1 360px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: isXs ? "0.3rem" : "0.65rem", flexWrap: isSm ? "nowrap" : "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: isXs ? "0.3rem" : "0.5rem", flexWrap: "nowrap" }}>
               <button
                 onClick={() => {
                   if (saveState === "dirty") {
@@ -939,7 +950,25 @@ ${bodyHtml}
               >
                 <PremiumIcon name="arrowLeft" size={isSm ? 14 : 18} />
               </button>
-              <h1 style={{ fontSize: isSm ? "0.85rem" : "1.05rem", margin: 0, whiteSpace: isSm ? "normal" : "nowrap", overflow: "hidden", textOverflow: isSm ? "clip" : "ellipsis", lineHeight: isSm ? 1.3 : 1, minWidth: 0, flex: 1, wordBreak: "break-word" }}>
+              <span style={{ display: "inline-flex", color: "var(--primary)", flexShrink: 0, marginLeft: "0.15rem" }}>
+                <PremiumIcon name="fileText" size={isSm ? 14 : 18} />
+              </span>
+              <h1
+                style={{
+                  fontSize: isSm ? "0.85rem" : "1.05rem",
+                  margin: 0,
+                  display: "-webkit-box",
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: "vertical",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  lineHeight: isSm ? 1.3 : 1.2,
+                  minWidth: 0,
+                  flex: 1,
+                  wordBreak: "break-word",
+                }}
+                title={workspace.title || "Tanpa Judul"}
+              >
                 {workspace.title || "Tanpa Judul"}
               </h1>
               {!isSm ? <StatusBadge status={workspace.status} /> : (

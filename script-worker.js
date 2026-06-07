@@ -1785,8 +1785,12 @@ const worker = {
                     
                     if (table === "users") {
                         body.id = session.uid;
-                    } else if (table === "topups" || table === "notifications") {
+                    } else if (table === "topups") {
                         body.userId = session.uid;
+                    } else if (table === "notifications") {
+                        if (!isAdmin) {
+                            body.userId = session.uid;
+                        }
                     } else if (!isGlobalAdminTable) {
                         body.user_id = session.uid;
                     }

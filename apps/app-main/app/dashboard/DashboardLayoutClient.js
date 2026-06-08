@@ -37,7 +37,17 @@ export default function DashboardLayout({ children }) {
 
   return (
     <AuthGuard requireAuth={true}>
-      <div className="bg-techy" style={{ display: "flex", minHeight: "100vh", overflow: "hidden", position: "relative" }}>
+      <div className="bg-techy" style={{
+          display: "flex",
+          height: "100dvh",
+          minHeight: "-webkit-fill-available",
+          overflow: "hidden",
+          position: "relative",
+          paddingTop: "env(safe-area-inset-top, 0px)",
+          paddingBottom: "env(safe-area-inset-bottom, 0px)",
+          paddingLeft: "env(safe-area-inset-left, 0px)",
+          paddingRight: "env(safe-area-inset-right, 0px)",
+        }}>
         <div className="noise-overlay" />
         
         {/* Mesh Glow Elements for "Techy" feel */}
@@ -84,7 +94,7 @@ export default function DashboardLayout({ children }) {
               width: isDesktopCollapsed ? "72px" : "260px",
               flexShrink: 0,
               transition: "width 0.3s cubic-bezier(0.4,0,0.2,1)",
-              height: "100vh",
+              height: "100%",
               position: "sticky",
               top: 0,
               zIndex: 10,
@@ -103,9 +113,8 @@ export default function DashboardLayout({ children }) {
             flex: 1,
             display: "flex",
             flexDirection: "column",
-            height: "100vh",
+            height: "100%",
             overflow: "hidden",
-            paddingTop: isMobile && isEditorPage ? "env(safe-area-inset-top, 0px)" : "0px",
           }}
         >
           {/* Pass mobile toggle or desktop collapse toggle so Header can render the hamburger */}
@@ -117,7 +126,7 @@ export default function DashboardLayout({ children }) {
           )}
           <div
             style={{
-              padding: isMobile ? "0.75rem 0.75rem calc(env(safe-area-inset-bottom, 0px) + 0.75rem) 0.75rem" : "1.5rem",
+              padding: isMobile ? "0.75rem" : "1.5rem",
               overflowY: "auto",
               flex: 1,
               position: "relative",

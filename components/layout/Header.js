@@ -22,22 +22,22 @@ export function Header({ onMenuClick = null, isMobile = false }) {
 
   return (
     <header
+      className="app-header"
       style={{
         display: "flex",
         justifyContent: "space-between",
         alignItems: "center",
-        paddingTop: isMobile ? "calc(env(safe-area-inset-top, 0px) + 0.4rem)" : "1.75rem",
-        paddingRight: isMobile ? "calc(env(safe-area-inset-right, 0px) + 0.6rem)" : "2rem",
-        paddingBottom: isMobile ? "0.4rem" : "1rem",
-        paddingLeft: isMobile ? "calc(env(safe-area-inset-left, 0px) + 0.6rem)" : "2rem",
+        paddingTop: isMobile ? "0.5rem" : "1.75rem",
+        paddingRight: isMobile ? "0.6rem" : "2rem",
+        paddingBottom: isMobile ? "0.5rem" : "1rem",
+        paddingLeft: isMobile ? "0.6rem" : "2rem",
         borderBottom: "none",
-        backgroundColor: "transparent",
+        backgroundColor: "var(--background)",
         boxShadow: "none",
         backdropFilter: "none",
         gap: "0.5rem",
         flexShrink: 0,
-        position: "sticky",
-        top: 0,
+        position: "relative",
         zIndex: 20,
       }}
     >

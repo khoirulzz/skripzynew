@@ -68,6 +68,7 @@ html {
   position: relative;
   width: 100%;
   height: 100%;
+  height: 100dvh;
   scroll-behavior: smooth;
   overflow-x: hidden;
   /* Prevent horizontal scroll at root level (critical for iOS Safari) */
@@ -92,7 +93,27 @@ body {
   position: relative;
   width: 100%;
   min-height: 100vh;
+  min-height: 100dvh;
   overflow-x: hidden;
+}
+
+/* ── PWA Fullscreen & WebView Compatibility ────────────── */
+
+/* Ensure the header is always visible even in WebView wrappers */
+.app-header {
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  will-change: transform;
+}
+
+/* When running inside a webview (median.co / capacitor etc.) ensure
+   the header layer is promoted to its own compositing layer so the
+   native webview toolbar doesn't clip or overlap it. */
+@media screen and (display-mode: standalone) {
+  .app-header {
+    position: relative;
+    z-index: 100;
+  }
 }
 
 /* Decorative elements using pseudo-elements */

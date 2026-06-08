@@ -226,7 +226,8 @@ function WorkspaceCard({ item, plan, isMobile }) {
         cursor: isLocked ? "not-allowed" : "pointer",
         opacity: isLocked ? 0.65 : 1,
         transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-        backgroundColor: "var(--surface)",
+        backgroundColor: "rgba(var(--surface-rgb), 0.5)",
+        backdropFilter: "blur(12px)",
         border: "1px solid var(--border)",
         position: "relative",
         overflow: "hidden",
@@ -335,7 +336,8 @@ function QuickToolCard({ tool, plan, isMobile }) {
         opacity: isInactive ? 0.5 : 1,
         transition: "all 0.3s ease",
         height: "100%",
-        backgroundColor: "var(--surface)",
+        backgroundColor: "rgba(var(--surface-rgb), 0.5)",
+        backdropFilter: "blur(12px)",
         border: "1px solid var(--border)",
       }}
       onMouseEnter={e => {
@@ -599,7 +601,8 @@ export default function DashboardPage() {
             style={{
               padding: isMobile ? "1.25rem" : "1.75rem",
               borderRadius: "24px",
-              backgroundColor: "var(--surface)",
+              backgroundColor: "rgba(var(--surface-rgb), 0.5)",
+              backdropFilter: "blur(12px)",
               display: "flex",
               flexDirection: "column",
               gap: "1.25rem",
@@ -700,7 +703,8 @@ export default function DashboardPage() {
             style={{
               padding: isMobile ? "1.25rem" : "1.75rem",
               borderRadius: "24px",
-              backgroundColor: "var(--surface)",
+              backgroundColor: "rgba(var(--surface-rgb), 0.5)",
+              backdropFilter: "blur(12px)",
               display: "flex",
               flexDirection: "column",
               justifyContent: "space-between",

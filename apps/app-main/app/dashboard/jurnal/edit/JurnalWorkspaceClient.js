@@ -30,13 +30,27 @@ function parseChapterKeys(referencesList) {
 import { DataHub } from "@/components/workspace/DataHub";
 import { DataAnalysisDashboard } from "@/components/workspace/DataAnalysisDashboard";
 import { WorkspaceNotesPanel } from "@/components/workspace/WorkspaceNotesPanel";
-import { WORKSPACE_TABS, calculateWorkspaceProgress, serializeLocalImages, deserializeLocalImages } from "@/lib/workspaceDefaults";
+import {
+  WORKSPACE_TABS,
+  calculateWorkspaceProgress,
+  serializeLocalImages,
+  deserializeLocalImages,
+} from "@/lib/workspaceDefaults";
 import { exportToDocx } from "@/lib/docxExport";
 
 function StatusBadge({ status }) {
   const tone =
-    status === "Selesai" ? "rgba(16,185,129,0.15)" : status === "Revisi" ? "rgba(245,158,11,0.15)" : "rgba(107,114,128,0.15)";
-  const color = status === "Selesai" ? "var(--success)" : status === "Revisi" ? "#d97706" : "var(--text-muted)";
+    status === "Selesai"
+      ? "rgba(16,185,129,0.15)"
+      : status === "Revisi"
+        ? "rgba(245,158,11,0.15)"
+        : "rgba(107,114,128,0.15)";
+  const color =
+    status === "Selesai"
+      ? "var(--success)"
+      : status === "Revisi"
+        ? "#d97706"
+        : "var(--text-muted)";
 
   return (
     <span
@@ -55,7 +69,12 @@ function StatusBadge({ status }) {
 }
 
 function SummaryChip({ label, value, tone = "default" }) {
-  const color = tone === "danger" ? "var(--danger)" : tone === "success" ? "var(--success)" : "var(--text-main)";
+  const color =
+    tone === "danger"
+      ? "var(--danger)"
+      : tone === "success"
+        ? "var(--success)"
+        : "var(--text-main)";
 
   return (
     <div
@@ -69,7 +88,15 @@ function SummaryChip({ label, value, tone = "default" }) {
         minWidth: 0,
       }}
     >
-      <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", whiteSpace: "nowrap" }}>{label}</span>
+      <span
+        style={{
+          fontSize: "0.72rem",
+          color: "var(--text-muted)",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {label}
+      </span>
       <strong
         style={{
           fontSize: "0.8rem",
@@ -113,7 +140,7 @@ async function persistWorkspaceDoc({
       methodologyType,
       activeFormId,
       ...overrides,
-    }
+    },
   });
 }
 
@@ -142,8 +169,10 @@ export default function WorkspaceEditorPage() {
   const [transcripts, setTranscripts] = useState([]);
   const [analysisSnapshots, setAnalysisSnapshots] = useState([]);
   const [noteText, setNoteText] = useState("");
-  const [isContextReferenceCardOpen, setIsContextReferenceCardOpen] = useState(true);
-  const [contextExpandedReferenceIds, setContextExpandedReferenceIds] = useState([]);
+  const [isContextReferenceCardOpen, setIsContextReferenceCardOpen] =
+    useState(true);
+  const [contextExpandedReferenceIds, setContextExpandedReferenceIds] =
+    useState([]);
   const [contextPreviewReference, setContextPreviewReference] = useState(null);
 
   // Root Context states for Journal
@@ -153,7 +182,7 @@ export default function WorkspaceEditorPage() {
     faktaLapangan: "",
     metode: "",
     gapAnalysis: "",
-    kebaruanNovelty: ""
+    kebaruanNovelty: "",
   });
   const [isEditingContext, setIsEditingContext] = useState(false);
   const [editedRootContext, setEditedRootContext] = useState(null);
@@ -197,15 +226,19 @@ export default function WorkspaceEditorPage() {
         const response = await d1Request("workspaces", { id });
         const data = response.data;
         if (!data || data.user_id !== user.uid) {
-          if (isMounted) { setNotFound(true); setLoading(false); }
+          if (isMounted) {
+            setNotFound(true);
+            setLoading(false);
+          }
           return;
         }
         if (isMounted) {
           let parsedSections = [];
           try {
-            parsedSections = typeof data.journalSections === 'string'
-              ? JSON.parse(data.journalSections)
-              : (data.journalSections || []);
+            parsedSections =
+              typeof data.journalSections === "string"
+                ? JSON.parse(data.journalSections)
+                : data.journalSections || [];
           } catch (e) {
             console.error("Gagal parse journalSections", e);
           }
@@ -221,10 +254,14 @@ export default function WorkspaceEditorPage() {
               console.error("Gagal parse content", e);
             }
             parsedSections.forEach((section) => {
-              initialBuffer[section.key] = deserializeLocalImages(parsedContent[section.key] || "");
+              initialBuffer[section.key] = deserializeLocalImages(
+                parsedContent[section.key] || "",
+              );
             });
             setContentBuffer(initialBuffer);
-            setActiveChapter(Number.isFinite(data.activeChapter) ? data.activeChapter : 0);
+            setActiveChapter(
+              Number.isFinite(data.activeChapter) ? data.activeChapter : 0,
+            );
             hydratedRef.current = true;
           }
           setLoading(false);
@@ -236,7 +273,10 @@ export default function WorkspaceEditorPage() {
     }
     fetchWorkspace();
     const interval = setInterval(fetchWorkspace, 10000);
-    return () => { isMounted = false; clearInterval(interval); };
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
   }, [id, user]);
 
   // Fetch sub-collections via D1
@@ -247,34 +287,46 @@ export default function WorkspaceEditorPage() {
       try {
         const refs = await d1Request("workspace_references");
         if (isMounted) {
-          const filteredRefs = (refs.data || []).filter(r => r.workspace_id === id);
+          const filteredRefs = (refs.data || []).filter(
+            (r) => r.workspace_id === id,
+          );
           setReferences(parseChapterKeys(filteredRefs));
         }
         const frms = await d1Request("workspace_forms");
-        if (isMounted) setForms((frms.data || []).filter(f => f.workspace_id === id));
+        if (isMounted)
+          setForms((frms.data || []).filter((f) => f.workspace_id === id));
         const trans = await d1Request("workspace_transcripts");
-        if (isMounted) setTranscripts((trans.data || []).filter(t => t.workspace_id === id));
+        if (isMounted)
+          setTranscripts(
+            (trans.data || []).filter((t) => t.workspace_id === id),
+          );
         const anly = await d1Request("workspace_analysis");
-        const anlyData = (anly.data || []).filter(a => a.workspace_id === id);
-        anlyData.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+        const anlyData = (anly.data || []).filter((a) => a.workspace_id === id);
+        anlyData.sort(
+          (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0),
+        );
         if (isMounted) setAnalysisSnapshots(anlyData);
 
         // Fetch notes
         const nts = await d1Request("workspace_notes");
         const allNotes = nts.data || [];
 
-        const generalNote = allNotes.find(n => n.workspace_id === id && n.id === "general");
+        const generalNote = allNotes.find(
+          (n) => n.workspace_id === id && n.id === "general",
+        );
         if (isMounted && generalNote) setNoteText(generalNote.content || "");
 
         // Fetch Root Context
-        const rootContextNote = allNotes.find(n => n.workspace_id === id && n.id === `root_context_${id}`);
+        const rootContextNote = allNotes.find(
+          (n) => n.workspace_id === id && n.id === `root_context_${id}`,
+        );
         let parsedRoot = {
           rumusanMasalah: "",
           fenomenaUmum: "",
           faktaLapangan: "",
           metode: "",
           gapAnalysis: "",
-          kebaruanNovelty: ""
+          kebaruanNovelty: "",
         };
         if (rootContextNote && rootContextNote.content) {
           try {
@@ -288,9 +340,13 @@ export default function WorkspaceEditorPage() {
         // Onboarding Guide Check for Jurnal (if root context is empty and session skip is not set)
         if (isMounted && !hasCheckedOnboarding) {
           const skippedSessionKey = `skipped_guide_${id}`;
-          const hasSkipped = sessionStorage.getItem(skippedSessionKey) === "true";
+          const hasSkipped =
+            sessionStorage.getItem(skippedSessionKey) === "true";
 
-          const hasNoRoot = !parsedRoot.rumusanMasalah && !parsedRoot.fenomenaUmum && !parsedRoot.faktaLapangan;
+          const hasNoRoot =
+            !parsedRoot.rumusanMasalah &&
+            !parsedRoot.fenomenaUmum &&
+            !parsedRoot.faktaLapangan;
 
           if (hasNoRoot && !hasSkipped) {
             setShowContextGuide(true);
@@ -298,38 +354,80 @@ export default function WorkspaceEditorPage() {
           }
           setHasCheckedOnboarding(true);
         }
-      } catch (e) { console.error("Failed fetching subs", e); }
+      } catch (e) {
+        console.error("Failed fetching subs", e);
+      }
     }
     fetchSubs();
     const interval = setInterval(fetchSubs, 10000);
-    return () => { isMounted = false; clearInterval(interval); };
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
   }, [id]);
 
   const activeForm = useMemo(
-    () => forms.find((item) => item.id === workspace?.activeFormId) || forms.find((item) => item.status === "published") || null,
-    [forms, workspace?.activeFormId]
+    () =>
+      forms.find((item) => item.id === workspace?.activeFormId) ||
+      forms.find((item) => item.status === "published") ||
+      null,
+    [forms, workspace?.activeFormId],
   );
 
   const latestAnalysis = analysisSnapshots[0] || null;
-  const currentChapter = (workspace?.journalSections || [])[activeChapter] || { key: "unknown", label: "Loading...", promptContext: "" };
+  const currentChapter = (workspace?.journalSections || [])[activeChapter] || {
+    key: "unknown",
+    label: "Loading...",
+    promptContext: "",
+  };
   const currentChapterReferences = useMemo(
-    () => references.filter((reference) => (reference.chapterKeys || []).includes(currentChapter?.key)),
-    [currentChapter?.key, references]
+    () =>
+      references.filter((reference) =>
+        (reference.chapterKeys || []).includes(currentChapter?.key),
+      ),
+    [currentChapter?.key, references],
   );
 
-  const progress = useMemo(() => calculateWorkspaceProgress(contentBuffer, "jurnal", workspace?.journalSections || []), [contentBuffer, workspace?.journalSections]);
-  const contextPanelWidth = isMobile ? "min(calc(100vw - 1.5rem), 420px)" : "360px";
+  const progress = useMemo(
+    () =>
+      calculateWorkspaceProgress(
+        contentBuffer,
+        "jurnal",
+        workspace?.journalSections || [],
+      ),
+    [contentBuffer, workspace?.journalSections],
+  );
+  const contextPanelWidth = isMobile
+    ? "min(calc(100vw - 1.5rem), 420px)"
+    : "360px";
 
   // Stabilize persistWorkspace using Ref to avoid dependency loop with polling
   const saveContextRef = useRef({
-    workspace, activeChapter, progress, references, latestAnalysis, activeForm
+    workspace,
+    activeChapter,
+    progress,
+    references,
+    latestAnalysis,
+    activeForm,
   });
 
   useEffect(() => {
     saveContextRef.current = {
-      workspace, activeChapter, progress, references, latestAnalysis, activeForm
+      workspace,
+      activeChapter,
+      progress,
+      references,
+      latestAnalysis,
+      activeForm,
     };
-  }, [workspace, activeChapter, progress, references, latestAnalysis, activeForm]);
+  }, [
+    workspace,
+    activeChapter,
+    progress,
+    references,
+    latestAnalysis,
+    activeForm,
+  ]);
 
   const persistWorkspace = useCallback(
     async (nextContentBuffer = contentBuffer, overrides = {}) => {
@@ -341,7 +439,9 @@ export default function WorkspaceEditorPage() {
 
       const serializedBuffer = {};
       Object.keys(nextContentBuffer).forEach((key) => {
-        serializedBuffer[key] = serializeLocalImages(nextContentBuffer[key] || "");
+        serializedBuffer[key] = serializeLocalImages(
+          nextContentBuffer[key] || "",
+        );
       });
 
       try {
@@ -351,9 +451,13 @@ export default function WorkspaceEditorPage() {
           activeChapter: ctx.activeChapter,
           progress: ctx.progress,
           referenceCount: ctx.references.length,
-          responseCount: ctx.latestAnalysis?.responseCount || ctx.workspace.responseCount || 0,
+          responseCount:
+            ctx.latestAnalysis?.responseCount ||
+            ctx.workspace.responseCount ||
+            0,
           methodologyType: ctx.workspace.methodologyType || "kuantitatif",
-          activeFormId: ctx.activeForm?.id || ctx.workspace.activeFormId || null,
+          activeFormId:
+            ctx.activeForm?.id || ctx.workspace.activeFormId || null,
           overrides,
         });
         setSaveState("saved");
@@ -364,7 +468,7 @@ export default function WorkspaceEditorPage() {
         setIsSaving(false);
       }
     },
-    [contentBuffer, isSaving]
+    [contentBuffer, isSaving],
   );
 
   const handleExportWord = async (exportAll = false) => {
@@ -377,7 +481,7 @@ export default function WorkspaceEditorPage() {
         const deserializedHtml = deserializeLocalImages(rawHtml);
         sections.push({
           title: section.label,
-          html: deserializedHtml
+          html: deserializedHtml,
         });
       });
     } else {
@@ -387,7 +491,7 @@ export default function WorkspaceEditorPage() {
       const deserializedHtml = deserializeLocalImages(rawHtml);
       sections.push({
         title: section.label,
-        html: deserializedHtml
+        html: deserializedHtml,
       });
     }
 
@@ -417,13 +521,22 @@ export default function WorkspaceEditorPage() {
           referenceCount: references.length,
           responseCount: latestAnalysis?.responseCount || 0,
           activeFormId: activeForm?.id || null,
-          activeChapter
-        }
-      }).catch((error) => console.error("Gagal sinkron metadata workspace:", error));
+          activeChapter,
+        },
+      }).catch((error) =>
+        console.error("Gagal sinkron metadata workspace:", error),
+      );
     }, 900);
 
     return () => window.clearTimeout(timeoutId);
-  }, [activeChapter, activeForm?.id, latestAnalysis?.responseCount, progress, references.length, workspace?.id]);
+  }, [
+    activeChapter,
+    activeForm?.id,
+    latestAnalysis?.responseCount,
+    progress,
+    references.length,
+    workspace?.id,
+  ]);
 
   useEffect(() => {
     if (saveState === "dirty" || isEditingContext) {
@@ -449,7 +562,14 @@ export default function WorkspaceEditorPage() {
     const handleAnchorClick = (event) => {
       if (window.isSkripzyWorkspaceDirty) {
         const anchor = event.target.closest("a");
-        if (anchor && anchor.href && !anchor.href.startsWith("#") && !anchor.href.includes("javascript:void") && !anchor.href.startsWith("mailto:") && !anchor.href.startsWith("tel:")) {
+        if (
+          anchor &&
+          anchor.href &&
+          !anchor.href.startsWith("#") &&
+          !anchor.href.includes("javascript:void") &&
+          !anchor.href.startsWith("mailto:") &&
+          !anchor.href.startsWith("tel:")
+        ) {
           const isSamePage = anchor.href === window.location.href;
           if (!isSamePage) {
             event.preventDefault();
@@ -473,7 +593,10 @@ export default function WorkspaceEditorPage() {
   }, [contentBuffer, persistWorkspace, saveState, isEditingContext]);
 
   const wordCount = useMemo(() => {
-    const rawText = (contentBuffer[currentChapter?.key] || "").replace(/<[^>]*>/g, " ");
+    const rawText = (contentBuffer[currentChapter?.key] || "").replace(
+      /<[^>]*>/g,
+      " ",
+    );
     return rawText.trim() ? rawText.trim().split(/\s+/).length : 0;
   }, [contentBuffer, currentChapter?.key]);
 
@@ -486,7 +609,7 @@ export default function WorkspaceEditorPage() {
         await d1Request("workspace_notes", {
           method: "PATCH",
           id: rootId,
-          body: { content: JSON.stringify(newRoot) }
+          body: { content: JSON.stringify(newRoot) },
         });
       } catch {
         await d1Request("workspace_notes", {
@@ -494,8 +617,8 @@ export default function WorkspaceEditorPage() {
           body: {
             id: rootId,
             workspace_id: id,
-            content: JSON.stringify(newRoot)
-          }
+            content: JSON.stringify(newRoot),
+          },
         });
       }
       setRootContext(newRoot);
@@ -514,7 +637,7 @@ export default function WorkspaceEditorPage() {
     await d1Request("workspaces", {
       method: "PATCH",
       id: workspace.id,
-      body: { status }
+      body: { status },
     });
   };
 
@@ -524,7 +647,7 @@ export default function WorkspaceEditorPage() {
     await d1Request("workspaces", {
       method: "PATCH",
       id: workspace.id,
-      body: { methodologyType }
+      body: { methodologyType },
     });
   };
 
@@ -538,7 +661,10 @@ export default function WorkspaceEditorPage() {
   const handleAiInsertContent = (generatedHtml, targetChapterIndex = null) => {
     let chapterKey = currentChapter?.key || "unknown";
 
-    if (targetChapterIndex !== null && JURNAL_IMRAD_TEMPLATE[targetChapterIndex]) {
+    if (
+      targetChapterIndex !== null &&
+      JURNAL_IMRAD_TEMPLATE[targetChapterIndex]
+    ) {
       chapterKey = JURNAL_IMRAD_TEMPLATE[targetChapterIndex].key;
       setActiveChapter(targetChapterIndex);
       setActiveTab("penulisan");
@@ -550,7 +676,9 @@ export default function WorkspaceEditorPage() {
       const existing = current[chapterKey] || "";
       return {
         ...current,
-        [chapterKey]: existing ? `${existing}<p></p>${generatedHtml}` : generatedHtml,
+        [chapterKey]: existing
+          ? `${existing}<p></p>${generatedHtml}`
+          : generatedHtml,
       };
     });
   };
@@ -562,7 +690,9 @@ export default function WorkspaceEditorPage() {
 
   const toggleContextReference = (referenceId) => {
     setContextExpandedReferenceIds((current) =>
-      current.includes(referenceId) ? current.filter((item) => item !== referenceId) : [...current, referenceId]
+      current.includes(referenceId)
+        ? current.filter((item) => item !== referenceId)
+        : [...current, referenceId],
     );
   };
 
@@ -581,7 +711,16 @@ export default function WorkspaceEditorPage() {
 
   if (loading) {
     return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "60vh", flexDirection: "column", gap: "1rem" }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: "60vh",
+          flexDirection: "column",
+          gap: "1rem",
+        }}
+      >
         <DefaultSpinner size="medium" sizePixel={48} />
         <p className="text-muted">Memuat workspace penelitian...</p>
       </div>
@@ -590,11 +729,26 @@ export default function WorkspaceEditorPage() {
 
   if (notFound || !workspace) {
     return (
-      <div className="glass-panel p-8 text-center" style={{ maxWidth: "520px", margin: "3rem auto" }}>
-        <PremiumIcon name="alertCircle" size={44} className="text-danger" style={{ margin: "0 auto 1rem" }} />
+      <div
+        className="glass-panel p-8 text-center"
+        style={{ maxWidth: "520px", margin: "3rem auto" }}
+      >
+        <PremiumIcon
+          name="alertCircle"
+          size={44}
+          className="text-danger"
+          style={{ margin: "0 auto 1rem" }}
+        />
         <h2>Workspace tidak ditemukan</h2>
-        <p className="text-muted">Workspace ini tidak ada atau Anda tidak memiliki akses ke proyek tersebut.</p>
-        <Link href="/dashboard/jurnal" className="btn btn-primary" style={{ marginTop: "1rem", display: "inline-flex" }}>
+        <p className="text-muted">
+          Workspace ini tidak ada atau Anda tidak memiliki akses ke proyek
+          tersebut.
+        </p>
+        <Link
+          href="/dashboard/jurnal"
+          className="btn btn-primary"
+          style={{ marginTop: "1rem", display: "inline-flex" }}
+        >
           <PremiumIcon name="arrowLeft" size={15} />
           Kembali
         </Link>
@@ -603,20 +757,70 @@ export default function WorkspaceEditorPage() {
   }
 
   const rightPanel = (
-    <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem", minHeight: 0, height: "100%", flex: 1 }}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "0.85rem",
+        minHeight: 0,
+        height: "100%",
+        flex: 1,
+      }}
+    >
       {activeTab === "penulisan" && (
-        <div className="workspace-scroll" style={{ display: "flex", flexDirection: "column", gap: "1rem", overflowY: "auto", flex: 1, minHeight: 0, paddingRight: "0.25rem" }}>
+        <div
+          className="workspace-scroll"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "1rem",
+            overflowY: "auto",
+            flex: 1,
+            minHeight: 0,
+            paddingRight: "0.25rem",
+          }}
+        >
           {/* Root Context Form */}
-          <div className="glass-panel" style={{ padding: isSm ? "0.65rem" : "1rem", backgroundColor: "var(--surface)", display: "flex", flexDirection: "column", gap: isSm ? "0.5rem" : "0.75rem" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem" }}>
-              <h4 style={{ margin: 0, fontSize: "0.88rem", fontWeight: 700, color: "var(--primary)", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+          <div
+            className="glass-panel"
+            style={{
+              padding: isSm ? "0.65rem" : "1rem",
+              backgroundColor: "var(--surface)",
+              display: "flex",
+              flexDirection: "column",
+              gap: isSm ? "0.5rem" : "0.75rem",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "0.5rem",
+              }}
+            >
+              <h4
+                style={{
+                  margin: 0,
+                  fontSize: "0.88rem",
+                  fontWeight: 700,
+                  color: "var(--primary)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.4rem",
+                }}
+              >
                 <PremiumIcon name="brainCircuit" size={16} />
                 <span>Konteks Utama (Brain Root)</span>
               </h4>
               {!isEditingContext && (
                 <button
                   className="btn btn-ghost"
-                  style={{ padding: "0.2rem 0.5rem", fontSize: "0.7rem", height: "auto" }}
+                  style={{
+                    padding: "0.2rem 0.5rem",
+                    fontSize: "0.7rem",
+                    height: "auto",
+                  }}
                   onClick={() => {
                     setEditedRootContext({ ...rootContext });
                     setIsEditingContext(true);
@@ -628,98 +832,321 @@ export default function WorkspaceEditorPage() {
             </div>
 
             {isEditingContext ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.65rem",
+                }}
+              >
                 <div className="form-group" style={{ margin: 0 }}>
-                  <label className="form-label" style={{ fontSize: isSm ? "0.68rem" : "0.72rem", marginBottom: "0.15rem" }}>Fenomena Umum</label>
+                  <label
+                    className="form-label"
+                    style={{
+                      fontSize: isSm ? "0.68rem" : "0.72rem",
+                      marginBottom: "0.15rem",
+                    }}
+                  >
+                    Fenomena Umum
+                  </label>
                   <textarea
                     className="form-input"
-                    style={{ fontSize: isSm ? "0.74rem" : "0.78rem", padding: isSm ? "0.3rem" : "0.4rem" }}
+                    style={{
+                      fontSize: isSm ? "0.74rem" : "0.78rem",
+                      padding: isSm ? "0.3rem" : "0.4rem",
+                    }}
                     rows={2}
                     value={editedRootContext?.fenomenaUmum || ""}
-                    onChange={e => setEditedRootContext(prev => ({ ...prev, fenomenaUmum: e.target.value }))}
+                    onChange={(e) =>
+                      setEditedRootContext((prev) => ({
+                        ...prev,
+                        fenomenaUmum: e.target.value,
+                      }))
+                    }
                   />
                 </div>
                 <div className="form-group" style={{ margin: 0 }}>
-                  <label className="form-label" style={{ fontSize: isSm ? "0.68rem" : "0.72rem", marginBottom: "0.15rem" }}>Fakta Lapangan / Masalah</label>
+                  <label
+                    className="form-label"
+                    style={{
+                      fontSize: isSm ? "0.68rem" : "0.72rem",
+                      marginBottom: "0.15rem",
+                    }}
+                  >
+                    Fakta Lapangan / Masalah
+                  </label>
                   <textarea
                     className="form-input"
-                    style={{ fontSize: isSm ? "0.74rem" : "0.78rem", padding: isSm ? "0.3rem" : "0.4rem" }}
+                    style={{
+                      fontSize: isSm ? "0.74rem" : "0.78rem",
+                      padding: isSm ? "0.3rem" : "0.4rem",
+                    }}
                     rows={2}
                     value={editedRootContext?.faktaLapangan || ""}
-                    onChange={e => setEditedRootContext(prev => ({ ...prev, faktaLapangan: e.target.value }))}
+                    onChange={(e) =>
+                      setEditedRootContext((prev) => ({
+                        ...prev,
+                        faktaLapangan: e.target.value,
+                      }))
+                    }
                   />
                 </div>
                 <div className="form-group" style={{ margin: 0 }}>
-                  <label className="form-label" style={{ fontSize: isSm ? "0.68rem" : "0.72rem", marginBottom: "0.15rem" }}>Rumusan Masalah</label>
+                  <label
+                    className="form-label"
+                    style={{
+                      fontSize: isSm ? "0.68rem" : "0.72rem",
+                      marginBottom: "0.15rem",
+                    }}
+                  >
+                    Rumusan Masalah
+                  </label>
                   <textarea
                     className="form-input"
-                    style={{ fontSize: isSm ? "0.74rem" : "0.78rem", padding: isSm ? "0.3rem" : "0.4rem" }}
+                    style={{
+                      fontSize: isSm ? "0.74rem" : "0.78rem",
+                      padding: isSm ? "0.3rem" : "0.4rem",
+                    }}
                     rows={2}
                     value={editedRootContext?.rumusanMasalah || ""}
-                    onChange={e => setEditedRootContext(prev => ({ ...prev, rumusanMasalah: e.target.value }))}
+                    onChange={(e) =>
+                      setEditedRootContext((prev) => ({
+                        ...prev,
+                        rumusanMasalah: e.target.value,
+                      }))
+                    }
                   />
                 </div>
                 <div className="form-group" style={{ margin: 0 }}>
-                  <label className="form-label" style={{ fontSize: isSm ? "0.68rem" : "0.72rem", marginBottom: "0.15rem" }}>Metode</label>
+                  <label
+                    className="form-label"
+                    style={{
+                      fontSize: isSm ? "0.68rem" : "0.72rem",
+                      marginBottom: "0.15rem",
+                    }}
+                  >
+                    Metode
+                  </label>
                   <textarea
                     className="form-input"
-                    style={{ fontSize: isSm ? "0.74rem" : "0.78rem", padding: isSm ? "0.3rem" : "0.4rem" }}
+                    style={{
+                      fontSize: isSm ? "0.74rem" : "0.78rem",
+                      padding: isSm ? "0.3rem" : "0.4rem",
+                    }}
                     rows={2}
                     value={editedRootContext?.metode || ""}
-                    onChange={e => setEditedRootContext(prev => ({ ...prev, metode: e.target.value }))}
+                    onChange={(e) =>
+                      setEditedRootContext((prev) => ({
+                        ...prev,
+                        metode: e.target.value,
+                      }))
+                    }
                   />
                 </div>
                 <div className="form-group" style={{ margin: 0 }}>
-                  <label className="form-label" style={{ fontSize: isSm ? "0.68rem" : "0.72rem", marginBottom: "0.15rem" }}>Gap Analysis (Opsional)</label>
+                  <label
+                    className="form-label"
+                    style={{
+                      fontSize: isSm ? "0.68rem" : "0.72rem",
+                      marginBottom: "0.15rem",
+                    }}
+                  >
+                    Gap Analysis (Opsional)
+                  </label>
                   <textarea
                     className="form-input"
-                    style={{ fontSize: isSm ? "0.74rem" : "0.78rem", padding: isSm ? "0.3rem" : "0.4rem" }}
+                    style={{
+                      fontSize: isSm ? "0.74rem" : "0.78rem",
+                      padding: isSm ? "0.3rem" : "0.4rem",
+                    }}
                     rows={2}
                     value={editedRootContext?.gapAnalysis || ""}
-                    onChange={e => setEditedRootContext(prev => ({ ...prev, gapAnalysis: e.target.value }))}
+                    onChange={(e) =>
+                      setEditedRootContext((prev) => ({
+                        ...prev,
+                        gapAnalysis: e.target.value,
+                      }))
+                    }
                   />
                 </div>
                 <div className="form-group" style={{ margin: 0 }}>
-                  <label className="form-label" style={{ fontSize: isSm ? "0.68rem" : "0.72rem", marginBottom: "0.15rem" }}>Kebaruan / Novelty (Opsional)</label>
+                  <label
+                    className="form-label"
+                    style={{
+                      fontSize: isSm ? "0.68rem" : "0.72rem",
+                      marginBottom: "0.15rem",
+                    }}
+                  >
+                    Kebaruan / Novelty (Opsional)
+                  </label>
                   <textarea
                     className="form-input"
-                    style={{ fontSize: isSm ? "0.74rem" : "0.78rem", padding: isSm ? "0.3rem" : "0.4rem" }}
+                    style={{
+                      fontSize: isSm ? "0.74rem" : "0.78rem",
+                      padding: isSm ? "0.3rem" : "0.4rem",
+                    }}
                     rows={2}
                     value={editedRootContext?.kebaruanNovelty || ""}
-                    onChange={e => setEditedRootContext(prev => ({ ...prev, kebaruanNovelty: e.target.value }))}
+                    onChange={(e) =>
+                      setEditedRootContext((prev) => ({
+                        ...prev,
+                        kebaruanNovelty: e.target.value,
+                      }))
+                    }
                   />
                 </div>
               </div>
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", fontSize: isSm ? "0.72rem" : "0.78rem", color: "var(--text-muted)", lineHeight: 1.5 }}>
-                <div><strong>Fenomena Umum:</strong> {rootContext.fenomenaUmum || <span style={{ fontStyle: "italic", opacity: 0.6 }}>Belum diisi...</span>}</div>
-                <div><strong>Fakta/Permasalahan:</strong> {rootContext.faktaLapangan || <span style={{ fontStyle: "italic", opacity: 0.6 }}>Belum diisi...</span>}</div>
-                <div><strong>Rumusan Masalah:</strong> {rootContext.rumusanMasalah || <span style={{ fontStyle: "italic", opacity: 0.6 }}>Belum diisi...</span>}</div>
-                <div><strong>Metode:</strong> {rootContext.metode || <span style={{ fontStyle: "italic", opacity: 0.6 }}>Belum diisi...</span>}</div>
-                {rootContext.gapAnalysis && <div><strong>Gap Analysis:</strong> {rootContext.gapAnalysis}</div>}
-                {rootContext.kebaruanNovelty && <div><strong>Kebaruan:</strong> {rootContext.kebaruanNovelty}</div>}
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.5rem",
+                  fontSize: isSm ? "0.72rem" : "0.78rem",
+                  color: "var(--text-muted)",
+                  lineHeight: 1.5,
+                }}
+              >
+                <div>
+                  <strong>Fenomena Umum:</strong>{" "}
+                  {rootContext.fenomenaUmum || (
+                    <span style={{ fontStyle: "italic", opacity: 0.6 }}>
+                      Belum diisi...
+                    </span>
+                  )}
+                </div>
+                <div>
+                  <strong>Fakta/Permasalahan:</strong>{" "}
+                  {rootContext.faktaLapangan || (
+                    <span style={{ fontStyle: "italic", opacity: 0.6 }}>
+                      Belum diisi...
+                    </span>
+                  )}
+                </div>
+                <div>
+                  <strong>Rumusan Masalah:</strong>{" "}
+                  {rootContext.rumusanMasalah || (
+                    <span style={{ fontStyle: "italic", opacity: 0.6 }}>
+                      Belum diisi...
+                    </span>
+                  )}
+                </div>
+                <div>
+                  <strong>Metode:</strong>{" "}
+                  {rootContext.metode || (
+                    <span style={{ fontStyle: "italic", opacity: 0.6 }}>
+                      Belum diisi...
+                    </span>
+                  )}
+                </div>
+                {rootContext.gapAnalysis && (
+                  <div>
+                    <strong>Gap Analysis:</strong> {rootContext.gapAnalysis}
+                  </div>
+                )}
+                {rootContext.kebaruanNovelty && (
+                  <div>
+                    <strong>Kebaruan:</strong> {rootContext.kebaruanNovelty}
+                  </div>
+                )}
               </div>
             )}
           </div>
 
           {/* Action buttons when editing context */}
           {isEditingContext && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.5rem",
+              }}
+            >
               {showSaveConfirm ? (
-                <div className="glass-panel" style={{ padding: "0.75rem", backgroundColor: "rgba(79, 70, 229, 0.05)", border: "1px solid var(--primary)", borderRadius: "8px", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                  <p style={{ margin: 0, fontSize: "0.74rem", color: "var(--text-main)", lineHeight: 1.4, display: "flex", alignItems: "flex-start", gap: "0.4rem" }}>
-                    <PremiumIcon name="alertTriangle" size={16} className="text-warning" style={{ flexShrink: 0, marginTop: "1.5px" }} />
-                    <span>Konteks ini adalah panduan utama AI Anda. Apakah Anda yakin ingin menyimpan perubahan?</span>
+                <div
+                  className="glass-panel"
+                  style={{
+                    padding: "0.75rem",
+                    backgroundColor: "rgba(79, 70, 229, 0.05)",
+                    border: "1px solid var(--primary)",
+                    borderRadius: "8px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "0.5rem",
+                  }}
+                >
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: "0.74rem",
+                      color: "var(--text-main)",
+                      lineHeight: 1.4,
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: "0.4rem",
+                    }}
+                  >
+                    <PremiumIcon
+                      name="alertTriangle"
+                      size={16}
+                      className="text-warning"
+                      style={{ flexShrink: 0, marginTop: "1.5px" }}
+                    />
+                    <span>
+                      Konteks ini adalah panduan utama AI Anda. Apakah Anda
+                      yakin ingin menyimpan perubahan?
+                    </span>
                   </p>
-                  <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
-                    <button className="btn btn-ghost" style={{ padding: "0.2rem 0.5rem", fontSize: "0.7rem", height: "auto" }} onClick={() => setShowSaveConfirm(false)}>Batal</button>
-                    <button className="btn btn-primary" style={{ padding: "0.2rem 0.6rem", fontSize: "0.7rem", height: "auto" }} onClick={() => void handleSaveContext(editedRootContext)}>Ya, Simpan</button>
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "0.5rem",
+                      justifyContent: "flex-end",
+                    }}
+                  >
+                    <button
+                      className="btn btn-ghost"
+                      style={{
+                        padding: "0.2rem 0.5rem",
+                        fontSize: "0.7rem",
+                        height: "auto",
+                      }}
+                      onClick={() => setShowSaveConfirm(false)}
+                    >
+                      Batal
+                    </button>
+                    <button
+                      className="btn btn-primary"
+                      style={{
+                        padding: "0.2rem 0.6rem",
+                        fontSize: "0.7rem",
+                        height: "auto",
+                      }}
+                      onClick={() => void handleSaveContext(editedRootContext)}
+                    >
+                      Ya, Simpan
+                    </button>
                   </div>
                 </div>
               ) : (
                 <div style={{ display: "flex", gap: "0.5rem" }}>
-                  <button className="btn btn-outline" style={{ flex: 1, padding: "0.45rem", fontSize: "0.78rem" }} onClick={() => { setIsEditingContext(false); setShowSaveConfirm(false); }}>Batal</button>
-                  <button className="btn btn-primary" style={{ flex: 1, padding: "0.45rem", fontSize: "0.78rem" }} onClick={() => setShowSaveConfirm(true)}>Simpan</button>
+                  <button
+                    className="btn btn-outline"
+                    style={{ flex: 1, padding: "0.45rem", fontSize: "0.78rem" }}
+                    onClick={() => {
+                      setIsEditingContext(false);
+                      setShowSaveConfirm(false);
+                    }}
+                  >
+                    Batal
+                  </button>
+                  <button
+                    className="btn btn-primary"
+                    style={{ flex: 1, padding: "0.45rem", fontSize: "0.78rem" }}
+                    onClick={() => setShowSaveConfirm(true)}
+                  >
+                    Simpan
+                  </button>
                 </div>
               )}
             </div>
@@ -727,21 +1154,53 @@ export default function WorkspaceEditorPage() {
 
           {/* Notes Panel inside the scroll area */}
           <div style={{ minHeight: 0, flexShrink: 0, marginTop: "-0.25rem" }}>
-            <WorkspaceNotesPanel workspaceId={workspace.id} collapsible defaultCollapsed rows={8} />
+            <WorkspaceNotesPanel
+              workspaceId={workspace.id}
+              collapsible
+              defaultCollapsed
+              rows={8}
+            />
           </div>
         </div>
       )}
 
       {activeTab === "analisis" && latestAnalysis && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "1rem", overflowY: "auto", flex: 1, minHeight: 0 }}>
-          <div className="glass-panel" style={{ padding: "1rem", backgroundColor: "var(--surface)" }}>
-            <h3 style={{ fontSize: "0.95rem", margin: 0 }}>Snapshot Analisis Terakhir</h3>
-            <p style={{ margin: "0.55rem 0 0 0", fontSize: "0.82rem", lineHeight: 1.6, color: "var(--text-main)" }}>
-              {latestAnalysis.narrative || "Snapshot sudah tersimpan namun narasi belum tersedia."}
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "1rem",
+            overflowY: "auto",
+            flex: 1,
+            minHeight: 0,
+          }}
+        >
+          <div
+            className="glass-panel"
+            style={{ padding: "1rem", backgroundColor: "var(--surface)" }}
+          >
+            <h3 style={{ fontSize: "0.95rem", margin: 0 }}>
+              Snapshot Analisis Terakhir
+            </h3>
+            <p
+              style={{
+                margin: "0.55rem 0 0 0",
+                fontSize: "0.82rem",
+                lineHeight: 1.6,
+                color: "var(--text-main)",
+              }}
+            >
+              {latestAnalysis.narrative ||
+                "Snapshot sudah tersimpan namun narasi belum tersedia."}
             </p>
           </div>
           <div style={{ minHeight: 0, flexShrink: 0 }}>
-            <WorkspaceNotesPanel workspaceId={workspace.id} collapsible defaultCollapsed rows={8} />
+            <WorkspaceNotesPanel
+              workspaceId={workspace.id}
+              collapsible
+              defaultCollapsed
+              rows={8}
+            />
           </div>
         </div>
       )}
@@ -749,23 +1208,46 @@ export default function WorkspaceEditorPage() {
   );
 
   return (
-    <div style={{ margin: isMobile ? "-0.75rem" : "-1.5rem", minHeight: "calc(100vh - 72px)", backgroundColor: "var(--background)" }}>
+    <div
+      style={{
+        margin: isMobile ? "-0.75rem" : "-1.5rem",
+        minHeight: "calc(100vh - 72px)",
+        backgroundColor: "var(--background)",
+      }}
+    >
       <div
         style={{
-          padding: isSm 
-            ? "calc(max(env(safe-area-inset-top, 0px), 24px) + 0.5rem) 0.75rem 0.5rem" 
+          padding: isSm
+            ? "calc(max(env(safe-area-inset-top, 0px), 24px) + 0.5rem) 0.75rem 0.5rem"
             : "calc(env(safe-area-inset-top, 0px) + 0.75rem) 1rem 0.75rem",
           borderBottom: "1px solid var(--border)",
-          backgroundColor: "color-mix(in srgb, var(--surface) 92%, transparent)",
+          backgroundColor:
+            "color-mix(in srgb, var(--surface) 92%, transparent)",
           backdropFilter: "blur(10px)",
           position: "sticky",
           top: isMobile ? "-0.75rem" : "-1.5rem",
           zIndex: 40,
         }}
       >
-        <div style={{ display: "flex", flexDirection: isXs ? "column" : "row", flexWrap: "wrap", justifyContent: "space-between", gap: isXs ? "0.6rem" : "0.9rem", alignItems: isXs ? "stretch" : "center" }}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: isXs ? "column" : "row",
+            flexWrap: "wrap",
+            justifyContent: "space-between",
+            gap: isXs ? "0.6rem" : "0.9rem",
+            alignItems: isXs ? "stretch" : "center",
+          }}
+        >
           <div style={{ minWidth: 0, flex: isSm ? "auto" : "1 1 360px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: isXs ? "0.3rem" : "0.5rem", flexWrap: "nowrap" }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: isXs ? "0.3rem" : "0.5rem",
+                flexWrap: "nowrap",
+              }}
+            >
               <button
                 onClick={() => {
                   if (saveState === "dirty" || isEditingContext) {
@@ -775,11 +1257,26 @@ export default function WorkspaceEditorPage() {
                     window.location.href = "/dashboard/jurnal";
                   }
                 }}
-                style={{ display: "inline-flex", color: "var(--text-muted)", flexShrink: 0, background: "none", border: "none", padding: 0, cursor: "pointer" }}
+                style={{
+                  display: "inline-flex",
+                  color: "var(--text-muted)",
+                  flexShrink: 0,
+                  background: "none",
+                  border: "none",
+                  padding: 0,
+                  cursor: "pointer",
+                }}
               >
                 <PremiumIcon name="arrowLeft" size={isSm ? 14 : 18} />
               </button>
-              <span style={{ display: "inline-flex", color: "var(--primary)", flexShrink: 0, marginLeft: "0.15rem" }}>
+              <span
+                style={{
+                  display: "inline-flex",
+                  color: "var(--primary)",
+                  flexShrink: 0,
+                  marginLeft: "0.15rem",
+                }}
+              >
                 <PremiumIcon name="fileText" size={isSm ? 14 : 18} />
               </span>
               <h1
@@ -839,17 +1336,59 @@ export default function WorkspaceEditorPage() {
                 {workspace.topic || "Topik penelitian belum diisi."}
               </p>
             ) : null}
-          </div>          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.75rem", justifyContent: "flex-end", flexShrink: 0 }}>
-            {(isHeaderExpanded || !isSm) ? (
+          </div>{" "}
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              gap: "0.75rem",
+              justifyContent: "flex-end",
+              flexShrink: 0,
+            }}
+          >
+            {isHeaderExpanded || !isSm ? (
               <>
                 {/* Minimal Blue Progress Line Bar */}
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem", width: "110px", marginRight: "0.25rem" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.72rem", color: "var(--text-muted)", lineHeight: 1 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "0.25rem",
+                    width: "110px",
+                    marginRight: "0.25rem",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      fontSize: "0.72rem",
+                      color: "var(--text-muted)",
+                      lineHeight: 1,
+                    }}
+                  >
                     <span>Progress</span>
                     <strong>{progress}%</strong>
                   </div>
-                  <div style={{ width: "100%", height: "4px", backgroundColor: "var(--border)", borderRadius: "999px", overflow: "hidden" }}>
-                    <div style={{ width: `${progress}%`, height: "100%", backgroundColor: "#3b82f6", borderRadius: "999px", transition: "width 0.4s ease" }} />
+                  <div
+                    style={{
+                      width: "100%",
+                      height: "4px",
+                      backgroundColor: "var(--border)",
+                      borderRadius: "999px",
+                      overflow: "hidden",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: `${progress}%`,
+                        height: "100%",
+                        backgroundColor: "#3b82f6",
+                        borderRadius: "999px",
+                        transition: "width 0.4s ease",
+                      }}
+                    />
                   </div>
                 </div>
 
@@ -866,10 +1405,14 @@ export default function WorkspaceEditorPage() {
                       alignItems: "center",
                       gap: "0.35rem",
                       height: "30px",
-                      transition: "all 0.2s"
+                      transition: "all 0.2s",
                     }}
                   >
-                    <PremiumIcon name="fileText" size={13} style={{ color: "#2b579a" }} />
+                    <PremiumIcon
+                      name="fileText"
+                      size={13}
+                      style={{ color: "#2b579a" }}
+                    />
                     <span>Docx</span>
                     <PremiumIcon name="chevronDown" size={12} />
                   </button>
@@ -897,24 +1440,42 @@ export default function WorkspaceEditorPage() {
                       >
                         <button
                           className="btn btn-ghost"
-                          style={{ justifyContent: "flex-start", fontSize: "0.75rem", padding: "0.4rem 0.6rem", width: "100%" }}
+                          style={{
+                            justifyContent: "flex-start",
+                            fontSize: "0.75rem",
+                            padding: "0.4rem 0.6rem",
+                            width: "100%",
+                          }}
                           onClick={() => {
                             handleExportWord(false);
                             setShowExportMenu(false);
                           }}
                         >
-                          <PremiumIcon name="file" size={13} style={{ marginRight: "0.4rem" }} />
+                          <PremiumIcon
+                            name="file"
+                            size={13}
+                            style={{ marginRight: "0.4rem" }}
+                          />
                           <span>Ekspor Bab Sekarang</span>
                         </button>
                         <button
                           className="btn btn-ghost"
-                          style={{ justifyContent: "flex-start", fontSize: "0.75rem", padding: "0.4rem 0.6rem", width: "100%" }}
+                          style={{
+                            justifyContent: "flex-start",
+                            fontSize: "0.75rem",
+                            padding: "0.4rem 0.6rem",
+                            width: "100%",
+                          }}
                           onClick={() => {
                             handleExportWord(true);
                             setShowExportMenu(false);
                           }}
                         >
-                          <PremiumIcon name="files" size={13} style={{ marginRight: "0.4rem" }} />
+                          <PremiumIcon
+                            name="files"
+                            size={13}
+                            style={{ marginRight: "0.4rem" }}
+                          />
                           <span>Ekspor Seluruh Jurnal</span>
                         </button>
                       </div>
@@ -935,15 +1496,24 @@ export default function WorkspaceEditorPage() {
                     alignItems: "center",
                     gap: "0.35rem",
                     height: "30px",
-                    transition: "all 0.2s"
+                    transition: "all 0.2s",
                   }}
                 >
-                  {saveState === "saving" ? <DefaultSpinner size="tiny" sizePixel={12} color="white" /> : <PremiumIcon name="save" size={13} />}
-                  <span>{saveState === "saving" ? "Menyimpan" : saveState === "dirty" ? "Simpan" : "Tersimpan"}</span>
+                  {saveState === "saving" ? (
+                    <DefaultSpinner size="tiny" sizePixel={12} color="white" />
+                  ) : (
+                    <PremiumIcon name="save" size={13} />
+                  )}
+                  <span>
+                    {saveState === "saving"
+                      ? "Menyimpan"
+                      : saveState === "dirty"
+                        ? "Simpan"
+                        : "Tersimpan"}
+                  </span>
                 </button>
               </>
             ) : null}
-
           </div>
         </div>
       </div>
@@ -960,8 +1530,25 @@ export default function WorkspaceEditorPage() {
         }}
       >
         {isMobile ? (
-          <div className="glass-panel" style={{ padding: "0.5rem", display: "flex", flexDirection: "column", gap: "0.5rem", width: "100%" }}>
-            <div style={{ display: "flex", gap: "0.5rem", overflowX: "auto", paddingBottom: "0.25rem", scrollSnapType: "x mandatory" }}>
+          <div
+            className="glass-panel"
+            style={{
+              padding: "0.5rem",
+              display: "flex",
+              flexDirection: "column",
+              gap: "0.5rem",
+              width: "100%",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                gap: "0.5rem",
+                overflowX: "auto",
+                paddingBottom: "0.25rem",
+                scrollSnapType: "x mandatory",
+              }}
+            >
               {WORKSPACE_TABS.map((tab) => (
                 <button
                   key={tab.key}
@@ -971,17 +1558,29 @@ export default function WorkspaceEditorPage() {
                     fontSize: "0.8rem",
                     whiteSpace: "nowrap",
                     flexShrink: 0,
-                    scrollSnapAlign: "start"
+                    scrollSnapAlign: "start",
                   }}
                   onClick={() => setActiveTab(tab.key)}
                   title={tab.label}
                 >
-                  <PremiumIcon name={tab.icon} size={13} style={{ marginRight: "0.3rem" }} />
+                  <PremiumIcon
+                    name={tab.icon}
+                    size={13}
+                    style={{ marginRight: "0.3rem" }}
+                  />
                   {tab.label}
                 </button>
               ))}
             </div>
-            <div style={{ display: "flex", gap: "0.5rem", overflowX: "auto", paddingBottom: "0.25rem", scrollSnapType: "x mandatory" }}>
+            <div
+              style={{
+                display: "flex",
+                gap: "0.5rem",
+                overflowX: "auto",
+                paddingBottom: "0.25rem",
+                scrollSnapType: "x mandatory",
+              }}
+            >
               {(workspace?.journalSections || []).map((section, index) => (
                 <button
                   key={section.key}
@@ -993,7 +1592,7 @@ export default function WorkspaceEditorPage() {
                     minWidth: "2.2rem",
                     whiteSpace: "nowrap",
                     flexShrink: 0,
-                    scrollSnapAlign: "start"
+                    scrollSnapAlign: "start",
                   }}
                   onClick={() => {
                     setActiveTab("penulisan");
@@ -1022,13 +1621,35 @@ export default function WorkspaceEditorPage() {
               transition: "width 0.2s ease, padding 0.2s ease",
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.65rem" }}>
-              <div style={{ minWidth: 0, display: "flex", alignItems: "center", gap: "0.55rem" }}>
-                <PremiumIcon name="layoutTemplate" size={16} className="text-primary" />
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "0.65rem",
+              }}
+            >
+              <div
+                style={{
+                  minWidth: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.55rem",
+                }}
+              >
+                <PremiumIcon
+                  name="layoutTemplate"
+                  size={16}
+                  className="text-primary"
+                />
                 {!isLeftRailCollapsed ? (
                   <div>
-                    <h3 style={{ fontSize: "0.92rem", margin: 0 }}>Journal Cockpit</h3>
-                    <p style={{ margin: "0.2rem 0 0 0", fontSize: "0.74rem" }}>Mode kerja dan navigasi section.</p>
+                    <h3 style={{ fontSize: "0.92rem", margin: 0 }}>
+                      Journal Cockpit
+                    </h3>
+                    <p style={{ margin: "0.2rem 0 0 0", fontSize: "0.74rem" }}>
+                      Mode kerja dan navigasi section.
+                    </p>
                   </div>
                 ) : null}
               </div>
@@ -1038,20 +1659,34 @@ export default function WorkspaceEditorPage() {
                 onClick={toggleLeftRail}
                 title={isLeftRailCollapsed ? "Perluas panel" : "Ciutkan panel"}
               >
-                <PremiumIcon name={isLeftRailCollapsed ? "chevronRight" : "chevronLeft"} size={15} />
+                <PremiumIcon
+                  name={isLeftRailCollapsed ? "chevronRight" : "chevronLeft"}
+                  size={15}
+                />
               </button>
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem" }}>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.45rem",
+              }}
+            >
               {WORKSPACE_TABS.map((tab) => (
                 <button
                   key={tab.key}
                   className={`btn ${activeTab === tab.key ? "btn-primary" : "btn-outline"}`}
                   style={{
-                    justifyContent: isLeftRailCollapsed ? "center" : "flex-start",
+                    justifyContent: isLeftRailCollapsed
+                      ? "center"
+                      : "flex-start",
                     paddingInline: isLeftRailCollapsed ? "0.5rem" : undefined,
-                    ...(isXs && { padding: "0.4rem 0.6rem", fontSize: "0.8rem" }),
-                    ...(isSm && isLeftRailCollapsed && { padding: "0.45rem" })
+                    ...(isXs && {
+                      padding: "0.4rem 0.6rem",
+                      fontSize: "0.8rem",
+                    }),
+                    ...(isSm && isLeftRailCollapsed && { padding: "0.45rem" }),
                   }}
                   onClick={() => setActiveTab(tab.key)}
                   title={tab.label}
@@ -1062,27 +1697,79 @@ export default function WorkspaceEditorPage() {
               ))}
             </div>
 
-            <div style={{ paddingTop: "0.75rem", borderTop: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: "0.65rem", minHeight: 0, flex: 1 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", flexShrink: 0 }}>
-                {!isLeftRailCollapsed ? <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--text-main)" }}>Struktur Section</span> : null}
-                <span style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}>{progress}%</span>
+            <div
+              style={{
+                paddingTop: "0.75rem",
+                borderTop: "1px solid var(--border)",
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.65rem",
+                minHeight: 0,
+                flex: 1,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "0.75rem",
+                  flexShrink: 0,
+                }}
+              >
+                {!isLeftRailCollapsed ? (
+                  <span
+                    style={{
+                      fontSize: "0.8rem",
+                      fontWeight: 600,
+                      color: "var(--text-main)",
+                    }}
+                  >
+                    Struktur Section
+                  </span>
+                ) : null}
+                <span
+                  style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}
+                >
+                  {progress}%
+                </span>
               </div>
-              <div className="workspace-scroll" style={{ display: "flex", flexDirection: "column", gap: "0.65rem", overflowY: "auto", minHeight: 0, flex: 1 }}>
+              <div
+                className="workspace-scroll"
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.65rem",
+                  overflowY: "auto",
+                  minHeight: 0,
+                  flex: 1,
+                }}
+              >
                 {(workspace?.journalSections || []).map((chapter, index) => (
                   <button
                     key={chapter.key}
                     className={`btn ${activeChapter === index ? "btn-primary" : "btn-ghost"}`}
-                    style={{ justifyContent: isLeftRailCollapsed ? "center" : "space-between", paddingInline: isLeftRailCollapsed ? "0.5rem" : undefined, flexShrink: 0 }}
+                    style={{
+                      justifyContent: isLeftRailCollapsed
+                        ? "center"
+                        : "space-between",
+                      paddingInline: isLeftRailCollapsed ? "0.5rem" : undefined,
+                      flexShrink: 0,
+                    }}
                     onClick={() => {
                       setActiveTab("penulisan");
                       setActiveChapter(index);
                     }}
                     title={chapter.label}
                   >
-                    <span>{isLeftRailCollapsed ? `${index + 1}` : chapter.label}</span>
+                    <span>
+                      {isLeftRailCollapsed ? `${index + 1}` : chapter.label}
+                    </span>
                     {!isLeftRailCollapsed ? (
                       <span style={{ fontSize: "0.7rem", opacity: 0.82 }}>
-                        {(contentBuffer[chapter.key] || "").length ? "isi" : "kosong"}
+                        {(contentBuffer[chapter.key] || "").length
+                          ? "isi"
+                          : "kosong"}
                       </span>
                     ) : null}
                   </button>
@@ -1091,18 +1778,45 @@ export default function WorkspaceEditorPage() {
             </div>
 
             {!isLeftRailCollapsed ? (
-              <div style={{ paddingTop: "0.75rem", borderTop: "1px solid var(--border)", display: isSm ? "flex" : "grid", flexDirection: isSm ? "column" : "row", gridTemplateColumns: "repeat(2, minmax(0,1fr))", gap: isSm ? "0.5rem" : "0.65rem" }}>
-                <div className="form-group" style={{ margin: 0, ...(isXs && { fontSize: "0.8rem" }) }}>
+              <div
+                style={{
+                  paddingTop: "0.75rem",
+                  borderTop: "1px solid var(--border)",
+                  display: isSm ? "flex" : "grid",
+                  flexDirection: isSm ? "column" : "row",
+                  gridTemplateColumns: "repeat(2, minmax(0,1fr))",
+                  gap: isSm ? "0.5rem" : "0.65rem",
+                }}
+              >
+                <div
+                  className="form-group"
+                  style={{ margin: 0, ...(isXs && { fontSize: "0.8rem" }) }}
+                >
                   <label className="form-label">Status</label>
-                  <select className="form-input" value={workspace.status || "Draft"} onChange={(event) => void handleStatusChange(event.target.value)}>
+                  <select
+                    className="form-input"
+                    value={workspace.status || "Draft"}
+                    onChange={(event) =>
+                      void handleStatusChange(event.target.value)
+                    }
+                  >
                     <option value="Draft">Draft</option>
                     <option value="Revisi">Revisi</option>
                     <option value="Selesai">Selesai</option>
                   </select>
                 </div>
-                <div className="form-group" style={{ margin: 0, ...(isXs && { fontSize: "0.8rem" }) }}>
+                <div
+                  className="form-group"
+                  style={{ margin: 0, ...(isXs && { fontSize: "0.8rem" }) }}
+                >
                   <label className="form-label">Metode</label>
-                  <select className="form-input" value={workspace.methodologyType || "kuantitatif"} onChange={(event) => void handleMethodologyChange(event.target.value)}>
+                  <select
+                    className="form-input"
+                    value={workspace.methodologyType || "kuantitatif"}
+                    onChange={(event) =>
+                      void handleMethodologyChange(event.target.value)
+                    }
+                  >
                     <option value="kuantitatif">Kuantitatif</option>
                     <option value="kualitatif">Kualitatif</option>
                     <option value="mixed">Mixed Methods</option>
@@ -1113,27 +1827,57 @@ export default function WorkspaceEditorPage() {
           </aside>
         )}
 
-        <main style={{ display: "flex", flexDirection: "column", gap: isMobile ? "0.5rem" : "1rem", minWidth: 0, flex: 1 }}>
-          <div className="glass-panel" style={{
-            padding: isSm ? "0.6rem 0.75rem" : "0.75rem 0.9rem",
+        <main
+          style={{
             display: "flex",
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: isSm ? "0.5rem" : "0.75rem",
-            flexWrap: "nowrap",
-            ...(activeTab === "penulisan" ? {
-              borderBottomLeftRadius: 0,
-              borderBottomRightRadius: 0,
-              borderBottom: "none",
-              zIndex: 5,
-            } : {})
-          }}>
+            flexDirection: "column",
+            gap: isMobile ? "0.5rem" : "1rem",
+            minWidth: 0,
+            flex: 1,
+          }}
+        >
+          <div
+            className="glass-panel"
+            style={{
+              padding: isSm ? "0.6rem 0.75rem" : "0.75rem 0.9rem",
+              display: "flex",
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: isSm ? "0.5rem" : "0.75rem",
+              flexWrap: "nowrap",
+              ...(activeTab === "penulisan"
+                ? {
+                    borderBottomLeftRadius: 0,
+                    borderBottomRightRadius: 0,
+                    borderBottom: "none",
+                    zIndex: 5,
+                  }
+                : {}),
+            }}
+          >
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: isSm ? "0.7rem" : "0.75rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                {WORKSPACE_TABS.find((tab) => tab.key === activeTab)?.label || "Workspace"}
+              <div
+                style={{
+                  fontSize: isSm ? "0.7rem" : "0.75rem",
+                  color: "var(--text-muted)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.08em",
+                }}
+              >
+                {WORKSPACE_TABS.find((tab) => tab.key === activeTab)?.label ||
+                  "Workspace"}
               </div>
-              <div style={{ fontSize: "0.86rem", color: "var(--text-main)", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              <div
+                style={{
+                  fontSize: "0.86rem",
+                  color: "var(--text-main)",
+                  fontWeight: 600,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
                 {activeTab === "penulisan"
                   ? currentChapter.label
                   : activeTab === "referensi"
@@ -1144,50 +1888,125 @@ export default function WorkspaceEditorPage() {
               </div>
             </div>
 
-            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "nowrap", flexShrink: 0 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.4rem",
+                flexWrap: "nowrap",
+                flexShrink: 0,
+              }}
+            >
               <button
                 className={`btn ${isRightPanelOpen ? "btn-primary" : "btn-ghost"}`}
                 onClick={toggleRightPanel}
-                style={{ padding: "0.35rem 0.6rem", fontSize: "0.75rem", height: "auto" }}
+                style={{
+                  padding: "0.35rem 0.6rem",
+                  fontSize: "0.75rem",
+                  height: "auto",
+                }}
                 title={isRightPanelOpen ? "Tutup Konteks" : "Buka Konteks"}
               >
-                <PremiumIcon name={isRightPanelOpen ? "x" : "layers"} size={14} />
-                <span style={{ display: isSm ? "none" : "inline" }}>Konteks</span>
+                <PremiumIcon
+                  name={isRightPanelOpen ? "x" : "layers"}
+                  size={14}
+                />
+                <span style={{ display: isSm ? "none" : "inline" }}>
+                  Konteks
+                </span>
               </button>
             </div>
           </div>
 
           {activeTab === "penulisan" ? (
-            <div style={{
-              position: "relative",
-              display: "flex",
-              flexDirection: "column",
-              minHeight: "72vh",
-              overflow: "hidden",
-              marginTop: isMobile ? "-0.5rem" : "-1rem"
-            }}>
-              <div className="glass-panel" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden", margin: 0, borderTopLeftRadius: 0, borderTopRightRadius: 0 }}>
+            <div
+              style={{
+                position: "relative",
+                display: "flex",
+                flexDirection: "column",
+                minHeight: "72vh",
+                overflow: "hidden",
+                marginTop: isMobile ? "-0.5rem" : "-1rem",
+              }}
+            >
+              <div
+                className="glass-panel"
+                style={{
+                  flex: 1,
+                  minHeight: 0,
+                  display: "flex",
+                  flexDirection: "column",
+                  overflow: "hidden",
+                  margin: 0,
+                  borderTopLeftRadius: 0,
+                  borderTopRightRadius: 0,
+                }}
+              >
                 <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
                   <TiptapEditor
                     key={currentChapter.key}
                     content={contentBuffer[currentChapter.key] || ""}
-                    onChange={(html) => handleEditorChange(currentChapter.key, html)}
-                    placeholder={currentChapter.promptContext || "Mulai menulis di sini..."}
+                    onChange={(html) =>
+                      handleEditorChange(currentChapter.key, html)
+                    }
+                    placeholder={
+                      currentChapter.promptContext || "Mulai menulis di sini..."
+                    }
                     isMobile={isSm}
                   />
                 </div>
               </div>
 
-              <div style={{ padding: "0.65rem 1rem", borderTop: "1px solid var(--border)", display: "flex", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap", flexShrink: 0 }}>
-                <span style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}>
-                  Referensi terhubung: <strong style={{ color: "var(--text-main)" }}>{currentChapterReferences.length}</strong>
+              <div
+                style={{
+                  padding: "0.65rem 1rem",
+                  borderTop: "1px solid var(--border)",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: "1rem",
+                  flexWrap: "wrap",
+                  flexShrink: 0,
+                }}
+              >
+                <span
+                  style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}
+                >
+                  Referensi terhubung:{" "}
+                  <strong style={{ color: "var(--text-main)" }}>
+                    {currentChapterReferences.length}
+                  </strong>
                 </span>
-                <span style={{ fontSize: "0.74rem", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                <span
+                  style={{
+                    fontSize: "0.74rem",
+                    color: "var(--text-muted)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.35rem",
+                  }}
+                >
                   <PremiumIcon name="edit3" size={13} />
-                  <span><strong style={{ color: "var(--text-main)" }}>{wordCount}</strong> kata</span>
+                  <span>
+                    <strong style={{ color: "var(--text-main)" }}>
+                      {wordCount}
+                    </strong>{" "}
+                    kata
+                  </span>
                 </span>
-                <span style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}>
-                  Tekan <kbd style={{ padding: "1px 5px", border: "1px solid var(--border)", borderRadius: "4px" }}>Ctrl+S</kbd> untuk menyimpan manual
+                <span
+                  style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}
+                >
+                  Tekan{" "}
+                  <kbd
+                    style={{
+                      padding: "1px 5px",
+                      border: "1px solid var(--border)",
+                      borderRadius: "4px",
+                    }}
+                  >
+                    Ctrl+S
+                  </kbd>{" "}
+                  untuk menyimpan manual
                 </span>
               </div>
             </div>
@@ -1201,7 +2020,12 @@ export default function WorkspaceEditorPage() {
             />
           ) : null}
 
-          {activeTab === "data" ? <DataHub workspaceId={workspace.id} hideQualitative={workspace?.methodologyType === "kuantitatif"} /> : null}
+          {activeTab === "data" ? (
+            <DataHub
+              workspaceId={workspace.id}
+              hideQualitative={workspace?.methodologyType === "kuantitatif"}
+            />
+          ) : null}
 
           {activeTab === "analisis" ? (
             <div className="glass-panel" style={{ padding: "1rem" }}>
@@ -1256,7 +2080,11 @@ export default function WorkspaceEditorPage() {
             className="workspace-scroll"
             style={{
               position: "fixed",
-              top: isMobile ? "2.5rem" : contextPreviewReference ? "104px" : "84px",
+              top: isMobile
+                ? "2.5rem"
+                : contextPreviewReference
+                  ? "104px"
+                  : "84px",
               right: "0.75rem",
               bottom: "0.75rem",
               width: contextPanelWidth,
@@ -1268,7 +2096,18 @@ export default function WorkspaceEditorPage() {
               minHeight: 0,
             }}
           >
-            <div className="glass-panel" style={{ padding: "0.85rem", marginBottom: "0.75rem", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", backgroundColor: "var(--surface)" }}>
+            <div
+              className="glass-panel"
+              style={{
+                padding: "0.85rem",
+                marginBottom: "0.75rem",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "0.75rem",
+                backgroundColor: "var(--surface)",
+              }}
+            >
               <div style={{ minWidth: 0 }}>
                 <h3 style={{ fontSize: "0.94rem", margin: 0 }}>
                   {contextPreviewReference ? "PDF Viewer" : "Panel Konteks"}
@@ -1279,12 +2118,26 @@ export default function WorkspaceEditorPage() {
                     : "Referensi cepat, analisis, dan catatan kerja."}
                 </p>
               </div>
-              <button className="btn btn-ghost" onClick={toggleRightPanel} style={{ padding: "0.35rem" }}>
+              <button
+                className="btn btn-ghost"
+                onClick={toggleRightPanel}
+                style={{ padding: "0.35rem" }}
+              >
                 <PremiumIcon name="x" size={15} />
               </button>
             </div>
             {contextPreviewReference?.pdfUrl ? (
-              <div className="glass-panel" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden", backgroundColor: "var(--surface)" }}>
+              <div
+                className="glass-panel"
+                style={{
+                  flex: 1,
+                  minHeight: 0,
+                  display: "flex",
+                  flexDirection: "column",
+                  overflow: "hidden",
+                  backgroundColor: "var(--surface)",
+                }}
+              >
                 <div
                   style={{
                     padding: "0.9rem 1rem",
@@ -1293,43 +2146,116 @@ export default function WorkspaceEditorPage() {
                     alignItems: "flex-start",
                     justifyContent: "space-between",
                     gap: "0.75rem",
-                    background: "linear-gradient(180deg, rgba(79,70,229,0.08), transparent)",
+                    background:
+                      "linear-gradient(180deg, rgba(79,70,229,0.08), transparent)",
                   }}
                 >
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: "0.72rem", color: "var(--primary)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                    <div
+                      style={{
+                        fontSize: "0.72rem",
+                        color: "var(--primary)",
+                        fontWeight: 700,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.08em",
+                      }}
+                    >
                       Preview Referensi
                     </div>
-                    <h4 style={{ fontSize: "0.94rem", margin: "0.2rem 0 0 0", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    <h4
+                      style={{
+                        fontSize: "0.94rem",
+                        margin: "0.2rem 0 0 0",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
                       {contextPreviewReference.title}
                     </h4>
-                    <p style={{ margin: "0.3rem 0 0 0", fontSize: "0.75rem", lineHeight: 1.5 }}>
-                      {contextPreviewReference.authorString || (contextPreviewReference.authors || []).join(", ")} {contextPreviewReference.year ? `| ${contextPreviewReference.year}` : ""}
+                    <p
+                      style={{
+                        margin: "0.3rem 0 0 0",
+                        fontSize: "0.75rem",
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      {contextPreviewReference.authorString ||
+                        (contextPreviewReference.authors || []).join(", ")}{" "}
+                      {contextPreviewReference.year
+                        ? `| ${contextPreviewReference.year}`
+                        : ""}
                     </p>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", flexShrink: 0 }}>
-                    <a href={contextPreviewReference.pdfUrl} target="_blank" rel="noreferrer" className="btn btn-outline">
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.45rem",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <a
+                      href={contextPreviewReference.pdfUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="btn btn-outline"
+                    >
                       <PremiumIcon name="download" size={14} />
                       Buka
                     </a>
-                    <button className="btn btn-ghost" onClick={() => setContextPreviewReference(null)}>
+                    <button
+                      className="btn btn-ghost"
+                      onClick={() => setContextPreviewReference(null)}
+                    >
                       <PremiumIcon name="x" size={15} />
                       Tutup
                     </button>
                   </div>
                 </div>
 
-                <div style={{ padding: "0.85rem", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", gap: "0.75rem", alignItems: "center", backgroundColor: "var(--background)" }}>
-                  <span style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}>
+                <div
+                  style={{
+                    padding: "0.85rem",
+                    borderBottom: "1px solid var(--border)",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: "0.75rem",
+                    alignItems: "center",
+                    backgroundColor: "var(--background)",
+                  }}
+                >
+                  <span
+                    style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}
+                  >
                     {contextPreviewReference.fileName || "PDF referensi"}
                   </span>
-                  <span style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}>
+                  <span
+                    style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}
+                  >
                     Viewer aktif di panel konteks
                   </span>
                 </div>
 
-                <div style={{ flex: 1, minHeight: 0, backgroundColor: "#eef2ff", padding: "0.85rem" }}>
-                  <div style={{ width: "100%", height: "100%", borderRadius: "16px", overflow: "hidden", border: "1px solid rgba(79,70,229,0.12)", backgroundColor: "white", boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.45)" }}>
+                <div
+                  style={{
+                    flex: 1,
+                    minHeight: 0,
+                    backgroundColor: "#eef2ff",
+                    padding: "0.85rem",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      borderRadius: "16px",
+                      overflow: "hidden",
+                      border: "1px solid rgba(79,70,229,0.12)",
+                      backgroundColor: "white",
+                      boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.45)",
+                    }}
+                  >
                     <iframe
                       src={buildPdfPreviewUrl(contextPreviewReference.pdfUrl)}
                       title={`Preview ${contextPreviewReference.title}`}
@@ -1374,29 +2300,33 @@ export default function WorkspaceEditorPage() {
               animation: "bounceSide 1.5s infinite alternate",
             }}
           >
-            <div style={{
-              backgroundColor: "var(--primary)",
-              color: "white",
-              padding: "0.5rem 0.8rem",
-              borderRadius: "8px",
-              fontSize: "0.78rem",
-              fontWeight: 700,
-              boxShadow: "0 8px 24px rgba(79,70,229,0.3)",
-              whiteSpace: "nowrap",
-            }}>
+            <div
+              style={{
+                backgroundColor: "var(--primary)",
+                color: "white",
+                padding: "0.5rem 0.8rem",
+                borderRadius: "8px",
+                fontSize: "0.78rem",
+                fontWeight: 700,
+                boxShadow: "0 8px 24px rgba(79,70,229,0.3)",
+                whiteSpace: "nowrap",
+              }}
+            >
               Lengkapi di sini
             </div>
-            <div style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              width: "36px",
-              height: "36px",
-              borderRadius: "50%",
-              backgroundColor: "var(--primary)",
-              color: "white",
-              boxShadow: "0 0 16px rgba(79,70,229,0.4)"
-            }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: "36px",
+                height: "36px",
+                borderRadius: "50%",
+                backgroundColor: "var(--primary)",
+                color: "white",
+                boxShadow: "0 0 16px rgba(79,70,229,0.4)",
+              }}
+            >
               <PremiumIcon name="arrowRight" size={18} />
             </div>
           </div>
@@ -1419,51 +2349,91 @@ export default function WorkspaceEditorPage() {
           `}</style>
 
           {/* Guide Tooltip Modal (Glassmorphic) */}
-          <div style={{
-            background: "linear-gradient(135deg, color-mix(in srgb, var(--surface) 95%, transparent), color-mix(in srgb, var(--background) 85%, transparent))",
-            backdropFilter: "blur(20px)",
-            WebkitBackdropFilter: "blur(20px)",
-            border: "1px solid color-mix(in srgb, var(--primary) 20%, transparent)",
-            borderRadius: "24px",
-            padding: "2.5rem 2rem",
-            maxWidth: "460px",
-            width: "90%",
-            boxShadow: "0 28px 60px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.1)",
-            color: "var(--text-main)",
-            textAlign: "center",
-            display: "flex",
-            flexDirection: "column",
-            gap: "1.5rem",
-            zIndex: 45,
-            position: "relative",
-            animation: "fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1)"
-          }}>
-            <div style={{
-              width: "64px",
-              height: "64px",
-              borderRadius: "50%",
-              backgroundColor: "rgba(79, 70, 229, 0.08)",
+          <div
+            style={{
+              background:
+                "linear-gradient(135deg, color-mix(in srgb, var(--surface) 95%, transparent), color-mix(in srgb, var(--background) 85%, transparent))",
+              backdropFilter: "blur(20px)",
+              WebkitBackdropFilter: "blur(20px)",
+              border:
+                "1px solid color-mix(in srgb, var(--primary) 20%, transparent)",
+              borderRadius: "24px",
+              padding: "2.5rem 2rem",
+              maxWidth: "460px",
+              width: "90%",
+              boxShadow:
+                "0 28px 60px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.1)",
+              color: "var(--text-main)",
+              textAlign: "center",
               display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              margin: "0 auto",
-              color: "var(--primary)",
-              boxShadow: "0 8px 24px rgba(79,70,229,0.12)"
-            }}>
+              flexDirection: "column",
+              gap: "1.5rem",
+              zIndex: 45,
+              position: "relative",
+              animation: "fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1)",
+            }}
+          >
+            <div
+              style={{
+                width: "64px",
+                height: "64px",
+                borderRadius: "50%",
+                backgroundColor: "rgba(79, 70, 229, 0.08)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                margin: "0 auto",
+                color: "var(--primary)",
+                boxShadow: "0 8px 24px rgba(79,70,229,0.12)",
+              }}
+            >
               <PremiumIcon name="brainCircuit" size={32} />
             </div>
 
-            <h3 style={{ margin: 0, fontSize: "1.35rem", fontWeight: 800, letterSpacing: "-0.01em", color: "var(--text-main)" }}>
+            <h3
+              style={{
+                margin: 0,
+                fontSize: "1.35rem",
+                fontWeight: 800,
+                letterSpacing: "-0.01em",
+                color: "var(--text-main)",
+              }}
+            >
               Aktifkan AI Copilot Jurnal Anda 🚀
             </h3>
-            <p style={{ margin: 0, fontSize: "0.86rem", color: "var(--text-muted)", lineHeight: 1.6 }}>
-              Sebelum mulai menulis dengan AI, lengkapi dulu <strong>Konteks Utama (Brain Root)</strong> agar draf naskah publikasi jurnal yang dihasilkan terarah dan akurat.
-              <span style={{ fontSize: "0.76rem", display: "block", marginTop: "0.6rem", fontStyle: "italic", opacity: 0.8 }}>
+            <p
+              style={{
+                margin: 0,
+                fontSize: "0.86rem",
+                color: "var(--text-muted)",
+                lineHeight: 1.6,
+              }}
+            >
+              Sebelum mulai menulis dengan AI, lengkapi dulu{" "}
+              <strong>Konteks Utama (Brain Root)</strong> agar draf naskah
+              publikasi jurnal yang dihasilkan terarah dan akurat.
+              <span
+                style={{
+                  fontSize: "0.76rem",
+                  display: "block",
+                  marginTop: "0.6rem",
+                  fontStyle: "italic",
+                  opacity: 0.8,
+                }}
+              >
                 *Anda tetap bisa melewati panduan ini untuk mengetik manual.
               </span>
             </p>
 
-            <div style={{ display: "flex", gap: "0.85rem", justifyContent: "center", width: "100%", marginTop: "0.5rem" }}>
+            <div
+              style={{
+                display: "flex",
+                gap: "0.85rem",
+                justifyContent: "center",
+                width: "100%",
+                marginTop: "0.5rem",
+              }}
+            >
               <button
                 className="btn btn-outline"
                 style={{
@@ -1473,7 +2443,7 @@ export default function WorkspaceEditorPage() {
                   borderRadius: "12px",
                   borderColor: "var(--border)",
                   color: "var(--text-muted)",
-                  transition: "all 0.2s"
+                  transition: "all 0.2s",
                 }}
                 onClick={() => {
                   sessionStorage.setItem(`skipped_guide_${id}`, "true");
@@ -1495,7 +2465,7 @@ export default function WorkspaceEditorPage() {
                   alignItems: "center",
                   justifyContent: "center",
                   gap: "0.4rem",
-                  transition: "all 0.2s"
+                  transition: "all 0.2s",
                 }}
                 onClick={() => {
                   setIsRightPanelOpen(true);
@@ -1509,50 +2479,81 @@ export default function WorkspaceEditorPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
       {showExitConfirm && (
-        <div style={{
-          position: "fixed",
-          inset: 0,
-          backgroundColor: "rgba(11, 15, 25, 0.75)",
-          backdropFilter: "blur(10px)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          zIndex: 9999,
-          padding: "1.5rem",
-        }}>
-          <div className="glass-panel animate-fade-in" style={{
-            maxWidth: "400px",
-            width: "100%",
-            backgroundColor: "var(--surface)",
-            border: "1px solid rgba(79, 70, 229, 0.15)",
-            borderRadius: "20px",
-            padding: "2rem",
-            boxShadow: "var(--shadow-lg)",
-            textAlign: "center",
-          }}>
-            <div style={{
-              width: "52px",
-              height: "52px",
-              borderRadius: "50%",
-              backgroundColor: "rgba(79, 70, 229, 0.08)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              margin: "0 auto 1.25rem",
-              color: "var(--primary)",
-            }}>
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(11, 15, 25, 0.75)",
+            backdropFilter: "blur(10px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+            padding: "1.5rem",
+          }}
+        >
+          <div
+            className="glass-panel animate-fade-in"
+            style={{
+              maxWidth: "400px",
+              width: "100%",
+              backgroundColor: "var(--surface)",
+              border: "1px solid rgba(79, 70, 229, 0.15)",
+              borderRadius: "20px",
+              padding: "2rem",
+              boxShadow: "var(--shadow-lg)",
+              textAlign: "center",
+            }}
+          >
+            <div
+              style={{
+                width: "52px",
+                height: "52px",
+                borderRadius: "50%",
+                backgroundColor: "rgba(79, 70, 229, 0.08)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                margin: "0 auto 1.25rem",
+                color: "var(--primary)",
+              }}
+            >
               <PremiumIcon name="save" size={24} />
             </div>
-            
-            <h3 style={{ fontSize: "1.2rem", fontWeight: 800, color: "var(--text-main)", marginBottom: "0.5rem" }}>
+
+            <h3
+              style={{
+                fontSize: "1.2rem",
+                fontWeight: 800,
+                color: "var(--text-main)",
+                marginBottom: "0.5rem",
+              }}
+            >
               Simpan Pekerjaan Anda?
             </h3>
-            <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "1.75rem", lineHeight: 1.45 }}>
-              Ada perubahan di workspace yang belum disimpan. Apakah Anda ingin menyimpannya sebelum keluar?
+            <p
+              style={{
+                fontSize: "0.85rem",
+                color: "var(--text-muted)",
+                marginBottom: "1.75rem",
+                lineHeight: 1.45,
+              }}
+            >
+              Ada perubahan di workspace yang belum disimpan. Apakah Anda ingin
+              menyimpannya sebelum keluar?
             </p>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.65rem",
+              }}
+            >
               <button
                 className="btn btn-primary"
                 style={{
@@ -1575,7 +2576,7 @@ export default function WorkspaceEditorPage() {
               >
                 Simpan &amp; Keluar
               </button>
-              
+
               <button
                 className="btn btn-outline"
                 style={{
@@ -1595,7 +2596,7 @@ export default function WorkspaceEditorPage() {
               >
                 Keluar Tanpa Simpan
               </button>
-              
+
               <button
                 className="btn btn-ghost"
                 style={{

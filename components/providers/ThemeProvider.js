@@ -16,6 +16,18 @@ function applyTheme(theme) {
   } else {
     document.body.classList.remove("dark-mode");
   }
+
+  // Update <meta name="theme-color"> tag dynamically for PWA/Webview compatibility
+  if (typeof window !== "undefined") {
+    let metaThemeColor = document.querySelector('meta[name="theme-color"]');
+    const targetColor = theme === "dark" ? "#0B0F19" : "#F9FAFB";
+    if (!metaThemeColor) {
+      metaThemeColor = document.createElement("meta");
+      metaThemeColor.setAttribute("name", "theme-color");
+      document.head.appendChild(metaThemeColor);
+    }
+    metaThemeColor.setAttribute("content", targetColor);
+  }
 }
 
 export function ThemeProvider({ children }) {

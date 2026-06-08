@@ -7,7 +7,7 @@
   "display": "standalone",
   "display_override": ["standalone"],
   "orientation": "portrait-primary",
-  "theme_color": "#000000",
+  "theme_color": "#0B0F19",
   "background_color": "#0B0F19",
   "categories": [
     "productivity",

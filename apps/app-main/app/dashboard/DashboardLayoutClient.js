@@ -43,10 +43,6 @@ export default function DashboardLayout({ children }) {
           minHeight: "-webkit-fill-available",
           overflow: "hidden",
           position: "relative",
-          paddingTop: "env(safe-area-inset-top, 0px)",
-          paddingBottom: "env(safe-area-inset-bottom, 0px)",
-          paddingLeft: "env(safe-area-inset-left, 0px)",
-          paddingRight: "env(safe-area-inset-right, 0px)",
         }}>
         <div className="noise-overlay" />
         
@@ -115,6 +111,7 @@ export default function DashboardLayout({ children }) {
             flexDirection: "column",
             height: "100%",
             overflow: "hidden",
+            paddingTop: isMobile && isEditorPage ? "env(safe-area-inset-top, 0px)" : "0px",
           }}
         >
           {/* Pass mobile toggle or desktop collapse toggle so Header can render the hamburger */}
@@ -126,7 +123,7 @@ export default function DashboardLayout({ children }) {
           )}
           <div
             style={{
-              padding: isMobile ? "0.75rem" : "1.5rem",
+              padding: isMobile ? "0.75rem 0.75rem calc(env(safe-area-inset-bottom, 0px) + 0.75rem) 0.75rem" : "1.5rem",
               overflowY: "auto",
               flex: 1,
               position: "relative",

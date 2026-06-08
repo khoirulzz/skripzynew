@@ -11,6 +11,22 @@ import { PremiumIcon } from "@/components/ui/PremiumIcon";
 import DefaultSpinner from "@/components/ui/DefaultSpinner";
 import { ReferenceManager } from "@/components/workspace/ReferenceManager";
 import { JurnalChapterAiAssistant } from "@/components/workspace/JurnalChapterAiAssistant";
+
+function parseChapterKeys(referencesList) {
+  return referencesList.map((r) => {
+    let keys = [];
+    if (Array.isArray(r.chapterKeys)) {
+      keys = r.chapterKeys;
+    } else if (typeof r.chapterKeys === "string") {
+      try {
+        keys = JSON.parse(r.chapterKeys || "[]");
+      } catch (e) {
+        keys = [];
+      }
+    }
+    return { ...r, chapterKeys: keys };
+  });
+}
 import { DataHub } from "@/components/workspace/DataHub";
 import { DataAnalysisDashboard } from "@/components/workspace/DataAnalysisDashboard";
 import { WorkspaceNotesPanel } from "@/components/workspace/WorkspaceNotesPanel";
@@ -228,7 +244,10 @@ export default function WorkspaceEditorPage() {
     async function fetchSubs() {
       try {
         const refs = await d1Request("workspace_references");
-        if (isMounted) setReferences((refs.data || []).filter(r => r.workspace_id === id));
+        if (isMounted) {
+          const filteredRefs = (refs.data || []).filter(r => r.workspace_id === id);
+          setReferences(parseChapterKeys(filteredRefs));
+        }
         const frms = await d1Request("workspace_forms");
         if (isMounted) setForms((frms.data || []).filter(f => f.workspace_id === id));
         const trans = await d1Request("workspace_transcripts");
@@ -1160,9 +1179,15 @@ export default function WorkspaceEditorPage() {
             </div>
           ) : null}
 
-          {activeTab === "referensi" ? <ReferenceManager workspaceId={workspace.id} currentChapterKey={currentChapter.key} /> : null}
+          {activeTab === "referensi" ? (
+            <ReferenceManager
+              workspaceId={workspace.id}
+              currentChapterKey={currentChapter.key}
+              onReferencesChange={setReferences}
+            />
+          ) : null}
 
-          {activeTab === "data" ? <DataHub workspaceId={workspace.id} /> : null}
+          {activeTab === "data" ? <DataHub workspaceId={workspace.id} hideQualitative={workspace?.methodologyType === "kuantitatif"} /> : null}
 
           {activeTab === "analisis" ? (
             <div className="glass-panel" style={{ padding: "1rem" }}>
@@ -1170,6 +1195,7 @@ export default function WorkspaceEditorPage() {
                 workspaceId={workspace.id}
                 activeFormId={activeForm?.id || null}
                 onInsertContent={handleAiInsertContent}
+                hideQualitative={workspace?.methodologyType === "kuantitatif"}
               />
             </div>
           ) : null}

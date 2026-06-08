@@ -79,7 +79,23 @@ function createManualReferenceState() {
   };
 }
 
-export function ReferenceManager({ workspaceId, currentChapterKey = null, onClose = null, compact = false }) {
+function parseChapterKeys(referencesList) {
+  return referencesList.map((r) => {
+    let keys = [];
+    if (Array.isArray(r.chapterKeys)) {
+      keys = r.chapterKeys;
+    } else if (typeof r.chapterKeys === "string") {
+      try {
+        keys = JSON.parse(r.chapterKeys || "[]");
+      } catch (e) {
+        keys = [];
+      }
+    }
+    return { ...r, chapterKeys: keys };
+  });
+}
+
+export function ReferenceManager({ workspaceId, currentChapterKey = null, onClose = null, compact = false, onReferencesChange = null }) {
   const { user, userData } = useAuth();
   const { toolMap } = useBillingCatalog();
   const [references, setReferences] = useState([]);
@@ -214,7 +230,7 @@ export function ReferenceManager({ workspaceId, currentChapterKey = null, onClos
           return rightTime - leftTime;
         });
         if (!isMounted) return;
-        setReferences(nextItems);
+        setReferences(parseChapterKeys(nextItems));
         setNoteDrafts((current) => {
           const nextDrafts = { ...current };
           nextItems.forEach((item) => {
@@ -238,6 +254,12 @@ export function ReferenceManager({ workspaceId, currentChapterKey = null, onClos
     const interval = setInterval(fetchRefs, 8000);
     return () => { isMounted = false; clearInterval(interval); };
   }, [workspaceId]);
+
+  useEffect(() => {
+    if (onReferencesChange) {
+      onReferencesChange(references);
+    }
+  }, [references, onReferencesChange]);
 
   const chapterReferences = useMemo(() => {
     if (!currentChapterKey) return references;
@@ -334,7 +356,7 @@ export function ReferenceManager({ workspaceId, currentChapterKey = null, onClos
       }
     });
     // Optimistic update
-    setReferences(prev => [{ id, ...payload, workspace_id: workspaceId, chapterKeys: payload.chapterKeys || [] }, ...prev]);
+    setReferences(prev => parseChapterKeys([{ id, ...payload, workspace_id: workspaceId, chapterKeys: payload.chapterKeys || [] }, ...prev]));
   };
 
   const handleImportReference = async (paper) => {
@@ -577,14 +599,14 @@ export function ReferenceManager({ workspaceId, currentChapterKey = null, onClos
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1rem", height: "100%" }}>
       <div className="glass-panel" style={{ padding: "1rem", backgroundColor: "var(--surface)" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", marginBottom: "0.85rem" }}>
+        <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: isMobile ? "stretch" : "center", justifyContent: "space-between", gap: "0.75rem", marginBottom: "0.85rem" }}>
           <div>
             <h3 style={{ fontSize: "1rem", margin: 0 }}>Reference Hub</h3>
             <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.82rem" }}>
               Cari jurnal, tambah referensi manual, upload PDF, dan tandai referensi untuk tiap bab.
             </p>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", justifyContent: "flex-end" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", justifyContent: isMobile ? "flex-start" : "flex-end", marginTop: isMobile ? "0.35rem" : "0" }}>
             {!compact ? (
               <>
                 <button className="btn btn-outline" onClick={handleExportBibtex} disabled={!selectedIds.length} title="Ekspor BibTeX">
@@ -660,7 +682,7 @@ export function ReferenceManager({ workspaceId, currentChapterKey = null, onClos
               </div>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "0.75rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(220px, 1fr))", gap: "0.75rem" }}>
               <div className="form-group" style={{ margin: 0, gridColumn: "1 / -1" }}>
                 <label className="form-label">Judul Referensi (Opsional jika upload PDF)</label>
                 <input className="form-input" value={manualReference.title} onChange={(event) => setManualReference((current) => ({ ...current, title: event.target.value }))} placeholder="Nama file PDF akan digunakan sebagai judul jika dikosongkan" />
@@ -837,14 +859,14 @@ export function ReferenceManager({ workspaceId, currentChapterKey = null, onClos
 
               return (
                 <div key={paper.id} style={{ padding: "0.85rem", borderRadius: "10px", border: "1px solid var(--border)", backgroundColor: "var(--background)" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", alignItems: "flex-start" }}>
+                  <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", justifyContent: "space-between", gap: isMobile ? "0.6rem" : "1rem", alignItems: isMobile ? "stretch" : "flex-start" }}>
                     <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: "0.9rem", fontWeight: 600, color: "var(--text-main)" }}>{paper.title}</div>
-                      <div style={{ fontSize: "0.76rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
+                      <div style={{ fontSize: "0.9rem", fontWeight: 600, color: "var(--text-main)", wordBreak: "break-word" }}>{paper.title}</div>
+                      <div style={{ fontSize: "0.76rem", color: "var(--text-muted)", marginTop: "0.25rem", wordBreak: "break-word" }}>
                         {paper.authorString} | {paper.year || "Tanpa tahun"}
                       </div>
                     </div>
-                    <button className={`btn ${importedReference ? "btn-outline" : "btn-primary"}`} onClick={() => void handleImportReference(paper)} disabled={!!importedReference} style={{ padding: "0.4rem 0.6rem", fontSize: "0.75rem" }}>
+                    <button className={`btn ${importedReference ? "btn-outline" : "btn-primary"}`} onClick={() => void handleImportReference(paper)} disabled={!!importedReference} style={{ padding: "0.4rem 0.6rem", fontSize: "0.75rem", alignSelf: isMobile ? "flex-end" : "flex-start", marginTop: isMobile ? "0.25rem" : "0" }}>
                       <PremiumIcon name={importedReference ? "checkCircle" : "plus"} size={14} />
                       {importedReference ? "Ada" : "Import"}
                     </button>
@@ -879,14 +901,14 @@ export function ReferenceManager({ workspaceId, currentChapterKey = null, onClos
                   <input type="checkbox" checked={selectedIds.includes(reference.id)} onChange={() => toggleSelected(reference.id)} style={{ marginTop: "0.25rem" }} />
                 ) : null}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", alignItems: "flex-start" }}>
+                  <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", justifyContent: "space-between", gap: isMobile ? "0.6rem" : "1rem", alignItems: isMobile ? "stretch" : "flex-start" }}>
                     <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: "0.95rem", fontWeight: 600, color: "var(--text-main)" }}>{reference.title}</div>
-                      <div style={{ fontSize: "0.76rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
+                      <div style={{ fontSize: "0.95rem", fontWeight: 600, color: "var(--text-main)", wordBreak: "break-word" }}>{reference.title}</div>
+                      <div style={{ fontSize: "0.76rem", color: "var(--text-muted)", marginTop: "0.25rem", wordBreak: "break-word" }}>
                         {reference.authorString || (reference.authors || []).join(", ")} | {reference.year || "Tanpa tahun"}
                       </div>
                     </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", alignSelf: isMobile ? "flex-end" : "flex-start", marginTop: isMobile ? "0.25rem" : "0" }}>
                       {reference.displayUrl ? (
                         <a href={reference.displayUrl} target="_blank" rel="noreferrer" className="btn btn-ghost" style={{ padding: "0.35rem" }} title="Buka sumber">
                           <PremiumIcon name="download" size={15} />

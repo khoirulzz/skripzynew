@@ -17,6 +17,14 @@ function createDraft() {
 }
 
 export function TranscriptManager({ workspaceId, category = "wawancara" }) {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
   const [transcripts, setTranscripts] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [draft, setDraft] = useState(createDraft());
@@ -269,7 +277,7 @@ export function TranscriptManager({ workspaceId, category = "wawancara" }) {
   const managerDesc = isObservasi ? "Unggah atau tulis hasil observasi langsung." : "Unggah rekaman transkrip atau ketik manual hasil wawancara.";
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "minmax(260px, 320px) minmax(0, 1fr)", gap: "1rem", minHeight: "520px" }}>
+    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "minmax(260px, 320px) minmax(0, 1fr)", gap: "1rem", minHeight: isMobile ? "auto" : "520px" }}>
       <div className="glass-panel" style={{ padding: "1rem", display: "flex", flexDirection: "column", gap: "0.85rem", backgroundColor: "var(--surface)" }}>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "0.5rem" }}>
           <div>
@@ -297,7 +305,7 @@ export function TranscriptManager({ workspaceId, category = "wawancara" }) {
           </label>
         </div>
 
-        <div className="workspace-scroll" style={{ display: "flex", flexDirection: "column", gap: "0.65rem", overflowY: "auto", flex: 1, maxHeight: "400px" }}>
+        <div className="workspace-scroll" style={{ display: "flex", flexDirection: "column", gap: "0.65rem", overflowY: "auto", flex: 1, maxHeight: isMobile ? "200px" : "400px" }}>
           {transcripts.length === 0 ? (
             <div style={{ padding: "1.5rem 1rem", border: "1px dashed var(--border)", borderRadius: "10px", textAlign: "center", color: "var(--text-muted)", fontSize: "0.82rem" }}>
               Belum ada data.
@@ -363,7 +371,7 @@ export function TranscriptManager({ workspaceId, category = "wawancara" }) {
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "0.8rem", flex: 1 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "0.75rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))", gap: "0.75rem" }}>
               <div className="form-group" style={{ margin: 0 }}>
                 <label className="form-label" style={{ fontSize: "0.74rem" }}>Judul / Topik</label>
                 <input className="form-input" style={{ fontSize: "0.8rem", padding: "0.4rem 0.6rem" }} value={draft.title} onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))} />

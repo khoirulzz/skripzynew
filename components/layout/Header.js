@@ -78,7 +78,7 @@ export function Header({ onMenuClick = null, isMobile = false }) {
                 lineHeight: 1.2,
               }}
             >
-              Selamat datang, {userData?.namaLengkap?.split(" ")[0] || "Khoirul"} 👋
+              Selamat datang, {userData?.namaLengkap?.split(" ")[0] || "Khoirul"} 🤙🏻
             </h2>
             <p
               style={{

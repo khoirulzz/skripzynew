@@ -415,16 +415,16 @@ KEMBALIKAN OUTPUT PURE JSON DENGAN STRUKTUR INI SAJA, TANPA FORMATTING MARKDOWN,
     <>
       {appMode === 'dashboard' ? (
         <div className="min-h-screen bg-slate-50 font-sans pb-20 text-slate-900">
-          <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 sticky top-0 z-10 shadow-sm">
+          <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-6 sticky top-0 z-10 shadow-sm">
             <div className="flex items-center gap-4">
-              <a href="http://app.skripzy.id/dashboard" className="p-2 -ml-2 text-slate-400 hover:text-slate-700 bg-slate-50 hover:bg-slate-100 rounded-lg flex items-center gap-2 text-sm font-semibold transition-colors">
+              <a href="http://app.skripzy.id/dashboard" className="p-2 -ml-2 text-slate-400 hover:text-slate-700 bg-slate-50 hover:bg-slate-100 rounded-lg hidden sm:flex items-center gap-2 text-sm font-semibold transition-colors">
                 <ArrowLeft className="w-4 h-4" />
                 Kembali
               </a>
               <div className="h-6 w-px bg-slate-200 hidden sm:block"></div>
-              <div className="flex items-center gap-3">
-                <img src="https://app.skripzy.id/logo-skripzy.webp" alt="Skripzy" className="w-10 h-10 rounded-xl shadow-sm" />
-                <h1 className="text-2xl font-bold font-display text-slate-800 tracking-tight">Skripzy<span className="text-indigo-600">Form</span></h1>
+              <div className="flex items-center gap-2 sm:gap-3">
+                <img src="https://app.skripzy.id/logo-skripzy.webp" alt="Skripzy" className="w-7 h-7 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl shadow-sm" />
+                <h1 className="text-lg sm:text-2xl font-bold font-display text-slate-800 tracking-tight">Skripzy<span className="text-indigo-600">Form</span></h1>
               </div>
             </div>
             <div className="hidden sm:flex items-center gap-2 bg-indigo-50 border border-indigo-100 px-3 py-1.5 rounded-lg text-xs font-semibold text-indigo-700">
@@ -432,10 +432,10 @@ KEMBALIKAN OUTPUT PURE JSON DENGAN STRUKTUR INI SAJA, TANPA FORMATTING MARKDOWN,
               <span>Pembuatan form: 5 Kredit</span>
             </div>
           </header>
-          <main className="max-w-6xl mx-auto mt-10 px-6">
+          <main className="max-w-6xl mx-auto mt-6 sm:mt-10 px-4 sm:px-6">
             {projects.length > 0 && (
               <div className="mb-12">
-                <h2 className="text-2xl font-bold font-display text-slate-800 mb-6">Kuesioner Saya</h2>
+                <h2 className="text-lg sm:text-2xl font-bold font-display text-slate-800 mb-4 sm:mb-6">Kuesioner Saya</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {projects.map((proj, idx) => (
                     <div key={proj.template.id || idx} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 hover:shadow-md transition cursor-pointer" onClick={() => {
@@ -467,25 +467,25 @@ KEMBALIKAN OUTPUT PURE JSON DENGAN STRUKTUR INI SAJA, TANPA FORMATTING MARKDOWN,
               </div>
             )}
 
-            <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 pb-4 border-b border-slate-200 gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 sm:mb-8 pb-4 border-b border-slate-200 gap-4">
               <div>
-                <h2 className="text-2xl font-bold font-display text-slate-800">Mulai Penelitian Baru</h2>
-                <p className="text-slate-500 text-sm mt-1">Pilih template form untuk memulai atau buat dari awal.</p>
+                <h2 className="text-lg sm:text-2xl font-bold font-display text-slate-800">Mulai Penelitian Baru</h2>
+                <p className="text-slate-500 text-xs sm:text-sm mt-1">Pilih template form untuk memulai atau buat dari awal.</p>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 sm:gap-3">
                 <button
                   onClick={() => setShowAiModal(true)}
                   disabled={isCreatingProject}
-                  className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-sm rounded-xl hover:shadow-lg transition flex items-center gap-2 shadow-sm disabled:opacity-50"
+                  className="px-3 sm:px-5 py-2 sm:py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-xs sm:text-sm rounded-xl hover:shadow-lg transition flex items-center gap-2 shadow-sm disabled:opacity-50"
                 >
-                  <Wand2 className="w-5 h-5" /> AI Builder ✨
+                  <Wand2 className="w-4.5 h-4.5 sm:w-5 sm:h-5" /> AI Builder ✨
                 </button>
                 <button
                   onClick={() => createNewProject(emptyTemplate)}
                   disabled={isCreatingProject}
-                  className="px-5 py-2.5 bg-white border-2 border-slate-200 text-slate-700 font-bold text-sm rounded-xl hover:border-indigo-600 hover:text-indigo-600 transition flex items-center gap-2 shadow-sm disabled:opacity-50"
+                  className="px-3 sm:px-5 py-2 sm:py-2.5 bg-white border-2 border-slate-200 text-slate-700 font-bold text-xs sm:text-sm rounded-xl hover:border-indigo-600 hover:text-indigo-600 transition flex items-center gap-2 shadow-sm disabled:opacity-50"
                 >
-                  {isCreatingProject ? <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" /> : <Plus className="w-5 h-5" />}
+                  {isCreatingProject ? <div className="w-3.5 h-3.5 sm:w-4 sm:h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" /> : <Plus className="w-4.5 h-4.5 sm:w-5 sm:h-5" />}
                   Buat Manual
                 </button>
               </div>
@@ -508,8 +508,8 @@ KEMBALIKAN OUTPUT PURE JSON DENGAN STRUKTUR INI SAJA, TANPA FORMATTING MARKDOWN,
                   </div>
 
                   {/* Info Text */}
-                  <div className="p-6 flex flex-col flex-1">
-                    <h3 className="font-bold text-lg text-slate-800 leading-tight mb-2 group-hover:text-indigo-600 transition-colors">
+                  <div className="p-5 sm:p-6 flex flex-col flex-1">
+                    <h3 className="font-bold text-base sm:text-lg text-slate-800 leading-tight mb-2 group-hover:text-indigo-600 transition-colors">
                       {tpl.title}
                     </h3>
                     <p className="text-xs text-slate-500 leading-relaxed mb-6 flex-1 line-clamp-3">
@@ -587,23 +587,23 @@ KEMBALIKAN OUTPUT PURE JSON DENGAN STRUKTUR INI SAJA, TANPA FORMATTING MARKDOWN,
             </div>
           </header>
 
-          <main className="max-w-5xl mx-auto mt-6 px-4 flex flex-col md:flex-row gap-6 items-start">
+          <main className={`mx-auto mt-6 px-4 flex flex-col md:flex-row gap-6 items-start w-full transition-all duration-300 ${activeTab === 'data' ? 'max-w-[1400px]' : 'max-w-5xl'}`}>
             {/* Sidebar Tabs */}
-            <aside className="w-full md:w-64 bg-white rounded-3xl border border-slate-200 p-4 shadow-sm shrink-0 sticky top-24">
+            <aside className="w-full md:w-64 bg-white rounded-3xl border border-slate-200 p-3 sm:p-4 shadow-sm shrink-0 sticky top-24">
               <div className="flex md:flex-col gap-2 overflow-x-auto pb-2 md:pb-0 hide-scrollbar">
                 <button
                   onClick={() => setActiveTab('builder')}
-                  className={`flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-2xl transition-colors whitespace-nowrap ${activeTab === 'builder' ? `${theme.pale} ${theme.text}` : 'text-slate-600 hover:bg-slate-50'
+                  className={`flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-medium rounded-2xl transition-colors whitespace-nowrap ${activeTab === 'builder' ? `${theme.pale} ${theme.text}` : 'text-slate-600 hover:bg-slate-50'
                     }`}
                 >
                   <FileText className="w-4 h-4" /> Builder Formulir
                 </button>
                 <button
                   onClick={() => setActiveTab('data')}
-                  className={`flex items-center justify-between gap-3 px-4 py-3 text-sm font-medium rounded-2xl transition-colors whitespace-nowrap ${activeTab === 'data' ? `${theme.pale} ${theme.text}` : 'text-slate-600 hover:bg-slate-50'
+                  className={`flex items-center justify-between gap-2 sm:gap-3 px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-medium rounded-2xl transition-colors whitespace-nowrap ${activeTab === 'data' ? `${theme.pale} ${theme.text}` : 'text-slate-600 hover:bg-slate-50'
                     }`}
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 sm:gap-3">
                     <Users className="w-4 h-4" /> Data Responden
                   </div>
                   {responses.length > 0 && (
@@ -614,7 +614,7 @@ KEMBALIKAN OUTPUT PURE JSON DENGAN STRUKTUR INI SAJA, TANPA FORMATTING MARKDOWN,
                 </button>
                 <button
                   onClick={() => setActiveTab('analysis')}
-                  className={`flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-2xl transition-colors whitespace-nowrap ${activeTab === 'analysis' ? `${theme.pale} ${theme.text}` : 'text-slate-600 hover:bg-slate-50'
+                  className={`flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-medium rounded-2xl transition-colors whitespace-nowrap ${activeTab === 'analysis' ? `${theme.pale} ${theme.text}` : 'text-slate-600 hover:bg-slate-50'
                     }`}
                 >
                   <PlaySquare className="w-4 h-4" /> Analisis Statistik
@@ -623,24 +623,24 @@ KEMBALIKAN OUTPUT PURE JSON DENGAN STRUKTUR INI SAJA, TANPA FORMATTING MARKDOWN,
             </aside>
 
             {/* Dynamic Content */}
-            <div className="flex-1 w-full relative">
+            <div className="flex-1 min-w-0 w-full relative">
 
               {activeTab === 'builder' && (
                 <div className="space-y-6">
                   {/* Form Settings / Header */}
-                  <div className="bg-white rounded-3xl border border-slate-200 p-5 md:p-8 shadow-sm relative overflow-hidden group">
+                  <div className="bg-white rounded-3xl border border-slate-200 p-4 sm:p-5 md:p-8 shadow-sm relative overflow-hidden group">
                     <div className={`absolute top-0 left-0 w-full h-2 ${theme.hex}`}></div>
                     <input
                       type="text"
                       value={template.title}
                       onChange={(e) => setTemplate({ ...template, title: e.target.value })}
-                      className="w-full text-2xl md:text-3xl font-display font-bold text-slate-800 border-none outline-none focus:ring-0 placeholder-slate-400 bg-transparent transition-colors hover:bg-slate-50 focus:bg-white rounded-xl px-2 -mx-2"
+                      className="w-full text-xl sm:text-2xl md:text-3xl font-display font-bold text-slate-800 border-none outline-none focus:ring-0 placeholder-slate-400 bg-transparent transition-colors hover:bg-slate-50 focus:bg-white rounded-xl px-2 -mx-2"
                       placeholder="Judul Formulir"
                     />
                     <textarea
                       value={template.description}
                       onChange={(e) => setTemplate({ ...template, description: e.target.value })}
-                      className="w-full mt-3 text-sm md:text-base text-slate-500 border-none outline-none focus:ring-0 resize-none placeholder-slate-400 bg-transparent transition-colors hover:bg-slate-50 focus:bg-white rounded-xl px-2 -mx-2 min-h-[60px]"
+                      className="w-full mt-3 text-xs sm:text-sm md:text-base text-slate-500 border-none outline-none focus:ring-0 resize-none placeholder-slate-400 bg-transparent transition-colors hover:bg-slate-50 focus:bg-white rounded-xl px-2 -mx-2 min-h-[60px]"
                       placeholder="Deskripsi formulir... (opsional)"
                       rows={2}
                     />
@@ -659,7 +659,7 @@ KEMBALIKAN OUTPUT PURE JSON DENGAN STRUKTUR INI SAJA, TANPA FORMATTING MARKDOWN,
 
                   {/* Sections Map */}
                   {template.sections.map((section, sIndex) => (
-                    <div key={section.id} className="bg-white rounded-3xl shadow-sm border border-slate-200 p-5 md:p-8 group relative">
+                    <div key={section.id} className="bg-white rounded-3xl shadow-sm border border-slate-200 p-4 sm:p-5 md:p-8 group relative">
 
                       {/* Section Drag Handle & Setup */}
                       <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center pb-4 mb-4 border-b border-slate-100 sticky top-[64px] bg-white z-10">
@@ -668,7 +668,7 @@ KEMBALIKAN OUTPUT PURE JSON DENGAN STRUKTUR INI SAJA, TANPA FORMATTING MARKDOWN,
                           <select
                             value={section.type}
                             onChange={(e) => updateSection(section.id, { type: e.target.value as SectionType })}
-                            className="bg-slate-50 border border-slate-200 text-xs font-bold text-slate-600 rounded-lg px-2 py-1 outline-none focus:border-indigo-400"
+                            className="bg-slate-50 border border-slate-200 text-xs font-bold text-slate-600 rounded-lg px-2 py-1 outline-none focus:border-indigo-400 w-full sm:w-auto"
                           >
                             <option value="variable">Variabel Penelitian (X/Y)</option>
                             <option value="identity">Identitas Responden</option>
@@ -681,7 +681,7 @@ KEMBALIKAN OUTPUT PURE JSON DENGAN STRUKTUR INI SAJA, TANPA FORMATTING MARKDOWN,
                             type="text"
                             value={section.name}
                             onChange={(e) => updateSection(section.id, { name: e.target.value })}
-                            className="flex-1 text-lg font-bold text-slate-800 border-none outline-none px-1 placeholder-slate-300"
+                            className="flex-1 text-sm sm:text-base md:text-lg font-bold text-slate-800 border-none outline-none px-1 placeholder-slate-300"
                             placeholder="Nama Bagian (ex: Demografi / Variabel X)"
                           />
                           <button onClick={() => removeSection(section.id)} className="text-slate-400 hover:text-red-500 p-2 shrink-0">
@@ -693,10 +693,10 @@ KEMBALIKAN OUTPUT PURE JSON DENGAN STRUKTUR INI SAJA, TANPA FORMATTING MARKDOWN,
                       {/* Items List */}
                       <div className="space-y-4">
                         {section.items.map((item, qIndex) => (
-                          <div key={item.id} className="flex gap-2 sm:gap-4 items-start bg-slate-50/50 p-4 md:p-5 rounded-2xl border border-slate-200 group/item transition-colors focus-within:bg-white focus-within:shadow-[0_0_0_2px_theme('colors.indigo.100')]">
+                          <div key={item.id} className="flex gap-2 sm:gap-4 items-start bg-slate-50/50 p-3 sm:p-4 md:p-5 rounded-xl sm:rounded-2xl border border-slate-200 group/item transition-colors focus-within:bg-white focus-within:shadow-[0_0_0_2px_theme('colors.indigo.100')]">
                             <div className="mt-2 text-slate-300 cursor-grab hidden sm:block"><GripVertical className="w-4 h-4" /></div>
 
-                            <div className="flex-1 flex flex-col gap-3">
+                            <div className="flex-1 flex flex-col gap-3 min-w-0">
                               {/* Item Question/Text Input */}
                               <div className="flex flex-col sm:flex-row gap-3">
                                 <input
@@ -734,10 +734,10 @@ KEMBALIKAN OUTPUT PURE JSON DENGAN STRUKTUR INI SAJA, TANPA FORMATTING MARKDOWN,
 
                                 {item.type === 'likert' && (
                                   <div className="flex flex-col gap-2 mt-2">
-                                    <div className="flex items-center gap-3">
+                                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
                                       <span className="text-xs text-slate-500 font-semibold uppercase tracking-widest">Skala Rating:</span>
                                       <select
-                                        className="bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 rounded-lg px-2 py-1 outline-none focus:border-indigo-400"
+                                        className="bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 rounded-lg px-2.5 py-1.5 outline-none focus:border-indigo-400 w-full sm:w-auto max-w-full"
                                         value={item.scale || 5}
                                         onChange={(e) => updateItem(section.id, item.id, { scale: Number(e.target.value) })}
                                       >
@@ -746,8 +746,9 @@ KEMBALIKAN OUTPUT PURE JSON DENGAN STRUKTUR INI SAJA, TANPA FORMATTING MARKDOWN,
                                         <option value="7">1 - 7 (Diperluas)</option>
                                       </select>
                                     </div>
-                                    <div className="flex items-center gap-4 text-xs text-slate-500 bg-indigo-50/50 px-3 py-2 rounded-lg w-fit border border-indigo-100">
-                                      <CircleDot className="w-3.5 h-3.5 text-indigo-500" /> Akan ditampilkan sebagai pilihan tombol skala 1 hingga {item.scale || 5} kepada responden.
+                                    <div className="flex items-start gap-2 text-xs text-slate-500 bg-indigo-50/50 px-3 py-2 rounded-lg w-full border border-indigo-100">
+                                      <CircleDot className="w-3.5 h-3.5 text-indigo-500 shrink-0 mt-0.5" />
+                                      <span>Akan ditampilkan sebagai pilihan tombol skala 1 hingga {item.scale || 5} kepada responden.</span>
                                     </div>
                                   </div>
                                 )}
@@ -821,10 +822,10 @@ KEMBALIKAN OUTPUT PURE JSON DENGAN STRUKTUR INI SAJA, TANPA FORMATTING MARKDOWN,
 
               {activeTab === 'data' && (
                 <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-                  <div className="px-5 sm:px-6 py-5 border-b border-slate-100 flex flex-col sm:flex-row gap-4 items-start justify-between">
+                  <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-slate-100 flex flex-col sm:flex-row gap-4 items-start justify-between">
                     <div>
-                      <h2 className="font-bold text-slate-800 text-lg">Respons Masuk</h2>
-                      <p className="text-xs text-slate-500 mt-1">Daftar semua respons responden.</p>
+                      <h2 className="font-bold text-slate-800 text-sm sm:text-lg">Respons Masuk</h2>
+                      <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5 sm:mt-1">Daftar semua respons responden.</p>
                     </div>
 
                     {/* Custom target progress UI element at top right */}
@@ -945,8 +946,12 @@ KEMBALIKAN OUTPUT PURE JSON DENGAN STRUKTUR INI SAJA, TANPA FORMATTING MARKDOWN,
               <button onClick={() => setShowPublishModal(false)} className="text-slate-400 hover:text-slate-700">&times;</button>
             </div>
             <div className="p-8 flex flex-col items-center justify-center bg-slate-50 text-center">
-              <div className="w-40 h-40 bg-white p-4 rounded-2xl shadow-sm border border-slate-200 mb-6 flex items-center justify-center text-slate-300">
-                <QrCode className="w-full h-full stroke-[1px] text-slate-800" />
+              <div className="w-40 h-40 bg-white p-3 rounded-2xl shadow-sm border border-slate-200 mb-6 flex items-center justify-center">
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(`https://forms.skripzy.id/f?id=${publicSlug}`)}`}
+                  alt="QR Code"
+                  className="w-full h-full object-contain"
+                />
               </div>
               <p className="text-sm font-semibold text-slate-700 mb-2">Pindai QR Code atau bagikan link</p>
               <div className="flex items-center w-full gap-2">
@@ -971,13 +976,13 @@ KEMBALIKAN OUTPUT PURE JSON DENGAN STRUKTUR INI SAJA, TANPA FORMATTING MARKDOWN,
       {showAiModal && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-purple-50 to-indigo-50">
+            <div className="p-5 sm:p-6 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-purple-50 to-indigo-50">
               <div>
-                <h3 className="text-xl font-bold text-slate-800 font-display flex items-center gap-2">
-                  <Wand2 className="w-6 h-6 text-purple-600" />
+                <h3 className="text-lg sm:text-xl font-bold text-slate-800 font-display flex items-center gap-2">
+                  <Wand2 className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600" />
                   AI Form Builder
                 </h3>
-                <p className="text-sm text-slate-500 mt-1">Buat kuesioner otomatis dengan struktur yang rapi (5 Kredit)</p>
+                <p className="text-xs sm:text-sm text-slate-500 mt-1">Buat kuesioner otomatis dengan struktur yang rapi (5 Kredit)</p>
               </div>
               <button onClick={() => !aiGenerating && setShowAiModal(false)} className="p-2 hover:bg-white rounded-full transition">
                 <X className="w-5 h-5 text-slate-400" />

@@ -224,7 +224,10 @@ export default function WorkspaceEditorPage() {
     async function fetchWorkspace() {
       try {
         const response = await d1Request("workspaces", { id });
-        const data = response.data;
+        let data = response.data;
+        if (Array.isArray(data)) {
+          data = data.length > 0 ? data[0] : null;
+        }
         if (!data || data.user_id !== user.uid) {
           if (isMounted) {
             setNotFound(true);

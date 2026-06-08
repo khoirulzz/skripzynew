@@ -27,7 +27,7 @@ export function Header({ onMenuClick = null, isMobile = false }) {
         display: "flex",
         justifyContent: "space-between",
         alignItems: "center",
-        paddingTop: isMobile ? "calc(max(env(safe-area-inset-top, 0px), 24px) + 0.5rem)" : "1.75rem",
+        paddingTop: isMobile ? "calc(env(safe-area-inset-top, 0px) + 0.5rem)" : "1.75rem",
         paddingRight: isMobile ? "calc(env(safe-area-inset-right, 0px) + 0.6rem)" : "2rem",
         paddingBottom: isMobile ? "0.5rem" : "1rem",
         paddingLeft: isMobile ? "calc(env(safe-area-inset-left, 0px) + 0.6rem)" : "2rem",

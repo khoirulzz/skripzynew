@@ -158,6 +158,8 @@ export default function WorkspaceEditorPage() {
   const [isEditingContext, setIsEditingContext] = useState(false);
   const [editedRootContext, setEditedRootContext] = useState(null);
   const [showSaveConfirm, setShowSaveConfirm] = useState(false);
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const [pendingExitUrl, setPendingExitUrl] = useState("");
   const [showContextGuide, setShowContextGuide] = useState(false);
   const [hasCheckedOnboarding, setHasCheckedOnboarding] = useState(false);
 
@@ -450,11 +452,10 @@ export default function WorkspaceEditorPage() {
         if (anchor && anchor.href && !anchor.href.startsWith("#") && !anchor.href.includes("javascript:void") && !anchor.href.startsWith("mailto:") && !anchor.href.startsWith("tel:")) {
           const isSamePage = anchor.href === window.location.href;
           if (!isSamePage) {
-            const confirmed = window.confirm("Ada perubahan yang belum disimpan. Anda yakin ingin meninggalkan halaman ini?");
-            if (!confirmed) {
-              event.preventDefault();
-              event.stopPropagation();
-            }
+            event.preventDefault();
+            event.stopPropagation();
+            setPendingExitUrl(anchor.href);
+            setShowExitConfirm(true);
           }
         }
       }
@@ -767,10 +768,12 @@ export default function WorkspaceEditorPage() {
             <div style={{ display: "flex", alignItems: "center", gap: isXs ? "0.3rem" : "0.5rem", flexWrap: "nowrap" }}>
               <button
                 onClick={() => {
-                  if (saveState === "dirty") {
-                    if (!window.confirm("Ada perubahan yang belum disimpan. Anda yakin ingin keluar?")) return;
+                  if (saveState === "dirty" || isEditingContext) {
+                    setPendingExitUrl("/dashboard/jurnal");
+                    setShowExitConfirm(true);
+                  } else {
+                    window.location.href = "/dashboard/jurnal";
                   }
-                  window.location.href = "/dashboard/jurnal";
                 }}
                 style={{ display: "inline-flex", color: "var(--text-muted)", flexShrink: 0, background: "none", border: "none", padding: 0, cursor: "pointer" }}
               >
@@ -790,15 +793,35 @@ export default function WorkspaceEditorPage() {
                   textOverflow: "ellipsis",
                   lineHeight: isSm ? 1.3 : 1.2,
                   minWidth: 0,
-                  flex: 1,
+                  flex: isSm ? "0 1 auto" : 1,
                   wordBreak: "break-word",
                 }}
                 title={workspace.title || "Tanpa Judul"}
               >
                 {workspace.title || "Tanpa Judul"}
               </h1>
-              {!isSm ? <StatusBadge status={workspace.status} /> : (
-                <div style={{ display: "inline-flex", padding: "0.2rem 0.45rem", borderRadius: "999px", fontSize: "0.6rem", backgroundColor: workspace.status === "Selesai" ? "rgba(16,185,129,0.15)" : workspace.status === "Revisi" ? "rgba(245,158,11,0.15)" : "rgba(107,114,128,0.15)", color: workspace.status === "Selesai" ? "var(--success)" : workspace.status === "Revisi" ? "#d97706" : "var(--text-muted)", fontWeight: 600, flexShrink: 0 }} title={workspace.status || "Draft"}>●</div>
+              {isSm ? (
+                <button
+                  className="btn btn-ghost"
+                  style={{
+                    padding: "0.2rem",
+                    minWidth: 0,
+                    flexShrink: 0,
+                    height: "24px",
+                    width: "24px",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: "50%",
+                    color: "var(--text-muted)",
+                  }}
+                  onClick={() => setIsHeaderExpanded((prev) => !prev)}
+                  title={isHeaderExpanded ? "Tutup metadata" : "Buka metadata"}
+                >
+                  <PremiumIcon name="moreVertical" size={14} />
+                </button>
+              ) : (
+                <StatusBadge status={workspace.status} />
               )}
             </div>
             {!isSm ? (
@@ -920,16 +943,7 @@ export default function WorkspaceEditorPage() {
                 </button>
               </>
             ) : null}
-            {isSm ? (
-              <button
-                className="btn btn-ghost"
-                style={{ padding: "0.3rem", minWidth: 0, flexShrink: 0 }}
-                onClick={() => setIsHeaderExpanded((prev) => !prev)}
-                title={isHeaderExpanded ? "Tutup metadata" : "Buka metadata"}
-              >
-                <PremiumIcon name="moreVertical" size={14} />
-              </button>
-            ) : null}
+
           </div>
         </div>
       </div>
@@ -1492,6 +1506,112 @@ export default function WorkspaceEditorPage() {
               >
                 <PremiumIcon name="sparkles" size={14} />
                 <span>Isi Konteks</span>
+              </button>
+            </div>
+          </div>
+      {showExitConfirm && (
+        <div style={{
+          position: "fixed",
+          inset: 0,
+          backgroundColor: "rgba(11, 15, 25, 0.75)",
+          backdropFilter: "blur(10px)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 9999,
+          padding: "1.5rem",
+        }}>
+          <div className="glass-panel animate-fade-in" style={{
+            maxWidth: "400px",
+            width: "100%",
+            backgroundColor: "var(--surface)",
+            border: "1px solid rgba(79, 70, 229, 0.15)",
+            borderRadius: "20px",
+            padding: "2rem",
+            boxShadow: "var(--shadow-lg)",
+            textAlign: "center",
+          }}>
+            <div style={{
+              width: "52px",
+              height: "52px",
+              borderRadius: "50%",
+              backgroundColor: "rgba(79, 70, 229, 0.08)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              margin: "0 auto 1.25rem",
+              color: "var(--primary)",
+            }}>
+              <PremiumIcon name="save" size={24} />
+            </div>
+            
+            <h3 style={{ fontSize: "1.2rem", fontWeight: 800, color: "var(--text-main)", marginBottom: "0.5rem" }}>
+              Simpan Pekerjaan Anda?
+            </h3>
+            <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "1.75rem", lineHeight: 1.45 }}>
+              Ada perubahan di workspace yang belum disimpan. Apakah Anda ingin menyimpannya sebelum keluar?
+            </p>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
+              <button
+                className="btn btn-primary"
+                style={{
+                  width: "100%",
+                  padding: "0.75rem",
+                  borderRadius: "12px",
+                  fontWeight: 700,
+                  fontSize: "0.85rem",
+                  boxShadow: "0 4px 12px rgba(79, 70, 229, 0.2)",
+                }}
+                onClick={async () => {
+                  window.isSkripzyWorkspaceDirty = false;
+                  try {
+                    await persistWorkspace(contentBuffer);
+                  } catch (e) {
+                    console.error("Gagal simpan saat keluar:", e);
+                  }
+                  window.location.href = pendingExitUrl;
+                }}
+              >
+                Simpan &amp; Keluar
+              </button>
+              
+              <button
+                className="btn btn-outline"
+                style={{
+                  width: "100%",
+                  padding: "0.75rem",
+                  borderRadius: "12px",
+                  fontWeight: 600,
+                  fontSize: "0.85rem",
+                  borderColor: "rgba(239, 68, 68, 0.2)",
+                  color: "var(--danger)",
+                  backgroundColor: "transparent",
+                }}
+                onClick={() => {
+                  window.isSkripzyWorkspaceDirty = false;
+                  window.location.href = pendingExitUrl;
+                }}
+              >
+                Keluar Tanpa Simpan
+              </button>
+              
+              <button
+                className="btn btn-ghost"
+                style={{
+                  width: "100%",
+                  padding: "0.75rem",
+                  borderRadius: "12px",
+                  fontWeight: 600,
+                  fontSize: "0.85rem",
+                  color: "var(--text-muted)",
+                }}
+                onClick={() => {
+                  setShowExitConfirm(false);
+                  setPendingExitUrl("");
+                }}
+              >
+                Batal
               </button>
             </div>
           </div>

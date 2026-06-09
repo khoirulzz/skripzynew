@@ -10,6 +10,7 @@ import { PremiumIcon } from "@/components/ui/PremiumIcon";
 import { useBillingCatalog } from "@/lib/useBillingCatalog";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import Link from "next/link";
+import FeatureOnboardingModal from "@/components/ui/FeatureOnboardingModal";
 
 const API_GROUP = "group_2"; // Group untuk Asisten AI
 
@@ -224,6 +225,7 @@ Berikan hasil murni dalam format Markdown yang rapi. Tanpa markdown block dan ka
 
   return (
     <div className="animate-fade-in" style={{ maxWidth: "1000px", margin: "0 auto", paddingBottom: isMobile ? "2rem" : 0 }}>
+      <FeatureOnboardingModal featureId="asisten-ai" />
       {/* Header */}
       <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: isMobile ? "flex-start" : "center", gap: isMobile ? "0.75rem" : "1rem", marginBottom: isMobile ? "1.5rem" : "2rem" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>

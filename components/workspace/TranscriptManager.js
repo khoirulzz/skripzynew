@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { d1Request } from "@/lib/d1Client";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
 import { extractTextFromPDF } from "@/lib/pdfText";
+import * as XLSX from "xlsx";
 
 function createDraft() {
   return {
@@ -122,7 +123,7 @@ export function TranscriptManager({ workspaceId, category = "wawancara" }) {
     const newItem = {
       id,
       workspace_id: workspaceId,
-      title: category === "observasi" ? "Catatan Observasi Baru" : "Transkrip Baru",
+      title: category === "observasi" ? "Catatan Observasi Baru" : category === "angket" ? "Data Angket Baru" : "Transkrip Baru",
       content: contentPayload,
       role: "",
       interviewDate: "",
@@ -139,13 +140,12 @@ export function TranscriptManager({ workspaceId, category = "wawancara" }) {
       role: "",
       interviewDate: "",
       tags: "",
-      excerpt: "",
       content: "",
     });
   };
 
-  const handleFileUpload = async (event) => {
-    const file = event.target.files?.[0];
+  const handleFileUpload = async (eventOrFile) => {
+    let file = eventOrFile.target ? eventOrFile.target.files?.[0] : eventOrFile;
     if (!file) return;
 
     setUploading(true);
@@ -153,6 +153,27 @@ export function TranscriptManager({ workspaceId, category = "wawancara" }) {
     try {
       if (file.name.endsWith(".pdf")) {
         text = await extractTextFromPDF(file);
+      } else if (file.name.endsWith(".xlsx") || file.name.endsWith(".xls") || file.name.endsWith(".csv")) {
+        text = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            try {
+              const data = new Uint8Array(e.target.result);
+              const workbook = XLSX.read(data, { type: "array" });
+              let combinedText = "";
+              workbook.SheetNames.forEach(sheetName => {
+                const worksheet = workbook.Sheets[sheetName];
+                const csv = XLSX.utils.sheet_to_csv(worksheet);
+                combinedText += `[Sheet: ${sheetName}]\n${csv}\n\n`;
+              });
+              resolve(combinedText.trim());
+            } catch (err) {
+              reject(new Error("Gagal membaca file Excel/CSV."));
+            }
+          };
+          reader.onerror = (e) => reject(new Error("Gagal membaca file Excel/CSV."));
+          reader.readAsArrayBuffer(file);
+        });
       } else {
         text = await new Promise((resolve, reject) => {
           const reader = new FileReader();
@@ -168,7 +189,6 @@ export function TranscriptManager({ workspaceId, category = "wawancara" }) {
         role: "",
         interviewDate: "",
         tags: [],
-        excerpt: "",
         category: category,
         text: text,
       });
@@ -191,7 +211,6 @@ export function TranscriptManager({ workspaceId, category = "wawancara" }) {
         role: "",
         interviewDate: "",
         tags: [],
-        excerpt: "",
         category: category,
         text: text,
       };
@@ -203,7 +222,6 @@ export function TranscriptManager({ workspaceId, category = "wawancara" }) {
         role: "",
         interviewDate: "",
         tags: "",
-        excerpt: "",
         content: text,
       });
     } catch (err) {
@@ -211,7 +229,7 @@ export function TranscriptManager({ workspaceId, category = "wawancara" }) {
       alert("Gagal membaca atau memproses dokumen: " + err.message);
     } finally {
       setUploading(false);
-      event.target.value = ""; // reset input
+      if (eventOrFile.target) eventOrFile.target.value = ""; // reset input
     }
   };
 
@@ -223,7 +241,6 @@ export function TranscriptManager({ workspaceId, category = "wawancara" }) {
         role: draft.role,
         interviewDate: draft.interviewDate,
         tags: draft.tags.split(",").map(item => item.trim()).filter(Boolean),
-        excerpt: draft.excerpt,
         category: category,
         text: draft.content,
       });
@@ -246,7 +263,6 @@ export function TranscriptManager({ workspaceId, category = "wawancara" }) {
             role: draft.role,
             interviewDate: draft.interviewDate,
             tags: draft.tags.split(",").map(item => item.trim()).filter(Boolean),
-            excerpt: draft.excerpt,
             text: draft.content,
           };
         }
@@ -273,12 +289,65 @@ export function TranscriptManager({ workspaceId, category = "wawancara" }) {
   };
 
   const isObservasi = category === "observasi";
-  const managerTitle = isObservasi ? "Observasi & Catatan Lapangan" : "Transkrip Wawancara";
-  const managerDesc = isObservasi ? "Unggah atau tulis hasil observasi langsung." : "Unggah rekaman transkrip atau ketik manual hasil wawancara.";
+  const isAngket = category === "angket";
+  const managerTitle = isAngket ? "Data Hasil Angket" : isObservasi ? "Observasi & Catatan Lapangan" : "Transkrip Wawancara";
+  const managerDesc = isAngket ? "Unggah tabulasi (Excel/CSV/PDF) atau paste hasil survei/angket." : isObservasi ? "Unggah atau tulis hasil observasi langsung." : "Unggah rekaman transkrip atau ketik manual hasil wawancara.";
+  const acceptFileTypes = isAngket ? ".pdf,.csv,.xlsx,.xls" : ".pdf,.txt";
+
+  const isDirty = useMemo(() => {
+    if (!selectedId) return false;
+    const current = transcripts.find(t => t.id === selectedId);
+    if (!current) return false;
+    
+    const currentTagsStr = Array.isArray(current.tags) ? current.tags.join(", ") : "";
+    
+    return (
+      draft.title !== (current.title || "") ||
+      draft.role !== (current.role || "") ||
+      draft.interviewDate !== (current.interviewDate || "") ||
+      draft.tags !== currentTagsStr ||
+      draft.content !== (current.text || "")
+    );
+  }, [selectedId, transcripts, draft]);
+
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleFileUpload(e.dataTransfer.files[0]);
+    }
+  };
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "minmax(260px, 320px) minmax(0, 1fr)", gap: "1rem", minHeight: isMobile ? "auto" : "520px" }}>
-      <div className="glass-panel" style={{ padding: "1rem", display: "flex", flexDirection: "column", gap: "0.85rem", backgroundColor: "var(--surface)" }}>
+      <div 
+        className="glass-panel" 
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        style={{ 
+          padding: "1rem", 
+          display: "flex", 
+          flexDirection: "column", 
+          gap: "0.85rem", 
+          backgroundColor: isDragOver ? "var(--primary-light)" : "var(--surface)", 
+          maxHeight: isMobile ? "50vh" : "auto",
+          border: isDragOver ? "2px dashed var(--primary)" : "none",
+          transition: "all 0.2s"
+        }}
+      >
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "0.5rem" }}>
           <div>
             <h3 style={{ fontSize: "0.96rem", margin: 0, fontWeight: 700 }}>{managerTitle}</h3>
@@ -286,18 +355,18 @@ export function TranscriptManager({ workspaceId, category = "wawancara" }) {
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: "0.4rem" }}>
-          <button className="btn btn-primary" onClick={handleCreate} style={{ flex: 1, padding: "0.4rem 0.6rem", fontSize: "0.78rem" }}>
+        <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+          <button className="btn btn-primary" onClick={handleCreate} style={{ flex: 1, minWidth: "100px", padding: "0.4rem 0.6rem", fontSize: "0.78rem" }}>
             <PremiumIcon name="plus" size={13} />
             <span>Tambah</span>
           </button>
           
-          <label className="btn btn-outline" style={{ cursor: "pointer", margin: 0, display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.4rem 0.6rem", fontSize: "0.78rem" }}>
+          <label className="btn btn-outline" style={{ cursor: "pointer", margin: 0, display: "inline-flex", flex: 1, minWidth: "140px", alignItems: "center", justifyContent: "center", gap: "0.3rem", padding: "0.4rem 0.6rem", fontSize: "0.78rem" }}>
             <PremiumIcon name="uploadCloud" size={13} />
-            <span>{uploading ? "Extracting..." : "Upload PDF/TXT"}</span>
+            <span style={{ whiteSpace: "nowrap" }}>{uploading ? "Extracting..." : isAngket ? "Upload Excel/PDF" : "Upload PDF/TXT"}</span>
             <input
               type="file"
-              accept=".pdf,.txt"
+              accept={acceptFileTypes}
               style={{ display: "none" }}
               onChange={handleFileUpload}
               disabled={uploading}
@@ -321,7 +390,6 @@ export function TranscriptManager({ workspaceId, category = "wawancara" }) {
                     role: item.role || "",
                     interviewDate: item.interviewDate || "",
                     tags: Array.isArray(item.tags) ? item.tags.join(", ") : "",
-                    excerpt: item.excerpt || "",
                     content: item.text || "",
                   });
                 }}
@@ -340,7 +408,7 @@ export function TranscriptManager({ workspaceId, category = "wawancara" }) {
                   {item.title || "Tanpa Judul"}
                 </div>
                 <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
-                  {item.role || (isObservasi ? "Observasi" : "Informan")} {item.interviewDate ? `• ${item.interviewDate}` : ""}
+                  {item.role || (isAngket ? "Data Responden" : isObservasi ? "Observasi" : "Informan")} {item.interviewDate ? `• ${item.interviewDate}` : ""}
                 </div>
               </button>
             ))
@@ -355,7 +423,7 @@ export function TranscriptManager({ workspaceId, category = "wawancara" }) {
             <p style={{ fontSize: "0.74rem", margin: "0.2rem 0 0 0", color: "var(--text-muted)" }}>Simpan kutipan penting dan tag tema untuk dianalisis AI.</p>
           </div>
           <div style={{ display: "flex", gap: "0.4rem" }}>
-            <button className="btn btn-primary" onClick={handleSave} disabled={!selectedId || saving} style={{ padding: "0.4rem 0.8rem", fontSize: "0.78rem" }}>
+            <button className="btn btn-primary" onClick={handleSave} disabled={!selectedId || saving || !isDirty} style={{ padding: "0.4rem 0.8rem", fontSize: "0.78rem" }}>
               <PremiumIcon name="save" size={13} />
               <span>{saving ? "Menyimpan..." : "Simpan"}</span>
             </button>
@@ -377,8 +445,8 @@ export function TranscriptManager({ workspaceId, category = "wawancara" }) {
                 <input className="form-input" style={{ fontSize: "0.8rem", padding: "0.4rem 0.6rem" }} value={draft.title} onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))} />
               </div>
               <div className="form-group" style={{ margin: 0 }}>
-                <label className="form-label" style={{ fontSize: "0.74rem" }}>{isObservasi ? "Lokasi / Subjek" : "Peran Informan"}</label>
-                <input className="form-input" style={{ fontSize: "0.8rem", padding: "0.4rem 0.6rem" }} value={draft.role} onChange={(event) => setDraft((current) => ({ ...current, role: event.target.value }))} placeholder={isObservasi ? "mis. Ruang Kelas" : "mis. Guru"} />
+                <label className="form-label" style={{ fontSize: "0.74rem" }}>{isAngket ? "Keterangan/Kelompok" : isObservasi ? "Lokasi / Subjek" : "Peran Informan"}</label>
+                <input className="form-input" style={{ fontSize: "0.8rem", padding: "0.4rem 0.6rem" }} value={draft.role} onChange={(event) => setDraft((current) => ({ ...current, role: event.target.value }))} placeholder={isAngket ? "mis. Angkatan 2021" : isObservasi ? "mis. Ruang Kelas" : "mis. Guru"} />
               </div>
               <div className="form-group" style={{ margin: 0 }}>
                 <label className="form-label" style={{ fontSize: "0.74rem" }}>Tanggal</label>
@@ -390,13 +458,8 @@ export function TranscriptManager({ workspaceId, category = "wawancara" }) {
               </div>
             </div>
 
-            <div className="form-group" style={{ margin: 0 }}>
-              <label className="form-label" style={{ fontSize: "0.74rem" }}>Excerpt / Temuan Kunci</label>
-              <textarea className="form-textarea" rows={2} style={{ fontSize: "0.8rem", padding: "0.4rem 0.6rem" }} value={draft.excerpt} onChange={(event) => setDraft((current) => ({ ...current, excerpt: event.target.value }))} placeholder="Kutipan penting atau poin temuan utama yang menonjol." />
-            </div>
-
             <div className="form-group" style={{ margin: 0, flex: 1, display: "flex", flexDirection: "column" }}>
-              <label className="form-label" style={{ fontSize: "0.74rem" }}>Isi Transkrip / Deskripsi Detail</label>
+              <label className="form-label" style={{ fontSize: "0.74rem" }}>{isAngket ? "Isi Data Angket (Teks/CSV)" : "Isi Transkrip / Deskripsi Detail"}</label>
               <textarea className="form-textarea" rows={10} style={{ fontSize: "0.8rem", padding: "0.4rem 0.6rem", flex: 1, resize: "none" }} value={draft.content} onChange={(event) => setDraft((current) => ({ ...current, content: event.target.value }))} />
             </div>
           </div>

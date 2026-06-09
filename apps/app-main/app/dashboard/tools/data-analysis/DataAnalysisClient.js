@@ -15,6 +15,7 @@ import {
     BarChart3,
 } from "lucide-react";
 import Link from "next/link";
+import FeatureOnboardingModal from "@/components/ui/FeatureOnboardingModal";
 
 export default function DataAnalysisClient() {
     const { user } = useAuth();
@@ -43,6 +44,7 @@ export default function DataAnalysisClient() {
 
     return (
         <div className="container mx-auto p-4 md:p-8 max-w-6xl space-y-8">
+            <FeatureOnboardingModal featureId="data-analysis" />
             {/* Page Header */}
             <div style={{ borderBottom: "1px solid var(--border)", paddingBottom: "1.5rem" }}>
                 <h1 style={{ fontSize: "1.9rem", fontWeight: 800, margin: 0, color: "var(--text-main)", letterSpacing: "-0.02em" }}>

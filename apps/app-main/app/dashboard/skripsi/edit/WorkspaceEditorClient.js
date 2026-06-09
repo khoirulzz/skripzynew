@@ -163,6 +163,7 @@ export default function WorkspaceEditorPage() {
   const [isSm, setIsSm] = useState(false);
   const [isXs, setIsXs] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
   const [showMobileOptions, setShowMobileOptions] = useState(false);
   const [isLeftRailCollapsed, setIsLeftRailCollapsed] = useState(true);
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(false);
@@ -2208,7 +2209,7 @@ export default function WorkspaceEditorPage() {
           {activeTab === "data" ? (
             <DataHub
               workspaceId={workspace.id}
-              hideQualitative={workspace?.methodologyType === "kuantitatif"}
+              hideQualitative={false}
             />
           ) : null}
 
@@ -2218,7 +2219,8 @@ export default function WorkspaceEditorPage() {
                 workspaceId={workspace.id}
                 activeFormId={activeForm?.id || null}
                 onInsertContent={handleAiInsertContent}
-                hideQualitative={workspace?.methodologyType === "kuantitatif"}
+                hideQualitative={false}
+                rootContext={rootContext}
               />
             </div>
           ) : null}

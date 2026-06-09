@@ -9,6 +9,7 @@ import { PremiumIcon } from "@/components/ui/PremiumIcon";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { useBillingCatalog } from "@/lib/useBillingCatalog";
 import Link from "next/link";
+import FeatureOnboardingModal from "@/components/ui/FeatureOnboardingModal";
 
 const CREDIT_COST = 2;
 const API_GROUP   = "group_3";
@@ -128,6 +129,7 @@ export default function CekGrammarPage() {
 
   return (
     <div className="animate-fade-in" style={{ maxWidth: "960px", margin: "0 auto", paddingBottom: isMobile ? "2rem" : 0 }}>
+      <FeatureOnboardingModal featureId="cek-grammar" />
       {/* Header */}
       <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: isMobile ? "flex-start" : "center", gap: isMobile ? "0.75rem" : "1rem", marginBottom: isMobile ? "1.5rem" : "2rem" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>

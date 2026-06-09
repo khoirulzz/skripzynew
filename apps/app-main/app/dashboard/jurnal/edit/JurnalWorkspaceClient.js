@@ -2026,7 +2026,7 @@ export default function WorkspaceEditorPage() {
           {activeTab === "data" ? (
             <DataHub
               workspaceId={workspace.id}
-              hideQualitative={workspace?.methodologyType === "kuantitatif"}
+              hideQualitative={false}
             />
           ) : null}
 
@@ -2036,7 +2036,8 @@ export default function WorkspaceEditorPage() {
                 workspaceId={workspace.id}
                 activeFormId={activeForm?.id || null}
                 onInsertContent={handleAiInsertContent}
-                hideQualitative={workspace?.methodologyType === "kuantitatif"}
+                hideQualitative={false}
+                rootContext={rootContext}
               />
             </div>
           ) : null}

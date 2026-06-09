@@ -2,7 +2,7 @@
 
 import {
   Moon, Sun, Home, Compass, User, CreditCard, ChevronRight, Zap,
-  Settings, HelpCircle, FileText, Database, Send,
+  Settings, HelpCircle, FileText, File, Files, Database, Send,
   Bold, Italic, List, ListOrdered, Quote, Heading2, Heading3,
   ArrowLeft, Save, Sparkles, Plus, X, Check, ChevronDown, BookOpen,
   BarChart2, MessageSquare, Volume, Upload, AlertCircle, Radio, BookMarked, Mic, Wand2,
@@ -46,6 +46,8 @@ const icons = {
   settings: Settings,
   help: HelpCircle,
   fileText: FileText,
+  file: File,
+  files: Files,
   database: Database,
   send: Send,
   instagram: Instagram,

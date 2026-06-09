@@ -6,6 +6,7 @@ import { PremiumIcon } from "@/components/ui/PremiumIcon";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { d1Request } from "@/lib/d1Client";
+import FeatureOnboardingModal from "@/components/ui/FeatureOnboardingModal";
 
 const MAX_NOTEBOOKS_FREE = 5;
 const MAX_JOURNALS_PER_NOTEBOOK = 10;
@@ -118,6 +119,7 @@ export default function NotebookDashboardPage() {
 
   return (
     <div className="animate-fade-in" style={{ maxWidth: "1080px", margin: "0 auto", color: "var(--text-main)", paddingBottom: isMobile ? "2rem" : 0 }}>
+      <FeatureOnboardingModal featureId="notebook" />
       {/* Header */}
       <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: isMobile ? "flex-start" : "center", justifyContent: "space-between", marginBottom: isMobile ? "1.5rem" : "2rem", gap: "1rem" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>

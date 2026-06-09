@@ -28,7 +28,7 @@ function StatTile({ label, value, caption, tone = "default" }) {
   );
 }
 
-export function DataAnalysisDashboard({ workspaceId, activeFormId = null, compact = false, onInsertContent = null, hideQualitative = false }) {
+export function DataAnalysisDashboard({ workspaceId, activeFormId = null, compact = false, onInsertContent = null, hideQualitative = false, rootContext = {} }) {
   const { user, userData, refreshUserData } = useAuth();
   const { toolMap } = useBillingCatalog();
   const [workspaceActiveFormId, setWorkspaceActiveFormId] = useState(activeFormId);
@@ -316,17 +316,26 @@ Kembangkan hasil analisis dan catatan peneliti tersebut menjadi narasi pembahasa
         return cat === "wawancara";
       });
       const observasiList = transcripts.filter(t => {
-        let cat = "wawancara";
+        let cat = "observasi";
         try {
           if (t.content && t.content.trim().startsWith("{")) {
-            cat = JSON.parse(t.content).category || "wawancara";
+            cat = JSON.parse(t.content).category || "observasi";
           }
         } catch {}
         return cat === "observasi";
       });
+      const angketList = transcripts.filter(t => {
+        let cat = "angket";
+        try {
+          if (t.content && t.content.trim().startsWith("{")) {
+            cat = JSON.parse(t.content).category || "angket";
+          }
+        } catch {}
+        return cat === "angket";
+      });
 
       const formattedWawancara = wawancaraList.map((t, idx) => {
-        let parsed = { role: "", interviewDate: "", tags: [], excerpt: "", text: t.content || "" };
+        let parsed = { role: "", interviewDate: "", tags: [], text: t.content || "" };
         try {
           if (t.content && t.content.trim().startsWith("{")) {
             const p = JSON.parse(t.content);
@@ -334,16 +343,15 @@ Kembangkan hasil analisis dan catatan peneliti tersebut menjadi narasi pembahasa
               role: p.role || "",
               interviewDate: p.interviewDate || "",
               tags: p.tags || [],
-              excerpt: p.excerpt || "",
               text: p.text || "",
             };
           }
         } catch {}
-        return `[Wawancara ${idx + 1}] Informan: ${t.title || ""}, Peran: ${parsed.role}, Tanggal: ${parsed.interviewDate}\nTag Tema: ${parsed.tags.join(", ")}\nKutipan Penting: "${parsed.excerpt}"\nIsi: ${parsed.text.slice(0, 1000)}...`;
+        return `[Wawancara ${idx + 1}] Peran: ${parsed.role}, Judul: ${t.title || ""}, Tanggal: ${parsed.interviewDate}\nTag Tema: ${parsed.tags.join(", ")}\nIsi: ${parsed.text.slice(0, 1000)}...`;
       }).join("\n\n");
 
       const formattedObservasi = observasiList.map((t, idx) => {
-        let parsed = { role: "", interviewDate: "", tags: [], excerpt: "", text: t.content || "" };
+        let parsed = { role: "", interviewDate: "", tags: [], text: t.content || "" };
         try {
           if (t.content && t.content.trim().startsWith("{")) {
             const p = JSON.parse(t.content);
@@ -351,12 +359,27 @@ Kembangkan hasil analisis dan catatan peneliti tersebut menjadi narasi pembahasa
               role: p.role || "",
               interviewDate: p.interviewDate || "",
               tags: p.tags || [],
-              excerpt: p.excerpt || "",
               text: p.text || "",
             };
           }
         } catch {}
-        return `[Observasi ${idx + 1}] Lokasi/Subjek: ${parsed.role}, Judul: ${t.title || ""}, Tanggal: ${parsed.interviewDate}\nTag Tema: ${parsed.tags.join(", ")}\nKutipan Penting: "${parsed.excerpt}"\nIsi: ${parsed.text.slice(0, 1000)}...`;
+        return `[Observasi ${idx + 1}] Lokasi/Subjek: ${parsed.role}, Judul: ${t.title || ""}, Tanggal: ${parsed.interviewDate}\nTag Tema: ${parsed.tags.join(", ")}\nIsi: ${parsed.text.slice(0, 1000)}...`;
+      }).join("\n\n");
+      
+      const formattedAngket = angketList.map((t, idx) => {
+        let parsed = { role: "", interviewDate: "", tags: [], text: t.content || "" };
+        try {
+          if (t.content && t.content.trim().startsWith("{")) {
+            const p = JSON.parse(t.content);
+            parsed = {
+              role: p.role || "",
+              interviewDate: p.interviewDate || "",
+              tags: p.tags || [],
+              text: p.text || "",
+            };
+          }
+        } catch {}
+        return `[Angket ${idx + 1}] Keterangan: ${parsed.role}, Judul: ${t.title || ""}\nTag Tema: ${parsed.tags.join(", ")}\nIsi Data:\n${parsed.text.slice(0, 2000)}...`;
       }).join("\n\n");
 
       await d1Request("credits/deduct", {
@@ -374,17 +397,24 @@ Kembangkan hasil analisis dan catatan peneliti tersebut menjadi narasi pembahasa
       const qList = activeForm ? flattenFormQuestions(activeForm).filter((q) => q.type !== "sectionText") : [];
 
       const prompt = `
-Anda adalah ahli analisis data kualitatif dan kuantitatif (mixed methods) untuk penulisan karya ilmiah/skripsi/jurnal.
+Anda adalah peneliti akademik tingkat akhir yang cerdas, analitis, dan sangat mahir menyusun narasi hasil penelitian.
 Lakukan analisis tematik mendalam terhadap data-data penelitian yang dikumpulkan di bawah ini untuk menghasilkan **Poin-Poin Tematik Pembahasan** yang komprehensif.
 
-INFORMASI PENELITIAN:
+INFORMASI PENELITIAN & KONTEKS (BRAIN ROOT):
 - Judul: ${wsTitle || "Tanpa Judul"}
 - Topik: ${wsTopic || "Tanpa Topik"}
+- Fenomena Umum: ${rootContext.fenomenaUmum || "Belum ada"}
+- Fakta/Permasalahan Lapangan: ${rootContext.faktaLapangan || "Belum ada"}
+- Rumusan Masalah: ${rootContext.rumusanMasalah || "Belum ada"}
+- Metode: ${rootContext.metode || "Belum ada"}
 
-DATA ANGKET / KUESIONER:
+DATA ANGKET / KUESIONER (ONLINE):
 - Jumlah Butir Pernyataan: ${qList.length}
 - Jumlah Responden: ${responses.length}
-${offlineFiles.length > 0 ? `- File Tabulasi Angket Terunggah: ${offlineFiles.map(f => f.name).join(", ")}` : ""}
+${offlineFiles.length > 0 ? `- File Tabulasi Angket Terunggah (Hanya Nama): ${offlineFiles.map(f => f.name).join(", ")}` : ""}
+
+DATA TABULASI ANGKET (HASIL UPLOAD EXCEL/CSV/PDF):
+${formattedAngket || "Tidak ada data teks angket yang diunggah secara langsung."}
 
 DATA WAWANCARA:
 ${formattedWawancara || "Tidak ada data wawancara."}
@@ -394,13 +424,14 @@ ${formattedObservasi || "Tidak ada data observasi."}
 
 TUGAS ANDA:
 1. Hubungkan temuan dari data Kuesioner (Angket), Wawancara, dan Observasi.
-2. Identifikasi minimal 3 tema besar pembahasan yang paling relevan dan menonjol.
-3. Untuk setiap tema, berikan:
-   - Deskripsi penjelasan tema secara akademis.
-   - Dukungan data konkret (kutipan wawancara atau fakta observasi).
-   - Hubungan logis antardata (misal: bagaimana hasil wawancara menjelaskan temuan angket).
-4. Sajikan hasil analisis dalam format HTML yang terstruktur rapi (gunakan <h3>, <p>, <ul>, <li>, <strong>) agar siap disalin atau dibaca oleh AI Copilot untuk menyusun Bab IV (Hasil & Pembahasan).
-5. Tulis dalam bahasa Indonesia akademik yang sangat profesional, objektif, dan mendalam. HINDARI bahasa pengantar tambahan seperti "Baik, berikut adalah analisis..." - berikan langsung isi analisisnya dalam format HTML.
+2. Identifikasi minimal 3 tema besar pembahasan yang paling relevan dan menonjol berdasarkan rumusan masalah.
+3. Untuk setiap tema, berikan narasi analitis yang memuat:
+   - Deskripsi penjelasan tema secara akademis yang mengalir.
+   - Bukti pendukung data konkret (narasikan isi wawancara/angket/observasi secara luwes, jangan sekadar melempar kutipan mentah).
+   - Hubungan logis antardata (misal: bagaimana hasil wawancara menjelaskan atau membantah temuan angket).
+4. Tulis dalam bahasa Indonesia baku yang natural, mengalir, dan berstandar akademik (sesuaikan dengan keluwesan penulisan skripsi atau kepadatan jurnal ilmiah). Minimalisir penggunaan kalimat klise. Gunakan transisi antar paragraf agar pembahasan mengalir.
+5. Sajikan hasil analisis dalam format HTML yang terstruktur rapi (gunakan <h3>, <p>, <strong>, <em>). Penggunaan poin-poin (<ul>, <li>) BUKAN KEWAJIBAN, gunakan HANYA jika benar-benar perlu menjabarkan faktor atau sub-aspek ganda. Utamakan bentuk paragraf naratif yang kohesif, detail, dan panjang.
+6. HINDARI bahasa pengantar tambahan seperti "Baik, berikut adalah analisis..." - berikan langsung isi analisisnya dalam format HTML.
 `.trim();
 
       const result = await generateWorkspaceChapter({
@@ -491,38 +522,6 @@ TUGAS ANDA:
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-      {/* Sub-tabs for Qualitative/Mixed method workspace */}
-      {!hideQualitative && (
-        <div style={{ display: "flex", gap: "0.75rem", borderBottom: "1px solid var(--border)", paddingBottom: "0.25rem", marginBottom: "1rem", overflowX: "auto" }}>
-          <button
-            className="btn btn-ghost"
-            onClick={() => setActiveAnalysisTab("tematik")}
-            style={{
-              borderBottom: activeAnalysisTab === "tematik" ? "2px solid var(--primary)" : "2px solid transparent",
-              color: activeAnalysisTab === "tematik" ? "var(--primary)" : "var(--text-muted)",
-              borderRadius: 0,
-              paddingInline: "0.4rem",
-            }}
-          >
-            <PremiumIcon name="sparkles" size={15} />
-            Analisis Tematik (AI)
-          </button>
-          <button
-            className="btn btn-ghost"
-            onClick={() => setActiveAnalysisTab("kuantitatif")}
-            style={{
-              borderBottom: activeAnalysisTab === "kuantitatif" ? "2px solid var(--primary)" : "2px solid transparent",
-              color: activeAnalysisTab === "kuantitatif" ? "var(--primary)" : "var(--text-muted)",
-              borderRadius: 0,
-              paddingInline: "0.4rem",
-            }}
-          >
-            <PremiumIcon name="barChart3" size={15} />
-            Analisis Statistik (Kuantitatif)
-          </button>
-        </div>
-      )}
-
       {activeAnalysisTab === "tematik" && (
         <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "360px 1fr", gap: "1.5rem", alignItems: "start" }}>
@@ -537,9 +536,17 @@ TUGAS ANDA:
                     <PremiumIcon name="layoutTemplate" size={16} />
                   </div>
                   <div>
-                    <div style={{ fontSize: "0.82rem", fontWeight: 700 }}>Kuesioner / Angket</div>
+                    <div style={{ fontSize: "0.82rem", fontWeight: 700 }}>Data Angket</div>
                     <div style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>
-                      {responses.length} responden online • {offlineFiles.length} file tabulasi
+                      {transcripts.filter(t => {
+                        let cat = "angket";
+                        try {
+                          if (t.content && t.content.trim().startsWith("{")) {
+                            cat = JSON.parse(t.content).category || "angket";
+                          }
+                        } catch {}
+                        return cat === "angket";
+                      }).length} data angket tersimpan
                     </div>
                   </div>
                 </div>

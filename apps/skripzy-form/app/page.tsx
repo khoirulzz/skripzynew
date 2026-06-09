@@ -13,6 +13,7 @@ import {
   FileSpreadsheet, PenTool, Wand2, X
 } from 'lucide-react';
 import { d1Request, deductCredits, generateFormWithAI, publishPublicFormSnapshot, getCookie } from '@/lib/api';
+import FeatureOnboardingModal from '@/components/ui/FeatureOnboardingModal';
 
 const THEME_COLORS = [
   { id: 'indigo', hex: 'bg-indigo-600', text: 'text-indigo-600', border: 'border-indigo-600', hover: 'hover:bg-indigo-50', pale: 'bg-indigo-50/50' },
@@ -413,6 +414,7 @@ KEMBALIKAN OUTPUT PURE JSON DENGAN STRUKTUR INI SAJA, TANPA FORMATTING MARKDOWN,
 
   return (
     <>
+      <FeatureOnboardingModal featureId="skripzy-form" />
       {appMode === 'dashboard' ? (
         <div className="min-h-screen bg-slate-50 font-sans pb-20 text-slate-900">
           <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-6 sticky top-0 z-10 shadow-sm">

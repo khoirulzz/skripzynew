@@ -142,17 +142,28 @@ export function ChapterAiAssistant({
         .join("\n");
 
       const prompt = `
-Anda adalah co-writer akademik untuk penyusunan skripsi.
+Anda adalah mahasiswa peneliti tingkat akhir yang cerdas, analitis, dan sangat mahir menyusun narasi akademik.
 Tugas Anda adalah menulis sub-bab khusus: "${selectedAction.title}" (${selectedAction.desc}) untuk ${chapter.longLabel}.
+
+PANDUAN GAYA BAHASA & DIKSI:
+- Tulis dalam bahasa Indonesia baku yang natural, mengalir, dan tidak kaku ("skripsi banget"). 
+- Hasilkan kalimat yang detail, panjang, dan naratif secara fleksibel. Minimalisir penggunaan kalimat klise atau ungkapan robotik khas AI.
+- Pembahasan harus mengalir antar paragraf. Gunakan kata transisi dengan luwes (misal: "Sejalan dengan hal tersebut", "Lebih lanjut", "Menariknya", "Kondisi ini mengindikasikan bahwa", "Di sisi lain").
+- Penggunaan poin-poin (bullet points) HARUS FLEKSIBEL dan BUKAN KEWAJIBAN. Lebur informasi menjadi narasi paragraf yang kohesif. Gunakan bullet points HANYA jika benar-benar diperlukan (misal: menjabarkan sub-aspek yang terstruktur kaku atau menyebutkan faktor-faktor yang banyak).
+
+PANDUAN PENYAJIAN DATA KHUSUS (TERUTAMA BAB 4):
+- Jika ini adalah bagian Hasil dan Pembahasan, JANGAN sekadar "melempar" angka dari angket atau kutipan dari wawancara/observasi secara mentah.
+- Narasikan data tersebut secara analitis. Contoh: Daripada "Responden A mengatakan: 'X'", gunakan "Hal ini diperkuat oleh penuturan salah satu informan yang mengungkapkan bahwa...".
+- Selalu berikan interpretasi analitis di balik setiap sajian data, dan pastikan terhubung dengan teori atau temuan lain.
 
 ATURAN KELUARAN:
 - Kembalikan HTML saja, tanpa markdown fence, tanpa pengantar tambahan.
 - Gunakan hanya elemen: <h2>, <h3>, <p>, <ul>, <ol>, <li>, <strong>, <em>.
-- Tulis dalam bahasa Indonesia akademik yang rapi, mengalir, ilmiah, dan tidak kaku.
-- Jika konteks referensi tersedia, gunakan kutipan & sitasi yang relevan untuk memperkaya isi secara konkret.
-- Kutipan/sitasi harus ditulis dalam format Penulis (Tahun) atau (Penulis, Tahun) secara konsisten dan akurat sesuai referensi terpilih. Jangan gunakan format sitasi angka seperti [1] atau format lainnya.
-- PENTING: Terapkan prinsip anti-halusinasi yang ketat. Jika suatu informasi tidak terdapat dalam referensi/sumber yang terunggah, nyatakan secara jujur bahwa informasi tersebut tidak ada, dan hanya tulis fakta yang benar-benar tercantum dalam data referensi.
-- Jangan mengada-ada data kuantitatif; jika data tidak cukup, tulis secara hati-hati, netral, dan logis.
+- Gunakan kutipan & sitasi yang relevan jika konteks referensi tersedia. Format harus konsisten (Penulis, Tahun). Dilarang keras menggunakan format angka seperti [1].
+- PENTING: Anti-halusinasi! Jika informasi tidak ada di sumber, jangan mengarang.
+
+SINKRONISASI KONTEKS (PENTING! JANGAN SAMPAI BENTROK):
+Pastikan output Anda meleburkan harmonisasi antara "Konteks Utama", "Sistematika Bab", dan "Arahan Khusus". Setiap paragraf harus memiliki benang merah yang sejalan dengan Fenomena Umum dan Rumusan Masalah.
 
 KONTEKS UTAMA PENELITIAN (BRAIN ROOT):
 - Judul penelitian: ${workspaceContext.title || "Tanpa judul"}

@@ -228,9 +228,9 @@ export function DataHub({ workspaceId, hideQualitative = false }) {
       ];
     }
     return [
-      { key: "angket", label: "Angket & Tabulasi", icon: "layoutTemplate" },
-      { key: "wawancara", label: "Wawancara", icon: "mic" },
-      { key: "observasi", label: "Observasi", icon: "eye" },
+      { key: "angket", label: "Hasil Angket", icon: "layoutTemplate" },
+      { key: "wawancara", label: "Transkrip Wawancara", icon: "mic" },
+      { key: "observasi", label: "Transkrip Observasi", icon: "eye" },
     ];
   }, [hideQualitative]);
 
@@ -723,162 +723,7 @@ export function DataHub({ workspaceId, hideQualitative = false }) {
 
       {/* Tab CONTENT: ANGKET & TABULASI */}
       {activeTab === "angket" && (
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 340px", gap: isMobile ? "1rem" : "1.5rem", alignItems: "start" }}>
-          
-          {/* Bagian Utama: Kelola Form Online */}
-          <div className="techy-card" style={{ padding: "1.5rem", backgroundColor: "var(--surface)", borderTop: "4px solid var(--primary)" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem", marginBottom: "1.25rem" }}>
-              <div>
-                <h3 style={{ fontSize: "1.05rem", margin: 0, fontWeight: 700 }}>Instrumen Angket Online</h3>
-                <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.82rem", color: "var(--text-muted)" }}>Kumpulkan data responden secara online menggunakan instrumen kuesioner.</p>
-              </div>
-              <button className="btn btn-primary" onClick={handleCreateForm} style={{ padding: "0.4rem 0.8rem", fontSize: "0.78rem" }}>
-                <PremiumIcon name="plus" size={14} />
-                <span>Form Baru</span>
-              </button>
-            </div>
-
-            {forms.length === 0 ? (
-              <div style={{ padding: "2.5rem 1rem", border: "2px dashed var(--border)", borderRadius: "12px", textAlign: "center", color: "var(--text-muted)", fontSize: "0.85rem" }}>
-                Belum ada instrumen online dibuat. Klik "Form Baru" untuk mulai merancang.
-              </div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
-                {forms.map((item) => {
-                  const isActive = item.id === activeFormId;
-                  return (
-                    <div key={item.id} style={{ display: "flex", flexDirection: isMobile ? "column" : "row", justifyContent: "space-between", alignItems: isMobile ? "stretch" : "center", gap: "0.75rem", padding: "0.85rem", border: isActive ? "1.5px solid var(--primary)" : "1px solid var(--border)", borderRadius: "10px", backgroundColor: isActive ? "var(--primary-light)" : "var(--background)" }}>
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
-                          <span style={{ fontSize: "0.84rem", fontWeight: 700, color: "var(--text-main)", wordBreak: "break-word" }}>{item.title}</span>
-                          {isActive && <span style={{ fontSize: "0.65rem", padding: "0.1rem 0.4rem", borderRadius: "4px", backgroundColor: "var(--primary)", color: "white", fontWeight: 700 }}>AKTIF</span>}
-                        </div>
-                        <div style={{ fontSize: "0.74rem", color: "var(--text-muted)", marginTop: "0.2rem" }}>
-                          {item.sections?.length || 0} variabel • {item.sections?.reduce((sum, s) => sum + (s.questions?.length || 0), 0) || 0} butir pernyataan
-                        </div>
-                      </div>
-                      <div style={{ display: "flex", gap: "0.35rem", justifyContent: isMobile ? "flex-end" : "flex-start" }}>
-                        <button className="btn btn-outline" style={{ padding: "0.35rem 0.65rem", fontSize: "0.74rem", flex: isMobile ? 1 : "auto" }} onClick={() => setEditingFormId(item.id)}>
-                          <PremiumIcon name="edit3" size={12} />
-                          <span>Edit</span>
-                        </button>
-                        {!isActive && (
-                          <button className="btn btn-ghost" style={{ padding: "0.35rem 0.65rem", fontSize: "0.74rem", flex: isMobile ? 1 : "auto" }} onClick={() => void handleActivateForm(item.id)}>
-                            Aktifkan
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Responses preview if any */}
-            {responses.length > 0 && (
-              <div style={{ marginTop: "2rem" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
-                  <h4 style={{ fontSize: "0.94rem", fontWeight: 700, margin: 0 }}>Tabel Data Responden Online ({responses.length})</h4>
-                  <button className="btn btn-outline" onClick={handleExportCSV} style={{ padding: "0.3rem 0.6rem", fontSize: "0.74rem" }}>
-                    <PremiumIcon name="download" size={13} />
-                    <span>Ekspor CSV</span>
-                  </button>
-                </div>
-                <div style={{ overflowX: "auto", border: "1px solid var(--border)", borderRadius: "10px", maxHeight: "250px" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.78rem" }}>
-                    <thead>
-                      <tr style={{ backgroundColor: "var(--surface)", borderBottom: "1px solid var(--border)", textAlign: "left" }}>
-                        <th style={{ padding: "0.5rem 0.75rem", width: "40px" }}>No</th>
-                        {activeFormQuestions.slice(0, 4).map(q => (
-                          <th key={q.id} style={{ padding: "0.5rem 0.75rem", minWidth: "120px" }}>{q.variableKey || q.label}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {responses.slice(0, 5).map((resp, idx) => (
-                        <tr key={resp.id} style={{ borderBottom: "1px solid var(--border)" }}>
-                          <td style={{ padding: "0.5rem 0.75rem", color: "var(--text-muted)" }}>{idx + 1}</td>
-                          {activeFormQuestions.slice(0, 4).map(q => (
-                            <td key={q.id} style={{ padding: "0.5rem 0.75rem" }}>{getFormattedAnswer(resp, q)}</td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Bagian Samping: Upload Tabulasi Offline (Excel/CSV) */}
-          <div className="glass-panel" style={{ padding: "1.25rem", backgroundColor: "var(--surface)", display: "flex", flexDirection: "column", gap: "1rem" }}>
-            <div>
-              <h3 style={{ fontSize: "0.96rem", margin: 0, fontWeight: 700 }}>Tabulasi Offline</h3>
-              <p style={{ margin: "0.2rem 0 0 0", fontSize: "0.74rem", color: "var(--text-muted)", lineHeight: 1.3 }}>Unggah file tabulasi Excel (.xlsx/.xls) atau CSV dari survei offline.</p>
-            </div>
-
-            <label className="btn btn-primary" style={{ cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.4rem", padding: "0.5rem", fontSize: "0.8rem", margin: 0 }}>
-              <PremiumIcon name="uploadCloud" size={15} />
-              <span>{uploadingFile ? "Mengunggah..." : "Unggah Tabulasi (.xlsx / .csv)"}</span>
-              <input
-                type="file"
-                accept=".csv, .xlsx, .xls"
-                onChange={handleUploadAngketFile}
-                disabled={uploadingFile}
-                style={{ display: "none" }}
-              />
-            </label>
-
-            {offlineFiles.length > 0 && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem", marginTop: "0.5rem" }}>
-                <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>File Terunggah ({offlineFiles.length}):</div>
-                {offlineFiles.map(file => (
-                  <div key={file.id} style={{ padding: "0.6rem 0.75rem", border: "1px solid var(--border)", borderRadius: "8px", backgroundColor: "var(--background)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem" }}>
-                    <div style={{ minWidth: 0, flex: 1, cursor: "pointer" }} onClick={() => void handleLoadCsvPreview(file)} title="Klik untuk pratinjau CSV">
-                      <div style={{ fontSize: "0.78rem", fontWeight: 700, color: file.name.endsWith(".csv") ? "var(--primary)" : "var(--text-main)", textDecoration: file.name.endsWith(".csv") ? "underline" : "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {file.name}
-                      </div>
-                      <div style={{ fontSize: "0.68rem", color: "var(--text-muted)", marginTop: "0.1rem" }}>
-                        {(file.size / 1024).toFixed(1)} KB • {new Date(file.uploadedAt).toLocaleDateString("id-ID")}
-                      </div>
-                    </div>
-                    <button className="btn btn-ghost" style={{ padding: "0.25rem", color: "var(--danger)" }} onClick={() => void handleDeleteAngketFile(file.id)}>
-                      <PremiumIcon name="trash" size={13} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* CSV Client-side Preview Table */}
-            {loadingCsvPreview && <div style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}>Memuat pratinjau data...</div>}
-            {csvPreview && (
-              <div style={{ marginTop: "0.5rem", border: "1px solid var(--border)", borderRadius: "8px", padding: "0.6rem", backgroundColor: "var(--background)" }}>
-                <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--primary)", marginBottom: "0.4rem" }}>PRATINJAU DATA CSV ({csvPreview.totalRows} baris):</div>
-                <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: "150px" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.68rem" }}>
-                    <thead>
-                      <tr style={{ backgroundColor: "var(--surface)", borderBottom: "1px solid var(--border)" }}>
-                        {csvPreview.headers.map((h, i) => (
-                          <th key={i} style={{ padding: "0.3rem", textAlign: "left", whiteSpace: "nowrap" }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {csvPreview.rows.map((row, ri) => (
-                        <tr key={ri} style={{ borderBottom: "1px solid var(--border)" }}>
-                          {row.map((cell, ci) => (
-                            <td key={ci} style={{ padding: "0.3rem", whiteSpace: "nowrap" }}>{cell}</td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+        <TranscriptManager workspaceId={workspaceId} category="angket" />
       )}
 
       {/* Tab CONTENT: WAWANCARA */}
@@ -890,24 +735,6 @@ export function DataHub({ workspaceId, hideQualitative = false }) {
       {activeTab === "observasi" && (
         <TranscriptManager workspaceId={workspaceId} category="observasi" />
       )}
-
-
-
-      {/* Form Builder Modal for inline edits */}
-      {activeForm && !hideQualitative ? (
-        <div style={{ position: "fixed", inset: 0, zIndex: 100, backgroundColor: "rgba(11,15,25,0.58)", backdropFilter: "blur(6px)" }}>
-          <FormBuilder
-            key={activeForm.id}
-            workspaceId={workspaceId}
-            form={activeForm}
-            existingForms={forms}
-            onClose={() => setEditingFormId(null)}
-            onSaved={(nextForm) => {
-              setForms((current) => current.map((item) => (item.id === nextForm.id ? nextForm : item)));
-            }}
-          />
-        </div>
-      ) : null}
     </div>
   );
 }

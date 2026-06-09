@@ -9,6 +9,7 @@ import { PremiumIcon } from "@/components/ui/PremiumIcon";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { useBillingCatalog } from "@/lib/useBillingCatalog";
 import Link from "next/link";
+import FeatureOnboardingModal from "@/components/ui/FeatureOnboardingModal";
 
 const CREDIT_COST = 3;
 const API_GROUP   = "group_1";
@@ -122,6 +123,7 @@ export default function HumanizerPage() {
 
   return (
     <div className="animate-fade-in" style={{ maxWidth: "1100px", margin: "0 auto", paddingBottom: isMobile ? "2rem" : 0 }}>
+      <FeatureOnboardingModal featureId="humanizer" />
 
       {/* Header */}
       <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: isMobile ? "flex-start" : "center", gap: isMobile ? "0.75rem" : "1rem", marginBottom: isMobile ? "1.5rem" : "2rem" }}>

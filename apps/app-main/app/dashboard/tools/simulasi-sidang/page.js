@@ -9,6 +9,7 @@ import { PremiumIcon } from "@/components/ui/PremiumIcon";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { useBillingCatalog } from "@/lib/useBillingCatalog";
 import Link from "next/link";
+import FeatureOnboardingModal from "@/components/ui/FeatureOnboardingModal";
 
 const SIDANG_MODEL = "gemini-flash-lite-latest";
 const ID_SPEECH_LANG = "id-ID";
@@ -661,6 +662,7 @@ Sajikan dengan gaya bahasa akademis namun membangun (konstruktif).`;
 
   return (
     <div className="animate-fade-in" style={{ maxWidth: isSessionActive ? "1120px" : "920px", margin: "0 auto", paddingBottom: isMobile ? "2rem" : 0 }}>
+      <FeatureOnboardingModal featureId="simulasi-sidang" />
       {/* Header */}
       <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: isMobile ? "flex-start" : "center", gap: isMobile ? "0.75rem" : "1rem", marginBottom: isMobile ? "1.5rem" : "2rem" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>

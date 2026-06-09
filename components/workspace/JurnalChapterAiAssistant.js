@@ -113,17 +113,23 @@ export function JurnalChapterAiAssistant({
         .join("\n");
 
       const prompt = `
-Anda adalah co-writer akademik untuk penyusunan naskah publikasi jurnal.
+Anda adalah peneliti dan penulis akademik yang cerdas, analitis, dan sangat mahir menyusun naskah publikasi jurnal ilmiah.
 Tugas Anda adalah menulis bagian **${chapter.label}** dalam format HTML siap tempel.
+
+PANDUAN GAYA BAHASA & DIKSI:
+- Tulis dalam bahasa Indonesia baku yang natural, mengalir, dan berstandar publikasi jurnal (padat, analitis, dan tajam). 
+- Hasilkan kalimat yang detail dan mengalir secara fleksibel. Sesuaikan nada penulisan dengan pedoman penulisan jurnal pada umumnya. Minimalisir penggunaan kalimat klise atau ungkapan robotik khas AI.
+- Pembahasan harus mengalir antar paragraf. Gunakan kata transisi dengan luwes (misal: "Sejalan dengan hal tersebut", "Lebih lanjut", "Menariknya", "Kondisi ini mengindikasikan bahwa", "Di sisi lain").
+- Penggunaan poin-poin (bullet points) HARUS FLEKSIBEL dan BUKAN KEWAJIBAN. Lebur informasi menjadi narasi paragraf yang kohesif. Gunakan bullet points HANYA jika benar-benar diperlukan (misal: menjabarkan faktor atau rincian yang terstruktur).
 
 ATURAN KELUARAN:
 - Kembalikan HTML saja, tanpa markdown fence, tanpa pengantar tambahan.
 - Gunakan hanya elemen: <h2>, <h3>, <p>, <ul>, <ol>, <li>, <strong>, <em>.
-- Tulis dalam bahasa Indonesia akademik yang rapi, mengalir, dan tidak kaku.
-- Jika konteks referensi tersedia, gunakan konteks itu untuk memperkaya isi.
-- Kutipan/sitasi harus ditulis dalam format Penulis (Tahun) atau (Penulis, Tahun) secara konsisten dan akurat sesuai referensi terpilih. Jangan gunakan format sitasi angka seperti [1] atau format lainnya.
-- PENTING: Terapkan prinsip anti-halusinasi yang ketat. Jika suatu informasi tidak terdapat dalam referensi/sumber yang terunggah, nyatakan secara jujur bahwa informasi tersebut tidak ada, dan hanya tulis fakta yang benar-benar tercantum dalam data referensi.
-- Jangan mengada-ada data kuantitatif; jika data tidak cukup, tulis secara hati-hati dan netral.
+- Gunakan kutipan & sitasi yang relevan jika konteks referensi tersedia. Format harus konsisten (Penulis, Tahun). Dilarang keras menggunakan format angka seperti [1].
+- PENTING: Anti-halusinasi! Jika informasi tidak ada di sumber, jangan mengarang.
+
+SINKRONISASI KONTEKS (PENTING! JANGAN SAMPAI BENTROK):
+Pastikan output Anda meleburkan harmonisasi antara "Konteks Utama", "Tujuan Bab", dan "Fokus Penulisan" serta "Arahan Khusus". Setiap paragraf harus memiliki benang merah yang sejalan dengan Fenomena Umum dan Rumusan Masalah.
 
 TUJUAN BAB:
 ${config.objective}

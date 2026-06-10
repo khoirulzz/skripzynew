@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "614571470693-7se94tgos2bknh804q4dmh93428l78dq.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "id.skripzy.app",
+            "certificate_hash": "7917965f806b89b9a58ef7699a47309e5101e645"
+          }
+        },
+        {
           "client_id": "614571470693-j2s54r02msvm90v770l6ff08l3ni2396.apps.googleusercontent.com",
           "client_type": 3
         }

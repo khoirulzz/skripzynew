@@ -60,8 +60,25 @@ export default function FeatureOnboardingModal({ featureId }) {
 
   const modalContent = (
     <div 
-      className={`fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 transition-all duration-300 ${isVisible ? 'opacity-100' : 'opacity-0'}`}
-      style={{ backgroundColor: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}
+      className={`transition-all duration-300 ${isVisible ? 'opacity-100' : 'opacity-0'}`}
+      style={{ 
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        width: '100vw',
+        height: '100vh',
+        zIndex: 99999,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '1rem',
+        backgroundColor: 'rgba(15, 23, 42, 0.4)', 
+        backdropFilter: 'blur(16px)', 
+        WebkitBackdropFilter: 'blur(16px)',
+        pointerEvents: 'auto'
+      }}
       onClick={handleClose}
     >
       <div 
@@ -138,21 +155,47 @@ export default function FeatureOnboardingModal({ featureId }) {
           </div>
 
           {/* Action Buttons */}
-          <div className="flex items-center justify-between gap-3">
+          <div style={{
+            display: "flex",
+            gap: "0.85rem",
+            justifyContent: "center",
+            width: "100%",
+            marginTop: "0.5rem",
+          }}>
             {currentStep > 0 ? (
               <button 
                 onClick={handlePrev}
-                className="flex items-center justify-center py-3 px-4 rounded-xl font-medium transition-colors flex-shrink-0"
-                style={{ color: "var(--text-muted, #64748b)", backgroundColor: "color-mix(in srgb, var(--surface, #ffffff) 80%, transparent)" }}
+                className="btn btn-outline"
+                style={{
+                  flex: 1,
+                  padding: "0.75rem 1.2rem",
+                  fontSize: "0.82rem",
+                  borderRadius: "12px",
+                  borderColor: "var(--border, #e2e8f0)",
+                  color: "var(--text-muted, #64748b)",
+                  transition: "all 0.2s",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "0.4rem"
+                }}
               >
-                <ChevronLeft size={20} className="mr-1" />
+                <ChevronLeft size={16} />
                 Kembali
               </button>
             ) : (
               <button 
                 onClick={handleClose}
-                className="py-3 px-4 rounded-xl font-medium transition-colors flex-shrink-0"
-                style={{ color: "var(--text-muted, #64748b)" }}
+                className="btn btn-outline"
+                style={{
+                  flex: 1,
+                  padding: "0.75rem 1.2rem",
+                  fontSize: "0.82rem",
+                  borderRadius: "12px",
+                  borderColor: "var(--border, #e2e8f0)",
+                  color: "var(--text-muted, #64748b)",
+                  transition: "all 0.2s",
+                }}
               >
                 Skip Tour
               </button>
@@ -160,15 +203,22 @@ export default function FeatureOnboardingModal({ featureId }) {
 
             <button 
               onClick={handleNext}
-              className="flex-1 flex items-center justify-center py-3 px-6 rounded-xl font-semibold transition-all hover:-translate-y-0.5"
-              style={{ 
-                backgroundColor: "var(--primary, #4f46e5)", 
-                color: "white",
-                boxShadow: "0 8px 20px color-mix(in srgb, var(--primary, #4f46e5) 25%, transparent)"
+              className="btn btn-primary"
+              style={{
+                flex: 1,
+                padding: "0.75rem 1.2rem",
+                fontSize: "0.82rem",
+                borderRadius: "12px",
+                boxShadow: "0 8px 20px rgba(79,70,229,0.25)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "0.4rem",
+                transition: "all 0.2s",
               }}
             >
               {currentStep === steps.length - 1 ? 'Mulai Sekarang' : 'Lanjut'}
-              {currentStep < steps.length - 1 && <ChevronRight size={20} className="ml-1" />}
+              {currentStep < steps.length - 1 && <ChevronRight size={16} />}
             </button>
           </div>
         </div>

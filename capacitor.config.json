@@ -17,6 +17,9 @@
     },
     "CapacitorUpdater": {
       "autoUpdate": false
+    },
+    "FirebaseAuthentication": {
+      "providers": ["google.com"]
     }
   }
 }

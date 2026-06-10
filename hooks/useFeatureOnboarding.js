@@ -6,7 +6,7 @@ export function useFeatureOnboarding(featureId) {
 
   useEffect(() => {
     // Check if the user has already seen the onboarding for this feature
-    const storageKey = `skripzy_onboarding_v2_${featureId}`;
+    const storageKey = `skripzy_onboarding_v3_${featureId}`;
     const hasSeen = localStorage.getItem(storageKey);
 
     if (!hasSeen) {
@@ -17,7 +17,7 @@ export function useFeatureOnboarding(featureId) {
   }, [featureId]);
 
   const dismissModal = () => {
-    const storageKey = `skripzy_onboarding_v2_${featureId}`;
+    const storageKey = `skripzy_onboarding_v3_${featureId}`;
     localStorage.setItem(storageKey, 'true');
     setShowModal(false);
   };

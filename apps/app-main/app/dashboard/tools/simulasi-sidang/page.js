@@ -10,6 +10,8 @@ import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { useBillingCatalog } from "@/lib/useBillingCatalog";
 import Link from "next/link";
 import FeatureOnboardingModal from "@/components/ui/FeatureOnboardingModal";
+import { VoiceRecorder } from 'capacitor-voice-recorder';
+import { TextToSpeech } from '@capacitor-community/text-to-speech';
 
 const SIDANG_MODEL = "gemini-flash-lite-latest";
 const ID_SPEECH_LANG = "id-ID";
@@ -252,9 +254,32 @@ export default function SimulasiSidangPage() {
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, chatLoading]);
 
-  // 2. TTS DENGAN SPEECH SYNTHESIS (NATIVE BROWSER OPTIMIZED)
-  const speak = (text) => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+  // 2. TTS DENGAN SPEECH SYNTHESIS (NATIVE CAPACITOR & BROWSER OPTIMIZED)
+  const speak = async (text) => {
+    if (typeof window === "undefined") return;
+
+    const ttsProfile = PROFILE_TTS[dosenProfile] || PROFILE_TTS.kritis;
+    const cleanStr = sanitizeSpeechText(text);
+
+    // Native Capacitor TTS
+    if (window.Capacitor && window.Capacitor.isNativePlatform()) {
+      try {
+        await TextToSpeech.stop();
+        await TextToSpeech.speak({
+          text: cleanStr,
+          lang: ID_SPEECH_LANG,
+          rate: ttsProfile.rate,
+          pitch: ttsProfile.pitch,
+          volume: 1.0,
+          category: 'ambient',
+        });
+        return;
+      } catch (err) {
+        console.warn("Native TTS error, falling back to Web Speech:", err);
+      }
+    }
+
+    if (!("speechSynthesis" in window)) return;
 
     window.speechSynthesis.cancel();
     
@@ -264,8 +289,7 @@ export default function SimulasiSidangPage() {
       window.currentAudio.currentTime = 0;
     }
 
-    const utterance = new SpeechSynthesisUtterance(sanitizeSpeechText(text));
-    const ttsProfile = PROFILE_TTS[dosenProfile] || PROFILE_TTS.kritis;
+    const utterance = new SpeechSynthesisUtterance(cleanStr);
     utterance.lang = ID_SPEECH_LANG;
     utterance.rate = ttsProfile.rate;
     utterance.pitch = ttsProfile.pitch;
@@ -475,11 +499,31 @@ Gunakan insight ini untuk bertanya spesifik.`;
     }
   };
 
-  const startListening = () => {
+  const startListening = async () => {
     if (!recognitionRef.current || chatLoading || isFinished) return;
 
     if (window.currentAudio) window.currentAudio.pause();
     window.speechSynthesis?.cancel?.();
+    if (window.Capacitor && window.Capacitor.isNativePlatform()) {
+      try {
+        await TextToSpeech.stop();
+        
+        // Native Permission Check
+        const canRecord = await VoiceRecorder.canDeviceVoiceRecord();
+        if (canRecord.value) {
+          const perm = await VoiceRecorder.hasAudioRecordingPermission();
+          if (!perm.value) {
+            const req = await VoiceRecorder.requestAudioRecordingPermission();
+            if (!req.value) {
+              alert("Izin mikrofon ditolak oleh perangkat.");
+              return;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("VoiceRecorder/TTS check failed:", err);
+      }
+    }
 
     recordingBaseRef.current = currentInput.trim();
     liveTranscriptRef.current = "";

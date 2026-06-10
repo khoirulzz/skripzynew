@@ -36,7 +36,9 @@ const WORKSPACE_ITEMS = [
     iconBg: "rgba(139, 92, 246, 0.1)",
     title: "Convert → Jurnal",
     desc: "Ubah skripsi menjadi artikel jurnal siap publish",
-    pro: true,
+    pro: false,
+    badge: "COMING SOON",
+    disabled: true,
   },
 ];
 
@@ -211,6 +213,8 @@ function ComingSoonBadge() {
 
 function WorkspaceCard({ item, plan, isMobile }) {
   const isLocked = item.pro && plan === "free";
+  const isDisabled = item.disabled;
+  const isInactive = isLocked || isDisabled;
   const inner = (
     <div
       className={isMobile ? "native-card workspace-card" : "glass-panel workspace-card"}
@@ -223,8 +227,8 @@ function WorkspaceCard({ item, plan, isMobile }) {
         padding: isMobile ? "1.25rem 1rem" : "1.75rem",
         height: "100%",
         borderRadius: isMobile ? "16px" : "24px",
-        cursor: isLocked ? "not-allowed" : "pointer",
-        opacity: isLocked ? 0.65 : 1,
+        cursor: isInactive ? "not-allowed" : "pointer",
+        opacity: isInactive ? 0.65 : 1,
         transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
         backgroundColor: "rgba(var(--surface-rgb), 0.5)",
         backdropFilter: "blur(12px)",
@@ -233,7 +237,7 @@ function WorkspaceCard({ item, plan, isMobile }) {
         overflow: "hidden",
       }}
       onMouseEnter={e => {
-        if (!isLocked) {
+        if (!isInactive) {
           e.currentTarget.style.transform = "translateY(-4px)";
           e.currentTarget.style.boxShadow = "0 20px 25px -5px rgba(0,0,0,0.05), 0 10px 10px -5px rgba(0,0,0,0.02)";
           const arrow = e.currentTarget.querySelector('.arrow-box');
@@ -259,9 +263,9 @@ function WorkspaceCard({ item, plan, isMobile }) {
 
         {/* Text container */}
         <div>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.15rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.15rem", flexWrap: "wrap" }}>
             <h4 style={{ fontSize: isMobile ? "0.9rem" : "1.1rem", margin: 0, color: "var(--text-main)", fontWeight: 700 }}>{item.title}</h4>
-            {item.pro && <ProBadge />}
+            {item.disabled ? <ComingSoonBadge /> : (item.pro && <ProBadge />)}
           </div>
           <p style={{ fontSize: isMobile ? "0.7rem" : "0.85rem", margin: 0, color: "var(--text-muted)", lineHeight: 1.4 }}>{item.desc}</p>
         </div>
@@ -317,7 +321,7 @@ function WorkspaceCard({ item, plan, isMobile }) {
     </div>
   );
 
-  if (isLocked) return inner;
+  if (isInactive) return inner;
   return <Link href={item.href} style={{ display: "block", textDecoration: "none" }}>{inner}</Link>;
 }
 

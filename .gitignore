@@ -52,3 +52,7 @@ serviceAccountKey.json
 *.sql
 *.log
 .wrangler/
+
+# android specific
+*.keystore
+google-services.json

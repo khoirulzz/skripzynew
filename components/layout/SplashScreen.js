@@ -31,23 +31,13 @@ export default function SplashScreen() {
 
   return (
     <div
-      className={`fixed inset-0 z-[9999] flex items-center justify-center bg-black transition-opacity duration-500 ${
+      className={`fixed inset-0 z-[9999] flex items-center justify-center bg-white transition-opacity duration-500 ${
         fadeOut ? "opacity-0" : "opacity-100"
       }`}
     >
       <div className="relative flex items-center justify-center">
-        {/* Efek Ripple (Gelombang) */}
-        <div 
-          className="absolute inset-0 rounded-full animate-ping bg-blue-500/20" 
-          style={{ animationDuration: '2s' }}
-        ></div>
-        <div 
-          className="absolute inset-[-20%] rounded-full animate-ping bg-blue-400/10" 
-          style={{ animationDuration: '2.5s', animationDelay: '0.2s' }}
-        ></div>
-        
-        {/* Logo Utama yang memantul/berdetak */}
-        <div className="relative z-10 w-32 h-32 md:w-40 md:h-40 animate-pulse">
+        {/* Logo Utama */}
+        <div className="relative z-10 w-32 h-32 md:w-40 md:h-40">
           <Image
             src="/logo-skripzy.png"
             alt="Skripzy Logo"

@@ -1,7 +1,10 @@
 {
   "appId": "id.skripzy.app",
-  "appName": "skripzy",
+  "appName": "Skripzy",
   "webDir": "apps/app-main/out",
+  "server": {
+    "allowNavigation": ["forms.skripzy.id"]
+  },
   "plugins": {
     "SplashScreen": {
       "launchShowDuration": 500,

@@ -3,6 +3,8 @@ import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { AuthProvider } from "@/components/providers/AuthProvider";
 import SplashScreen from "@/components/layout/SplashScreen";
 import OTAUpdater from "@/components/providers/OTAUpdater";
+import PushNotificationListener from "@/components/providers/PushNotificationListener";
+import NativeBridge from "@/components/providers/NativeBridge";
 
 export const viewport = {
   width: "device-width",
@@ -51,6 +53,8 @@ export default function RootLayout({ children }) {
       <body suppressHydrationWarning>
         <ThemeProvider>
           <AuthProvider>
+            <PushNotificationListener />
+            <NativeBridge />
             <OTAUpdater />
             <SplashScreen />
             {children}

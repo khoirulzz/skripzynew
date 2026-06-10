@@ -1,13 +1,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { AuthGuard } from "@/components/auth/AuthGuard";
+import PullToRefresh from "react-simple-pull-to-refresh";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 
 export default function DashboardLayout({ children }) {
   const pathname = usePathname();
+  const router = useRouter();
   const isEditorPage = pathname?.includes("/skripsi/edit") || pathname?.includes("/jurnal/edit");
 
   // Desktop: controls sidebar collapse (icon-only vs full)
@@ -34,6 +36,12 @@ export default function DashboardLayout({ children }) {
 
   // Close mobile drawer on route-like navigation
   const closeMobile = () => setIsMobileOpen(false);
+
+  const handleRefresh = async () => {
+    router.refresh();
+    // Wait a bit to show the spinner
+    await new Promise(resolve => setTimeout(resolve, 800));
+  };
 
   return (
     <AuthGuard requireAuth={true}>
@@ -131,9 +139,11 @@ export default function DashboardLayout({ children }) {
             }}
           >
             {/* Content wrapper */}
-            <div style={{ position: "relative", zIndex: 1 }}>
-              {children}
-            </div>
+            <PullToRefresh onRefresh={handleRefresh} pullingContent="" resistance={2.5}>
+              <div style={{ position: "relative", zIndex: 1, minHeight: "100%" }}>
+                {children}
+              </div>
+            </PullToRefresh>
           </div>
         </main>
 

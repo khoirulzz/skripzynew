@@ -40,10 +40,10 @@ jobs:
 
       - name: Build APK
         working-directory: ./android
-        run: ./gradlew assembleRelease
+        run: ./gradlew assembleDebug
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: skripzy-app-release
-          path: android/app/build/outputs/apk/release/app-release-unsigned.apk
+          name: skripzy-app-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk

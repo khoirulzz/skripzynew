@@ -1,6 +1,8 @@
 import "./globals.css";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { AuthProvider } from "@/components/providers/AuthProvider";
+import SplashScreen from "@/components/layout/SplashScreen";
+import OTAUpdater from "@/components/providers/OTAUpdater";
 
 export const viewport = {
   width: "device-width",
@@ -49,6 +51,8 @@ export default function RootLayout({ children }) {
       <body suppressHydrationWarning>
         <ThemeProvider>
           <AuthProvider>
+            <OTAUpdater />
+            <SplashScreen />
             {children}
           </AuthProvider>
         </ThemeProvider>

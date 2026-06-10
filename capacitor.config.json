@@ -1,0 +1,18 @@
+{
+  "appId": "id.skripzy.app",
+  "appName": "skripzy",
+  "webDir": "apps/app-main/out",
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 500,
+      "launchAutoHide": true,
+      "backgroundColor": "#000000",
+      "showSpinner": false,
+      "splashFullScreen": true,
+      "splashImmersive": true
+    },
+    "CapacitorUpdater": {
+      "autoUpdate": false
+    }
+  }
+}

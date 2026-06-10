@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">skripzy</string>
+    <string name="title_activity_main">skripzy</string>
+    <string name="package_name">id.skripzy.app</string>
+    <string name="custom_url_scheme">id.skripzy.app</string>
+</resources>

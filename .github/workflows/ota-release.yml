@@ -1,0 +1,54 @@
+name: OTA Release
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  ota:
+    name: Build & Publish OTA
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build Next.js App
+        run: npm run build:app
+
+      - name: Generate update.zip
+        working-directory: ./apps/app-main/out
+        run: zip -r ../../../update.zip .
+
+      - name: Generate version.json
+        run: |
+          VERSION=$(date +'%Y%m%d%H%M%S')
+          echo "{\"version\": \"$VERSION\", \"url\": \"https://github.com/${{ github.repository }}/releases/download/ota-latest/update.zip\"}" > version.json
+
+      - name: Commit version.json
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add version.json
+          git commit -m "chore(ota): update version.json [skip ci]" || echo "No changes to commit"
+          git push
+
+      - name: Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ota-latest
+          name: Latest OTA Update
+          files: update.zip
+          make_latest: true

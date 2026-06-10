@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { createUserWithEmailAndPassword, signInWithPopup } from "firebase/auth";
+import { createUserWithEmailAndPassword, signInWithPopup, signInWithCredential, GoogleAuthProvider } from "firebase/auth";
+import { FirebaseAuthentication } from "@capacitor-firebase/authentication";
 import { d1Request } from "@/lib/d1Client";
 import { auth, googleProvider } from "@/lib/firebase";
 import { AuthGuard } from "@/components/auth/AuthGuard";
@@ -74,8 +75,17 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      const result = await signInWithPopup(auth, googleProvider);
-      const user = result.user;
+      let user;
+
+      if (typeof window !== "undefined" && window.Capacitor && window.Capacitor.isNativePlatform()) {
+        const result = await FirebaseAuthentication.signInWithGoogle();
+        const credential = GoogleAuthProvider.credential(result.credential?.idToken);
+        const userCredential = await signInWithCredential(auth, credential);
+        user = userCredential.user;
+      } else {
+        const result = await signInWithPopup(auth, googleProvider);
+        user = result.user;
+      }
 
       const userResponse = await d1Request("users", { id: user.uid }).catch(() => null);
 

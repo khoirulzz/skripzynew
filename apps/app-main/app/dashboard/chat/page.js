@@ -9,6 +9,7 @@ import { GeminiLiveClient, VOICE_OPTIONS } from "@/lib/geminiLiveClient";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { useBillingCatalog } from "@/lib/useBillingCatalog";
+import { VoiceRecorder } from 'capacitor-voice-recorder';
 
 // ── Constants ────────────────────────────────────────────────
 const CREDIT_PER_MSG = 1;
@@ -382,6 +383,26 @@ export default function ChatDosenAIPage() {
   const startNativeMicrophone = async (liveClient) => {
     try {
       if (!callActiveRef.current) return;
+
+      // Request permission natively if in Capacitor
+      if (typeof window !== "undefined" && window.Capacitor) {
+        try {
+          const canRecord = await VoiceRecorder.canDeviceVoiceRecord();
+          if (canRecord.value) {
+            const perm = await VoiceRecorder.hasAudioRecordingPermission();
+            if (!perm.value) {
+              const req = await VoiceRecorder.requestAudioRecordingPermission();
+              if (!req.value) {
+                alert("Izin mikrofon ditolak oleh perangkat.");
+                throw new Error("Microphone permission denied");
+              }
+            }
+          }
+        } catch (err) {
+          console.warn("VoiceRecorder check failed:", err);
+        }
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
       
       if (!callActiveRef.current) {

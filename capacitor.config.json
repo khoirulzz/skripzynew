@@ -9,10 +9,11 @@
     "SplashScreen": {
       "launchShowDuration": 500,
       "launchAutoHide": true,
-      "backgroundColor": "#000000",
+      "backgroundColor": "#FFFFFF",
       "showSpinner": false,
-      "splashFullScreen": true,
-      "splashImmersive": true
+      "splashFullScreen": false,
+      "splashImmersive": false,
+      "androidScaleType": "FIT_CENTER"
     },
     "CapacitorUpdater": {
       "autoUpdate": false

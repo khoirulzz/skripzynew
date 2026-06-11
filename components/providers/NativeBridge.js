@@ -12,7 +12,8 @@ export default function NativeBridge() {
         try {
           const { App } = await import('@capacitor/app');
 
-          let backButtonTapTimeout = null;
+          // Cleanup any existing listener just to be safe
+          await App.removeAllListeners('backButton');
 
           App.addListener('backButton', ({ canGoBack }) => {
             // Check jika sedang di dalam workspace yang belum disimpan
@@ -31,7 +32,7 @@ export default function NativeBridge() {
               router.back();
             } else {
               // Jika ini adalah halaman awal (root), minta double tap untuk keluar
-              if (backButtonTapTimeout) {
+              if (window.backButtonTapTimeout) {
                 App.exitApp();
               } else {
                 // Buat elemen Toast sederhana
@@ -50,8 +51,8 @@ export default function NativeBridge() {
                 toast.style.transition = "opacity 0.3s ease";
                 document.body.appendChild(toast);
 
-                backButtonTapTimeout = setTimeout(() => {
-                  backButtonTapTimeout = null;
+                window.backButtonTapTimeout = setTimeout(() => {
+                  window.backButtonTapTimeout = null;
                   toast.style.opacity = "0";
                   setTimeout(() => {
                     if (document.body.contains(toast)) {
@@ -62,6 +63,9 @@ export default function NativeBridge() {
               }
             }
           });
+          
+          // Simpan referensi ke global window agar bisa dibersihkan
+          window.skripzyBackButtonListener = true;
         } catch (error) {
           console.error("NativeBridge init failed:", error);
         }
@@ -69,6 +73,15 @@ export default function NativeBridge() {
     };
 
     initBridge();
+
+    return () => {
+      // Cleanup listener if component unmounts
+      if (typeof window !== 'undefined' && window.Capacitor && window.Capacitor.isNativePlatform()) {
+        import('@capacitor/app').then(({ App }) => {
+          App.removeAllListeners('backButton').catch(e => console.error(e));
+        });
+      }
+    };
   }, [router]);
 
   return null;

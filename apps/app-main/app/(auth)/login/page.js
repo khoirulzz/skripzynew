@@ -51,7 +51,19 @@ export default function LoginPage() {
 
       if (typeof window !== "undefined" && window.Capacitor && window.Capacitor.isNativePlatform()) {
         const result = await FirebaseAuthentication.signInWithGoogle();
-        const credential = GoogleAuthProvider.credential(result.credential?.idToken);
+        let idToken = result.credential?.idToken;
+        
+        if (!idToken) {
+          // Fallback if credential is not returned directly
+          const tokenResult = await FirebaseAuthentication.getIdToken();
+          idToken = tokenResult?.token;
+        }
+
+        if (!idToken) {
+          throw new Error("Sesi Google berhasil di native, namun token kredensial (idToken) tidak ditemukan untuk sinkronisasi web.");
+        }
+
+        const credential = GoogleAuthProvider.credential(idToken);
         const userCredential = await signInWithCredential(auth, credential);
         user = userCredential.user;
       } else {

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import DefaultSpinner from "@/components/ui/DefaultSpinner";
 
 export default function SplashScreen() {
   const [show, setShow] = useState(true);
@@ -35,10 +34,8 @@ export default function SplashScreen() {
         fadeOut ? "opacity-0" : "opacity-100"
       }`}
     >
-      <div className="relative flex items-center justify-center">
-        <div className="relative z-10 flex items-center justify-center">
-          <DefaultSpinner size="large" />
-        </div>
+      <div className="relative flex items-center justify-center w-full h-full">
+        {/* Kosong sesuai permintaan agar tidak ada double loader */}
       </div>
     </div>
   );

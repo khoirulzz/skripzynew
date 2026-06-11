@@ -9,6 +9,7 @@ import { AuthGuard } from "@/components/auth/AuthGuard";
 import { PremiumIcon } from "@/components/ui/PremiumIcon";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useHaptics } from "@/hooks/useHaptics";
 
 const loginBenefits = [
   "Lanjutkan draf skripsi dari terakhir kamu berhenti.",
@@ -22,9 +23,11 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const { vibrateLight, vibrateError, vibrateSuccess } = useHaptics();
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    vibrateLight();
     setError("");
     setLoading(true);
 
@@ -33,9 +36,11 @@ export default function LoginPage() {
       const userResponse = await d1Request("users", { id: userCredential.user.uid }).catch(() => null);
       const role = userResponse?.data?.role || "user";
 
+      vibrateSuccess();
       router.push(role === "admin" ? "/admin" : "/dashboard");
     } catch (err) {
       console.error(err);
+      vibrateError();
       setError("Email atau password belum cocok. Coba cek lagi pelan-pelan.");
     } finally {
       setLoading(false);
@@ -43,6 +48,7 @@ export default function LoginPage() {
   };
 
   const handleGoogleLogin = async () => {
+    vibrateLight();
     setError("");
     setLoading(true);
 
@@ -87,9 +93,11 @@ export default function LoginPage() {
         });
       }
 
+      vibrateSuccess();
       router.push("/dashboard");
     } catch (err) {
       console.error(err);
+      vibrateError();
       if (err.code !== "auth/cancelled-popup-request" && err.message !== "User cancelled the login flow.") {
         setError(`Gagal masuk dengan Google: ${err.message || err.code || "Terjadi kesalahan sistem."}`);
       }

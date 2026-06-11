@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { useHaptics } from "@/hooks/useHaptics";
 import ReactMarkdown from "react-markdown";
 import { callGemini } from "@/lib/callWorker";
 import { deductCredits } from "@/lib/credits";
@@ -111,20 +112,17 @@ export default function SimulasiSidangPage() {
   const sessionCost = toolMap["simulasi-sidang"]?.creditCost ?? 5;
   const initialSession = useMemo(() => readPersistedSidangState(), []);
 
-  // Setup State
   const [isSessionActive, setIsSessionActive] = useState(initialSession.isSessionActive);
   const [skripsiTitle, setSkripsiTitle] = useState(initialSession.skripsiTitle);
   const [dosenProfile, setDosenProfile] = useState(initialSession.dosenProfile);
   const [sidangMode, setSidangMode] = useState(initialSession.sidangMode);
 
-  // Document State
   const [extractionStatus, setExtractionStatus] = useState("");
   const [setupLoading, setSetupLoading] = useState(false);
   const [setupError, setSetupError] = useState("");
   const [sessionInsight, setSessionInsight] = useState(initialSession.sessionInsight);
   const [docName, setDocName] = useState(initialSession.docName);
 
-  // Session Limits & Tracking
   const [questionCount, setQuestionCount] = useState(initialSession.questionCount);
   const [sanggahanCount, setSanggahanCount] = useState(initialSession.sanggahanCount);
   const [maxQuestions, setMaxQuestions] = useState(initialSession.maxQuestions);
@@ -132,12 +130,10 @@ export default function SimulasiSidangPage() {
   const [isFinished, setIsFinished] = useState(initialSession.isFinished);
   const [showConfirmEnd, setShowConfirmEnd] = useState(false);
 
-  // Chat State
   const [messages, setMessages] = useState(initialSession.messages);
   const [currentInput, setCurrentInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
 
-  // Speech State
   const [isRecording, setIsRecording] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(true);
   const [availableVoices, setAvailableVoices] = useState([]);
@@ -153,6 +149,8 @@ export default function SimulasiSidangPage() {
   const documentUploadRef = useRef(false);
   const startSessionRef = useRef(false);
   const sendMessageRef = useRef(false);
+  
+  const { vibrateLight, vibrateMedium, vibrateSuccess, vibrateError } = useHaptics();
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -176,7 +174,6 @@ export default function SimulasiSidangPage() {
     isRecordingRef.current = isRecording;
   }, [isRecording]);
 
-  // Init Speech Recognition
   useEffect(() => {
     if (typeof window !== "undefined") {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -186,20 +183,19 @@ export default function SimulasiSidangPage() {
         recognitionRef.current.interimResults = true;
         recognitionRef.current.lang = ID_SPEECH_LANG;
         recognitionRef.current.onresult = (event) => {
-          let finalText = "";
           let interimText = "";
-
-          for (let i = event.resultIndex; i < event.results.length; i += 1) {
-            const transcript = event.results[i][0]?.transcript || "";
-            if (event.results[i].isFinal) finalText += ` ${transcript}`;
-            else interimText += ` ${transcript}`;
+          let finalTranscript = recordingBaseRef.current;
+          
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            const transcript = event.results[i][0].transcript;
+            if (event.results[i].isFinal) {
+              finalTranscript = combineTranscript(finalTranscript, transcript);
+            } else {
+              interimText = combineTranscript(interimText, transcript);
+            }
           }
-
-          if (finalText.trim()) {
-            liveTranscriptRef.current = combineTranscript(liveTranscriptRef.current, finalText);
-          }
-
-          setCurrentInput(combineTranscript(recordingBaseRef.current, liveTranscriptRef.current, interimText));
+          liveTranscriptRef.current = interimText;
+          setCurrentInput(combineTranscript(finalTranscript, interimText));
         };
         recognitionRef.current.onerror = (event) => {
           if (event.error === "not-allowed" || event.error === "service-not-allowed") {
@@ -254,14 +250,12 @@ export default function SimulasiSidangPage() {
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, chatLoading]);
 
-  // 2. TTS DENGAN SPEECH SYNTHESIS (NATIVE CAPACITOR & BROWSER OPTIMIZED)
   const speak = async (text) => {
     if (typeof window === "undefined") return;
 
     const ttsProfile = PROFILE_TTS[dosenProfile] || PROFILE_TTS.kritis;
     const cleanStr = sanitizeSpeechText(text);
 
-    // Native Capacitor TTS
     if (window.Capacitor && window.Capacitor.isNativePlatform()) {
       try {
         await TextToSpeech.stop();
@@ -283,7 +277,6 @@ export default function SimulasiSidangPage() {
 
     window.speechSynthesis.cancel();
     
-    // Matikan audio puter jika masih ada yang tersisa
     if (window.currentAudio) {
       window.currentAudio.pause();
       window.currentAudio.currentTime = 0;
@@ -306,7 +299,6 @@ export default function SimulasiSidangPage() {
     window.speechSynthesis.speak(utterance);
   };
 
-  // 3. DOCUMENT EXTRACTION (PDF & WORD) CLIENT-SIDE
   const extractPDF = async (file) => {
     const pdfjsLib = await import("pdfjs-dist");
     pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.mjs`;
@@ -314,7 +306,7 @@ export default function SimulasiSidangPage() {
     const arrayBuffer = await file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
     let text = "";
-    const maxPages = Math.min(pdf.numPages, 100); // Batasi 100 halaman untuk hemat memory
+    const maxPages = Math.min(pdf.numPages, 100); 
     for (let i = 1; i <= maxPages; i++) {
       const page = await pdf.getPage(i);
       const content = await page.getTextContent();
@@ -340,14 +332,14 @@ export default function SimulasiSidangPage() {
     const cleaned = cleanText(rawText);
 
     const parts = cleaned.split(/(?=BAB\s+[IVXLC]+|CHAPTER\s+[IVXLC]+)/i);
-    if (parts.length < 2) return cleaned.split(" ").slice(0, 4000).join(" "); // Fallback
+    if (parts.length < 2) return cleaned.split(" ").slice(0, 4000).join(" ");
 
     let finalContext = "";
     parts.forEach((part, index) => {
       if (index === 0) {
         finalContext += "\n[ABSTRAK]\n" + part.slice(0, 3000);
       } else if (index === 1 || index === parts.length - 1) {
-        finalContext += `\n[BAB]\n` + part.slice(0, 4000); // Ambil full Bab 1 & Kesimpulan (limit 4k char)
+        finalContext += `\n[BAB]\n` + part.slice(0, 4000); 
       } else {
         const paragraphs = part.split(/\n+/).map(p => p.trim()).filter(p => p.length > 80);
         const keywords = ["tujuan", "masalah", "metode", "penelitian", "hasil", "analisis", "kesimpulan", "kerangka"];
@@ -364,11 +356,7 @@ export default function SimulasiSidangPage() {
     return finalContext;
   };
 
-  const handleDocumentUpload = async (e) => {
-    if (documentUploadRef.current) return;
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const handleDocUpload = async (file) => {
     if (file.type !== "application/pdf" && !file.name.endsWith(".docx")) {
       alert("Hanya file PDF atau Word (.docx) yang didukung.");
       return;
@@ -400,7 +388,7 @@ ${contextText.slice(0, 20000)}
       const aiResponse = await callGemini({
         prompt,
         model: SIDANG_MODEL,
-        temperature: 0.2, // Low temp for extraction JSON
+        temperature: 0.2, 
       });
 
       const jsonStr = aiResponse.replace(/```json/gi, "").replace(/```/g, "").trim();
@@ -408,10 +396,12 @@ ${contextText.slice(0, 20000)}
 
       setSessionInsight(insightObj);
       setExtractionStatus("Dokumen siap!");
+      vibrateSuccess();
       setTimeout(() => setExtractionStatus(""), 2000);
 
     } catch (err) {
       console.error(err);
+      vibrateError();
       setSetupError("Gagal memproses dokumen. Pastikan dokumen bisa dibaca.");
       setDocName("");
       setExtractionStatus("");
@@ -435,7 +425,6 @@ ${contextText.slice(0, 20000)}
     try {
       await deductCredits(user.uid, sessionCost);
 
-      // 4. ATURAN SIDANG (DOSEN & TIPE)
       let mq = 10;
       let ms = 5;
 
@@ -508,7 +497,6 @@ Gunakan insight ini untuk bertanya spesifik.`;
       try {
         await TextToSpeech.stop();
         
-        // Native Permission Check
         const canRecord = await VoiceRecorder.canDeviceVoiceRecord();
         if (canRecord.value) {
           const perm = await VoiceRecorder.hasAudioRecordingPermission();
@@ -558,6 +546,7 @@ Gunakan insight ini untuk bertanya spesifik.`;
   const handleSendMessage = async (e) => {
     e?.preventDefault();
     if (sendMessageRef.current) return;
+    vibrateLight();
     if (!currentInput.trim() || chatLoading || isFinished) return;
 
     const userMessage = currentInput.trim();
@@ -611,7 +600,6 @@ Gunakan insight ini untuk bertanya spesifik.`;
         responseObj = JSON.parse(aiResponseJSON.replace(/```json/gi, "").replace(/```/g, "").trim());
       } catch (e) { responseObj.message = aiResponseJSON; }
 
-      // Update turn counts dynamically
       if (responseObj.type === "pertanyaan") {
         setQuestionCount(prev => prev + 1);
       } else if (responseObj.type === "sanggahan") {
@@ -623,8 +611,13 @@ Gunakan insight ini untuk bertanya spesifik.`;
       setMessages(prev => [...prev, { role: "model", text: responseObj.message }]);
       speak(responseObj.message);
 
-    } catch (err) {
-      alert("Error: " + err.message);
+    } catch (error) {
+      console.error(error);
+      vibrateError();
+      const emsg = error.message.includes("429") 
+        ? "Batas penggunaan API tercapai. Mohon tunggu beberapa saat."
+        : "Gagal memproses respons. Silakan coba lagi.";
+      setMessages(prev => [...prev, { role: "system", content: emsg, isError: true }]);
     } finally {
       setChatLoading(false);
       sendMessageRef.current = false;
@@ -690,11 +683,12 @@ Sajikan dengan gaya bahasa akademis namun membangun (konstruktif).`;
     e.preventDefault(); e.stopPropagation();
     if (setupLoading) return;
     const file = e.dataTransfer.files?.[0];
-    if (file) {
-      // Simulate an input change event
-      const fakeEvent = { target: { files: [file] } };
-      handleDocumentUpload(fakeEvent);
-    }
+    if (file) handleDocUpload(file);
+  };
+
+  const toggleRecording = () => {
+    vibrateLight();
+    if (isRecording) stopListening(); else startListening();
   };
 
   const activeProfile = DOSEN_PROFILES.find(p => p.id === dosenProfile) || DOSEN_PROFILES[1];
@@ -707,7 +701,6 @@ Sajikan dengan gaya bahasa akademis namun membangun (konstruktif).`;
   return (
     <div className="animate-fade-in" style={{ maxWidth: isSessionActive ? "1120px" : "920px", margin: "0 auto", paddingBottom: isMobile ? "2rem" : 0 }}>
       <FeatureOnboardingModal featureId="simulasi-sidang" />
-      {/* Header */}
       <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: isMobile ? "flex-start" : "center", gap: isMobile ? "0.75rem" : "1rem", marginBottom: isMobile ? "1.5rem" : "2rem" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
           {isSessionActive ? (
@@ -741,7 +734,6 @@ Sajikan dengan gaya bahasa akademis namun membangun (konstruktif).`;
         </div>
       )}
 
-      {/* SETUP PHASE */}
       {!isSessionActive && (
         <div className={isMobile ? "native-card" : "glass-panel"} style={{ margin: isMobile ? "0 -0.75rem" : 0, padding: isMobile ? undefined : "1.5rem" }}>
           <form onSubmit={handleStartSession}>
@@ -801,7 +793,6 @@ Sajikan dengan gaya bahasa akademis namun membangun (konstruktif).`;
               />
             </div>
 
-            {/* Document Upload Drag & Drop */}
             <div className="form-group">
               <label className="form-label">Upload Dokumen (Wajib PDF / Word)</label>
               <label
@@ -827,10 +818,9 @@ Sajikan dengan gaya bahasa akademis namun membangun (konstruktif).`;
                     <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", opacity: 0.7 }}>Atau klik untuk memilih file (.pdf, .docx)</span>
                   </>
                 )}
-                <input type="file" accept=".pdf,.docx" style={{ display: "none" }} onChange={handleDocumentUpload} disabled={setupLoading} />
+                <input type="file" accept=".pdf,.docx" style={{ display: "none" }} onChange={(e) => handleDocUpload(e.target.files[0])} disabled={setupLoading} />
               </label>
 
-              {/* Dynamic Extraction Label */}
               {extractionStatus && (
                 <div style={{ marginTop: "0.5rem", padding: "0.5rem", textAlign: "center", backgroundColor: "rgba(79, 70, 229, 0.1)", borderRadius: "4px", fontSize: "0.75rem", color: "var(--primary)", fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: "0.4rem" }}>
                   <LoadingSpinner size={12} className="text-primary" />
@@ -848,10 +838,8 @@ Sajikan dengan gaya bahasa akademis namun membangun (konstruktif).`;
         </div>
       )}
 
-      {/* CHAT/SESSION PHASE */}
       {isSessionActive && (
         <div className={isMobile ? "native-card" : "glass-panel"} style={{ display: "flex", flexDirection: "column", height: isMobile ? "calc(100vh - 165px)" : "72vh", minHeight: isMobile ? "560px" : "640px", margin: isMobile ? "0 -0.75rem" : 0, overflow: "hidden" }}>
-
           <div style={{ padding: isMobile ? "0.75rem 1rem" : "1rem 1.5rem", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "rgba(236,72,153,0.02)" }}>
             <div>
               <div style={{ fontSize: "0.65rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 700 }}>
@@ -942,7 +930,7 @@ Sajikan dengan gaya bahasa akademis namun membangun (konstruktif).`;
             <div style={{ padding: isMobile ? "0.75rem" : "1rem", borderTop: "1px solid var(--border)", display: "grid", gridTemplateColumns: "auto 1fr auto", gap: "0.65rem", alignItems: "end", backgroundColor: "rgba(var(--surface-rgb), 0.86)" }}>
               <button
                 type="button"
-                onClick={() => { if (isRecording) stopListening(); else startListening(); }}
+                onClick={toggleRecording}
                 disabled={!speechSupported || chatLoading}
                 style={{ width: isMobile ? "42px" : "50px", height: isMobile ? "42px" : "50px", borderRadius: "50%", border: isRecording ? "1px solid rgba(239,68,68,0.35)" : "1px solid var(--border)", cursor: speechSupported && !chatLoading ? "pointer" : "not-allowed", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: isRecording ? "rgba(239,68,68,0.12)" : "var(--surface-hover)", color: isRecording ? "var(--danger)" : "var(--text-muted)", transition: "all 0.2s", boxShadow: isRecording ? "0 0 0 6px rgba(239,68,68,0.08)" : "none" }}
                 title={speechSupported ? "Gunakan mikrofon" : "Speech recognition tidak didukung browser ini"}

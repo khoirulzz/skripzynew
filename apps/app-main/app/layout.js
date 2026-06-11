@@ -5,6 +5,7 @@ import SplashScreen from "@/components/layout/SplashScreen";
 import OTAUpdater from "@/components/providers/OTAUpdater";
 import PushNotificationListener from "@/components/providers/PushNotificationListener";
 import NativeBridge from "@/components/providers/NativeBridge";
+import NetworkObserver from "@/components/providers/NetworkObserver";
 
 export const viewport = {
   width: "device-width",
@@ -55,6 +56,7 @@ export default function RootLayout({ children }) {
           <AuthProvider>
             <PushNotificationListener />
             <NativeBridge />
+            <NetworkObserver />
             <OTAUpdater />
             <SplashScreen />
             {children}

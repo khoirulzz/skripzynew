@@ -17,7 +17,7 @@ export default function OTAUpdater() {
 
           // 1. Cek versi terbaru dari GitHub
           // Pastikan file version.json ter-cache-busting
-          const response = await fetch(`https://raw.githubusercontent.com/hulumzz/Skripzyv2/main/version.json?t=${new Date().getTime()}`);
+          const response = await fetch(`https://raw.githubusercontent.com/khoirulzz/skripzynew/main/version.json?t=${new Date().getTime()}`);
           
           if (!response.ok) return;
           

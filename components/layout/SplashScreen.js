@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Image from "next/image";
+import DefaultSpinner from "@/components/ui/DefaultSpinner";
 
 export default function SplashScreen() {
   const [show, setShow] = useState(true);
@@ -36,16 +36,8 @@ export default function SplashScreen() {
       }`}
     >
       <div className="relative flex items-center justify-center">
-        {/* Logo Utama */}
         <div className="relative z-10 flex items-center justify-center">
-          <Image
-            src="/logo-skripzy.webp"
-            alt="Skripzy Logo"
-            width={120}
-            height={120}
-            className="rounded-2xl shadow-lg"
-            priority
-          />
+          <DefaultSpinner size="large" />
         </div>
       </div>
     </div>

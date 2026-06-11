@@ -26,7 +26,7 @@ function getSourceLabel(source = "") {
 
 function PaperCard({ paper, onSummarize, hasSummary, isSummarizing, summaryCost, summaryText, isMobile }) {
   return (
-    <div className={isMobile ? "native-card" : "glass-panel p-6"} style={{ display: "flex", flexDirection: "column", gap: "1rem", margin: isMobile ? "0 -0.75rem" : 0 }}>
+    <div className="glass-panel" style={{ padding: isMobile ? "1.25rem" : "1.5rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
       <div>
         <h3 style={{ fontSize: isMobile ? "1rem" : "1.1rem", margin: "0 0 0.5rem 0", fontWeight: 700 }}>
           <a href={paper.displayUrl || paper.url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--primary)", textDecoration: "none" }}>
@@ -90,7 +90,7 @@ function PaperSection({ title, description, papers, onSummarize, summaries, load
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: isMobile ? "0.75rem" : "1rem" }}>
-      <div style={{ padding: "0.75rem 1rem", backgroundColor: "rgba(99, 102, 241, 0.1)", borderRadius: isMobile ? 0 : "8px", fontSize: "0.8rem", color: "var(--primary)", margin: isMobile ? "0 -0.75rem" : 0 }}>
+      <div style={{ padding: "0.75rem 1rem", backgroundColor: "rgba(99, 102, 241, 0.1)", borderRadius: "8px", fontSize: "0.8rem", color: "var(--primary)" }}>
         {title} — {description}
       </div>
 
@@ -242,7 +242,7 @@ export default function ReferensiCerdasPage() {
       </div>
 
       {/* Box Pencarian */}
-      <div className={isMobile ? "native-card" : "glass-panel p-6 mb-6"} style={{ margin: isMobile ? "0 -0.75rem 1.5rem" : "0 0 1.5rem 0" }}>
+      <div className="glass-panel" style={{ padding: isMobile ? "1.25rem" : "1.5rem", marginBottom: "1.5rem" }}>
         <form onSubmit={handleSearch} style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: "1rem", alignItems: isMobile ? "stretch" : "flex-end" }}>
           <div className="form-group" style={{ flex: "1 1 auto", margin: 0 }}>
             <label className="form-label">Kata Kunci Pencarian</label>

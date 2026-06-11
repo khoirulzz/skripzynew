@@ -244,7 +244,7 @@ export default function ParafrasePage() {
               value={input}
               onChange={e => setInput(e.target.value)}
               placeholder="Tempel atau ketik teks yang ingin Anda parafrase di sini..."
-              className="form-textarea"
+              className="form-input"
               style={{ minHeight: isMobile ? "40vh" : "200px", resize: "vertical", fontFamily: "'Outfit', sans-serif", lineHeight: 1.6, fontSize: isMobile ? "0.8rem" : "0.95rem", border: isMobile ? "none" : "1px solid var(--border)", padding: isMobile ? "0.5rem 0" : "0.75rem 1rem", backgroundColor: isMobile ? "transparent" : "var(--background)" }}
               maxLength={charLimit}
             />

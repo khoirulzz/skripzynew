@@ -56,3 +56,5 @@ serviceAccountKey.json
 # android specific
 *.keystore
 google-services.json
+
+statszy/

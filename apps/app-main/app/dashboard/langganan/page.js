@@ -726,14 +726,14 @@ export default function LanggananPage() {
           <PremiumIcon name="arrowLeft" size={20} />
         </Link>
         <div>
-          <h1 style={{ fontSize: "1.75rem", margin: 0, fontWeight: 900 }}>Billing Studio</h1>
-          <p style={{ margin: "0.35rem 0 0", fontSize: "0.92rem", color: "var(--text-muted)" }}>
+          <h1 style={{ fontSize: isMobile ? "1.25rem" : "1.75rem", margin: 0, fontWeight: 900 }}>Billing Studio</h1>
+          <p style={{ margin: "0.35rem 0 0", fontSize: isMobile ? "0.75rem" : "0.92rem", color: "var(--text-muted)" }}>
             Kelola paket langganan dan saldo kredit Anda dengan mudah dan aman.
           </p>
         </div>
       </div>
 
-      <div style={{ backgroundColor: "var(--surface)", borderTop: "1px solid var(--border)", borderBottom: "1px solid var(--border)", borderLeft: isMobile ? "none" : "1px solid var(--border)", borderRight: isMobile ? "none" : "1px solid var(--border)", borderRadius: isMobile ? 0 : 24, padding: isMobile ? "1.5rem 1rem" : "clamp(1.25rem, 5vw, 2rem)", boxShadow: isMobile ? "none" : "0 12px 32px rgba(0,0,0,0.03)", marginBottom: "2rem" }}>
+      <div style={{ backgroundColor: "var(--surface)", border: "1px solid var(--border)", borderRadius: 24, padding: isMobile ? "1.5rem 1rem" : "clamp(1.25rem, 5vw, 2rem)", boxShadow: "0 12px 32px rgba(0,0,0,0.03)", marginBottom: "2rem" }}>
         <StepperProgress currentStep={currentStep} steps={stepLabels} />
 
         {(successMsg || errorMsg) && (
@@ -773,7 +773,7 @@ export default function LanggananPage() {
               <>
                 <div style={{ marginBottom: "1.5rem", display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: "1rem" }}>
                   <div>
-                    <h2 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 900 }}>Pilih Plan Langganan</h2>
+                    <h2 style={{ margin: 0, fontSize: isMobile ? "1.05rem" : "1.2rem", fontWeight: 900 }}>Pilih Plan Langganan</h2>
                   </div>
                   <div style={{ 
                     display: "flex", 

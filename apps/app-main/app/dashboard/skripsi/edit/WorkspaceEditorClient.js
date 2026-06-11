@@ -2036,9 +2036,6 @@ export default function WorkspaceEditorPage() {
               flexWrap: "nowrap",
               ...(activeTab === "penulisan"
                 ? {
-                    borderBottomLeftRadius: 0,
-                    borderBottomRightRadius: 0,
-                    borderBottom: "none",
                     zIndex: 5,
                   }
                 : {}),
@@ -2114,7 +2111,6 @@ export default function WorkspaceEditorPage() {
                 flexDirection: "column",
                 minHeight: "72vh",
                 overflow: "hidden",
-                marginTop: isMobile ? "-0.5rem" : "-1rem",
               }}
             >
               <div
@@ -2126,8 +2122,6 @@ export default function WorkspaceEditorPage() {
                   flexDirection: "column",
                   overflow: "hidden",
                   margin: 0,
-                  borderTopLeftRadius: 0,
-                  borderTopRightRadius: 0,
                 }}
               >
                 <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>

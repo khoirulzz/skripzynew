@@ -37,12 +37,13 @@ export default function SplashScreen() {
     >
       <div className="relative flex items-center justify-center">
         {/* Logo Utama */}
-        <div className="relative z-10 w-32 h-32 md:w-40 md:h-40">
+        <div className="relative z-10 flex items-center justify-center">
           <Image
-            src="/logo-skripzy.png"
+            src="/logo-skripzy.webp"
             alt="Skripzy Logo"
-            fill
-            className="object-contain"
+            width={120}
+            height={120}
+            className="rounded-2xl shadow-lg"
             priority
           />
         </div>

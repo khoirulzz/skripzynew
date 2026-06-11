@@ -131,6 +131,7 @@ export default function DashboardLayout({ children }) {
             />
           )}
           <div
+            className="hide-scrollbar"
             style={{
               padding: isMobile ? "0.75rem 0.75rem calc(env(safe-area-inset-bottom, 0px) + 0.75rem) 0.75rem" : "1.5rem",
               overflowY: "auto",

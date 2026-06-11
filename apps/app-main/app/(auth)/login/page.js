@@ -78,8 +78,8 @@ export default function LoginPage() {
       router.push("/dashboard");
     } catch (err) {
       console.error(err);
-      if (err.code !== "auth/cancelled-popup-request") {
-        setError("Gagal masuk dengan Google. Silakan coba lagi.");
+      if (err.code !== "auth/cancelled-popup-request" && err.message !== "User cancelled the login flow.") {
+        setError(`Gagal masuk dengan Google: ${err.message || err.code || "Terjadi kesalahan sistem."}`);
       }
     } finally {
       setLoading(false);

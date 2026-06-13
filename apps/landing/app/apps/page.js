@@ -32,7 +32,7 @@ const platforms = [
     desc: "Versi desktop disiapkan untuk pengalaman menulis yang lebih fokus dan minim gangguan tab.",
     benefits: ["Mode kerja fokus", "Shortcut yang lebih lengkap", "Pengalaman menulis lebih lega"],
     cta: "Download EXE",
-    href: "/download/skripzyv2.exe",
+    href: "/download/Skripzy-Desktop.exe",
     disabled: false,
   },
   {
@@ -42,7 +42,7 @@ const platforms = [
     desc: "Akses Skripzy langsung dari HP Android kamu dengan aplikasi native yang lebih ringan.",
     benefits: ["Notifikasi real-time", "Hemat data", "Akses cepat satu tap"],
     cta: "Download APK",
-    href: "/download/skripzyv2.apk",
+    href: "/download/Skripzy-Mobile.apk",
     disabled: false,
   },
 ];

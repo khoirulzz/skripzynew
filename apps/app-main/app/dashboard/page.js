@@ -143,7 +143,7 @@ const QUICK_TOOLS = [
     badge: "PRO",
   },
   {
-    href: "/dashboard/tools/data-analysis",
+    href: "https://stats.skripzy.id",
     slug: "data-analysis",
     icon: "barChart3",
     iconColor: "#F59E0B",
@@ -152,8 +152,7 @@ const QUICK_TOOLS = [
     desc: "Olah data kuesioner, wawancara, dan observasi",
     credit: 0,
     pro: false,
-    badge: "COMING SOON",
-    disabled: true,
+    badge: "NEW",
   },
   {
     href: "/dashboard/tools/form-redirect",

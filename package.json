@@ -10,10 +10,12 @@
     "dev:landing": "npm run dev -w skripzy-landing -- -p 3000 --turbo",
     "dev:app": "npm run dev -w skripzy-dashboard -- -p 3001 --turbo",
     "dev:form": "npm run dev -w skripzy-form -- -p 3002",
+    "dev:stats": "npm run dev -w skripzy-stats -- -p 3003",
     "build": "next build",
     "build:landing": "npm run build -w skripzy-landing",
     "build:app": "npm run build -w skripzy-dashboard",
     "build:form": "npm run build -w skripzy-form",
+    "build:stats": "npm run build -w skripzy-stats",
     "start": "next start",
     "lint": "eslint"
   },

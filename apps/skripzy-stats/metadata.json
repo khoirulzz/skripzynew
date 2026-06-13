@@ -1,0 +1,6 @@
+{
+  "name": "StatsZy",
+  "description": "Modern statistical web app focused on academic research, with an SPSS-like experience that runs 100% in the browser.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

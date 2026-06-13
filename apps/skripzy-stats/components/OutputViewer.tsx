@@ -1,15 +1,21 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppStore } from '@/lib/store';
-import { Trash2, Sparkles, Loader2, Info, Copy, Check, FileText } from 'lucide-react';
+import { Trash2, Sparkles, Loader2, Info, Copy, Check, FileText, AlertTriangle } from 'lucide-react';
 import { interpretWithAI } from '@/lib/ai-assistant';
-import { exportToDocx } from '../../lib/docxExport';
+import { exportToDocx } from '../../../lib/docxExport';
+import { ResponsiveContainer, BarChart, Bar, ScatterChart, Scatter, ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip } from 'recharts';
 
 export function OutputViewer() {
   const { outputs, clearOutputs, addOutput } = useAppStore();
   const [loadingAiId, setLoadingAiId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const handleCopyTable = (output: any) => {
     let tsv = output.content.columns.join('\t') + '\n';
@@ -145,35 +151,91 @@ export function OutputViewer() {
             </div>
             
             {output.type === 'table' && (
-              <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-                <table className="min-w-full text-xs sm:text-sm font-sans border-collapse">
-                  <thead className="bg-slate-50">
-                    <tr>
-                      {output.content.columns.map((col: string) => (
-                        <th key={col} className="border-b border-slate-200 px-3 sm:px-4 py-2 sm:py-3 font-bold text-left text-slate-500 uppercase tracking-wider">
-                          {col}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {output.content.data.map((row: any, i: number) => (
-                      <tr key={i} className="hover:bg-slate-50/80 transition-colors">
-                        {output.content.columns.map((col: string) => {
-                          const val = row[col];
-                          // format numbers nicely
-                          const displayVal = typeof val === 'number' ? (Number.isInteger(val) ? val : val.toFixed(4)) : val;
-                          return (
-                            <td key={col} className="px-3 sm:px-4 py-2 sm:py-2.5 text-slate-700 whitespace-nowrap">
-                              {displayVal}
-                            </td>
-                          );
-                        })}
+              <>
+                {(output.missingCount || 0) > 0 && (
+                  <div className="mb-4 flex items-start gap-2.5 bg-amber-50 border border-amber-200 text-amber-800 p-3.5 rounded-xl text-xs sm:text-sm shadow-sm animate-in fade-in duration-250">
+                    <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold text-amber-900 block mb-0.5">Peringatan Data Kosong (Missing Values):</span>
+                      Ditemukan <span className="font-extrabold">{output.missingCount}</span> baris data kosong atau tidak valid yang telah diabaikan dalam analisis ini.
+                    </div>
+                  </div>
+                )}
+
+                <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+                  <table className="min-w-full text-xs sm:text-sm font-sans border-collapse">
+                    <thead className="bg-slate-50">
+                      <tr>
+                        {output.content.columns.map((col: string) => (
+                          <th key={col} className="border-b border-slate-200 px-3 sm:px-4 py-2 sm:py-3 font-bold text-left text-slate-500 uppercase tracking-wider">
+                            {col}
+                          </th>
+                        ))}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {output.content.data.map((row: any, i: number) => (
+                        <tr key={i} className="hover:bg-slate-50/80 transition-colors">
+                          {output.content.columns.map((col: string) => {
+                            const val = row[col];
+                            // format numbers nicely
+                            const displayVal = typeof val === 'number' ? (Number.isInteger(val) ? val : val.toFixed(4)) : val;
+                            return (
+                              <td key={col} className="px-3 sm:px-4 py-2 sm:py-2.5 text-slate-700 whitespace-nowrap">
+                                {displayVal}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {isMounted && output.chartType && output.chartData && (
+                  <div className="mt-6 p-4 sm:p-5 border border-slate-200 rounded-xl bg-slate-50/50">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 border-b border-slate-100 pb-3">
+                      <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full"></span>
+                        Visualisasi Grafik ({output.chartType === 'bar' ? 'Diagram Batang' : 'Diagram Sebar'})
+                      </h4>
+                      <div className="text-[11px] text-slate-500 font-medium">
+                        Sumbu X: <span className="font-semibold text-slate-700">{output.chartLabels?.x}</span> &nbsp;|&nbsp; Sumbu Y: <span className="font-semibold text-slate-700">{output.chartLabels?.y}</span>
+                      </div>
+                    </div>
+                    <div className="w-full h-64 sm:h-80">
+                      <ResponsiveContainer width="100%" height="100%">
+                        {output.chartType === 'bar' ? (
+                          <BarChart data={output.chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                            <XAxis dataKey="name" stroke="#64748b" fontSize={11} tickLine={false} />
+                            <YAxis stroke="#64748b" fontSize={11} tickLine={false} />
+                            <RechartsTooltip cursor={{ fill: 'rgba(226, 232, 240, 0.4)' }} contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '12px' }} />
+                            <Bar dataKey="value" fill="#6366f1" radius={[4, 4, 0, 0]} maxBarSize={50} />
+                          </BarChart>
+                        ) : output.chartType === 'regression' ? (
+                          <ComposedChart data={output.chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                            <XAxis type="number" dataKey="x" stroke="#64748b" fontSize={11} tickLine={false} domain={['auto', 'auto']} />
+                            <YAxis type="number" dataKey="y" stroke="#64748b" fontSize={11} tickLine={false} domain={['auto', 'auto']} />
+                            <RechartsTooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '12px' }} />
+                            <Scatter name="Data" data={output.chartData} fill="#6366f1" />
+                            <Line type="monotone" dataKey="lineY" data={output.chartData} name="Garis Regresi" stroke="#f43f5e" strokeWidth={2} dot={false} activeDot={false} />
+                          </ComposedChart>
+                        ) : (
+                          <ScatterChart margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                            <XAxis type="number" dataKey="x" stroke="#64748b" fontSize={11} tickLine={false} domain={['auto', 'auto']} />
+                            <YAxis type="number" dataKey="y" stroke="#64748b" fontSize={11} tickLine={false} domain={['auto', 'auto']} />
+                            <RechartsTooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '12px' }} />
+                            <Scatter name="Data" data={output.chartData} fill="#6366f1" />
+                          </ScatterChart>
+                        )}
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
             
             {output.type === 'text' && (

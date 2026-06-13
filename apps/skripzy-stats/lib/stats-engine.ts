@@ -1,15 +1,29 @@
 import * as ss from 'simple-statistics';
 import jStat from 'jstat';
 
-export function getNumericColumn(dataset: any[], colName: string): number[] {
-  return dataset
-    .map(row => Number(row[colName]))
+export function getNumericColumn(dataset: any[], colName: string) {
+  let missingCount = 0;
+  const data = dataset
+    .map(row => {
+      const val = Number(row[colName]);
+      if (isNaN(val) || row[colName] === '' || row[colName] == null) {
+        missingCount++;
+        return NaN;
+      }
+      return val;
+    })
     .filter(val => !isNaN(val));
+    
+  return { data, missingCount };
 }
 
 export function runDescriptives(dataset: any[], variables: string[]) {
+  let totalMissing = 0;
+  
   const results = variables.map(v => {
-    const data = getNumericColumn(dataset, v);
+    const { data, missingCount } = getNumericColumn(dataset, v);
+    totalMissing += missingCount;
+    
     if (data.length === 0) return { Variabel: v, N: 0, Rata_rata: null, SD: null, Min: null, Max: null };
     
     return {
@@ -28,6 +42,7 @@ export function runDescriptives(dataset: any[], variables: string[]) {
   return {
     title: 'Statistik Deskriptif',
     type: 'table' as const,
+    missingCount: totalMissing,
     content: {
       columns: ['Variabel', 'N', 'Rata_rata', 'SD', 'Varians', 'Skewness', 'Kurtosis', 'Min', 'Max'],
       data: results
@@ -36,15 +51,20 @@ export function runDescriptives(dataset: any[], variables: string[]) {
 }
 
 export function runPearsonCorrelation(dataset: any[], varX: string, varY: string) {
-  const dataX = [];
-  const dataY = [];
+  const dataX: number[] = [];
+  const dataY: number[] = [];
+  let missingCount = 0;
   
   for (let i = 0; i < dataset.length; i++) {
-    const x = Number(dataset[i][varX]);
-    const y = Number(dataset[i][varY]);
-    if (!isNaN(x) && !isNaN(y)) {
+    const xVal = dataset[i][varX];
+    const yVal = dataset[i][varY];
+    const x = Number(xVal);
+    const y = Number(yVal);
+    if (!isNaN(x) && xVal !== '' && xVal != null && !isNaN(y) && yVal !== '' && yVal != null) {
       dataX.push(x);
       dataY.push(y);
+    } else {
+      missingCount++;
     }
   }
 
@@ -57,9 +77,16 @@ export function runPearsonCorrelation(dataset: any[], varX: string, varY: string
   const t = r * Math.sqrt((n - 2) / (1 - r * r));
   const pValue = 2 * (1 - jStat.studentt.cdf(Math.abs(t), n - 2));
 
+  // Chart data for scatter plot
+  const chartData = dataX.map((x, i) => ({ x, y: dataY[i] }));
+
   return {
     title: `Korelasi Pearson: ${varX} & ${varY}`,
     type: 'table' as const,
+    missingCount,
+    chartType: 'scatter' as const,
+    chartData,
+    chartLabels: { x: varX, y: varY },
     content: {
       columns: ['Variabel X', 'Variabel Y', 'r', 'p-value', 'n'],
       data: [{
@@ -74,11 +101,19 @@ export function runPearsonCorrelation(dataset: any[], varX: string, varY: string
 }
 
 export function runTTest(dataset: any[], varNumeric: string, varGroup: string) {
+  let missingCount = 0;
   const groups: Record<string, number[]> = {};
+  
   for (const row of dataset) {
-    const v = Number(row[varNumeric]);
-    const g = String(row[varGroup]);
-    if (!isNaN(v) && g && g !== 'undefined') {
+    const vVal = row[varNumeric];
+    const gVal = row[varGroup];
+    
+    const v = Number(vVal);
+    const g = gVal != null ? String(gVal).trim() : '';
+    
+    if (isNaN(v) || vVal === '' || vVal == null || g === '' || g === 'undefined' || g === 'null') {
+      missingCount++;
+    } else {
       if (!groups[g]) groups[g] = [];
       groups[g].push(v);
     }
@@ -106,9 +141,18 @@ export function runTTest(dataset: any[], varNumeric: string, varGroup: string) {
   const df = n1 + n2 - 2;
   const pValue = 2 * (1 - jStat.studentt.cdf(Math.abs(t), df));
 
+  const chartData = [
+    { name: keys[0], value: m1 },
+    { name: keys[1], value: m2 }
+  ];
+
   return {
     title: `Independent T-Test: ${varNumeric} by ${varGroup}`,
     type: 'table' as const,
+    missingCount,
+    chartType: 'bar' as const,
+    chartData,
+    chartLabels: { x: varGroup, y: `Rata-rata ${varNumeric}` },
     content: {
       columns: ['Kelompok 1', 'Kelompok 2', 'Mean 1', 'Mean 2', 't', 'df', 'p-value'],
       data: [{
@@ -125,11 +169,19 @@ export function runTTest(dataset: any[], varNumeric: string, varGroup: string) {
 }
 
 export function runANOVA(dataset: any[], varNumeric: string, varGroup: string) {
+  let missingCount = 0;
   const groups: Record<string, number[]> = {};
+  
   for (const row of dataset) {
-    const v = Number(row[varNumeric]);
-    const g = String(row[varGroup]);
-    if (!isNaN(v) && g && g !== 'undefined') {
+    const vVal = row[varNumeric];
+    const gVal = row[varGroup];
+    
+    const v = Number(vVal);
+    const g = gVal != null ? String(gVal).trim() : '';
+    
+    if (isNaN(v) || vVal === '' || vVal == null || g === '' || g === 'undefined' || g === 'null') {
+      missingCount++;
+    } else {
       if (!groups[g]) groups[g] = [];
       groups[g].push(v);
     }
@@ -144,7 +196,7 @@ export function runANOVA(dataset: any[], varNumeric: string, varGroup: string) {
   const pValue = jStat.anovaftest(...arrays);
   
   // Hitung F stat manual untuk menampilkannya
-  let totalData = [];
+  const totalData: number[] = [];
   arrays.forEach(arr => totalData.push(...arr));
   const grandMean = ss.mean(totalData);
   const N = totalData.length;
@@ -167,9 +219,18 @@ export function runANOVA(dataset: any[], varNumeric: string, varGroup: string) {
   const msw = ssw / dfw;
   const F = msb / msw;
 
+  const chartData = keys.map(groupKey => ({
+    name: groupKey,
+    value: ss.mean(groups[groupKey])
+  }));
+
   return {
     title: `One-Way ANOVA: ${varNumeric} by ${varGroup}`,
     type: 'table' as const,
+    missingCount,
+    chartType: 'bar' as const,
+    chartData,
+    chartLabels: { x: varGroup, y: `Rata-rata ${varNumeric}` },
     content: {
       columns: ['Source', 'SS', 'df', 'MS', 'F', 'p-value'],
       data: [
@@ -182,11 +243,18 @@ export function runANOVA(dataset: any[], varNumeric: string, varGroup: string) {
 }
 
 export function runLinearRegression(dataset: any[], varY: string, varX: string) {
-  const data = [];
+  const data: [number, number][] = [];
+  let missingCount = 0;
+  
   for (const row of dataset) {
-    const x = Number(row[varX]);
-    const y = Number(row[varY]);
-    if (!isNaN(x) && !isNaN(y)) {
+    const xVal = row[varX];
+    const yVal = row[varY];
+    const x = Number(xVal);
+    const y = Number(yVal);
+    
+    if (isNaN(x) || xVal === '' || xVal == null || isNaN(y) || yVal === '' || yVal == null) {
+      missingCount++;
+    } else {
       data.push([x, y]);
     }
   }
@@ -202,9 +270,22 @@ export function runLinearRegression(dataset: any[], varY: string, varX: string) 
   const t = r * Math.sqrt((n - 2) / (1 - r2));
   const pValue = 2 * (1 - jStat.studentt.cdf(Math.abs(t), n - 2));
 
+  // Compute regression line
+  const regressionLine = ss.linearRegressionLine(result);
+  const sortedData = [...data].sort((a, b) => a[0] - b[0]);
+  const chartData = sortedData.map(([x, y]) => ({
+    x,
+    y,
+    lineY: regressionLine(x)
+  }));
+
   return {
     title: `Regresi Linier Sederhana: ${varY} ~ ${varX}`,
     type: 'table' as const,
+    missingCount,
+    chartType: 'regression' as const,
+    chartData,
+    chartLabels: { x: varX, y: varY },
     content: {
       columns: ['Variabel', 'Koefisien', 'R-Squared', 't', 'p-value', 'n'],
       data: [
@@ -218,8 +299,16 @@ export function runLinearRegression(dataset: any[], varY: string, varX: string) 
 export function runReliability(dataset: any[], variables: string[]) {
   if (variables.length < 2) throw new Error("Cronbach Alpha butuh setidaknya 2 variabel.");
   
+  let missingCount = 0;
   const validRows = dataset.filter(row => {
-    return variables.every(v => !isNaN(Number(row[v])));
+    const isValid = variables.every(v => {
+      const val = row[v];
+      return !isNaN(Number(val)) && val !== '' && val != null;
+    });
+    if (!isValid) {
+      missingCount++;
+    }
+    return isValid;
   });
 
   if (validRows.length < 2) throw new Error("Data valid tidak cukup.");
@@ -245,6 +334,7 @@ export function runReliability(dataset: any[], variables: string[]) {
   return {
     title: `Uji Reliabilitas (Cronbach Alpha)`,
     type: 'table' as const,
+    missingCount,
     content: {
       columns: ['N Items', 'N Kasus', 'Cronbach Alpha'],
       data: [{

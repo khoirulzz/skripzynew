@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useAppStore, Variable } from '@/lib/store';
 import { runTTest, runANOVA, runLinearRegression, runReliability } from '@/lib/stats-engine';
-import { X, Activity, ChevronRight } from 'lucide-react';
+import { X, Activity, ChevronRight, Info } from 'lucide-react';
 
 type AnalysisType = 'ttest' | 'anova' | 'regression' | 'reliability' | null;
 
@@ -151,6 +151,24 @@ export function AnalysisModal({ type, onClose }: AnalysisModalProps) {
                   </label>
                 ))}
                 {numericVars.length === 0 && <p className="text-sm text-slate-500 p-2 text-center">Tidak ada variabel numerik.</p>}
+              </div>
+            </div>
+          )}
+
+          {type && (
+            <div className="flex gap-2.5 bg-blue-50 border border-blue-200 text-blue-800 p-3.5 rounded-xl text-xs sm:text-sm">
+              <Info className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-semibold block mb-0.5 text-blue-900">Catatan Asumsi Statistik:</span>
+                {(type === 'ttest' || type === 'anova') && (
+                  <span>Pastikan data Anda terdistribusi normal dan memiliki varians yang homogen.</span>
+                )}
+                {type === 'regression' && (
+                  <span>Pastikan hubungan variabel bersifat linier dan data bebas dari outlier ekstrem.</span>
+                )}
+                {type === 'reliability' && (
+                  <span>Pastikan semua item yang dipilih mengukur konstruk yang sama (unidimensional).</span>
+                )}
               </div>
             </div>
           )}

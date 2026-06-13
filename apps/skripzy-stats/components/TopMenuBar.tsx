@@ -9,6 +9,7 @@ import { Tooltip } from '@/components/Tooltip';
 import { ChevronDown, FileSpreadsheet, Activity, LogOut, Info } from 'lucide-react';
 import { getCookie } from '@/lib/api';
 import { AnalysisModal } from './AnalysisModal';
+import { ComputeVariableModal } from './ComputeVariableModal';
 
 export function TopMenuBar() {
   const { dataset, variables, setDataset, setVariables, addOutput } = useAppStore();
@@ -16,6 +17,25 @@ export function TopMenuBar() {
   
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [modalType, setModalType] = useState<'ttest' | 'anova' | 'regression' | 'reliability' | null>(null);
+  const [showComputeModal, setShowComputeModal] = useState(false);
+
+  const handleExportCSV = () => {
+    if (dataset.length === 0) {
+      alert("Tidak ada data untuk diekspor");
+      return;
+    }
+    const csv = Papa.unparse(dataset);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `dataset_skripzy_${Date.now()}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setActiveMenu(null);
+  };
 
   const handleImportCSV = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -142,6 +162,19 @@ export function TopMenuBar() {
               >
                 Impor Data (CSV/XLSX)
               </button>
+              <button 
+                className="w-full text-left px-4 py-2 text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 text-sm font-medium transition-colors flex items-center justify-between"
+                onClick={handleExportCSV}
+              >
+                Ekspor Dataset (CSV)
+              </button>
+              <div className="border-t border-slate-100 my-1"></div>
+              <button 
+                className="w-full text-left px-4 py-2 text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 text-sm font-medium transition-colors flex items-center justify-between"
+                onClick={() => { setActiveMenu(null); setShowComputeModal(true); }}
+              >
+                Compute Variable (Hitung)
+              </button>
               {/* hidden upload input */}
               <input 
                 type="file" 
@@ -186,12 +219,20 @@ export function TopMenuBar() {
               <div className="px-3 pt-3 pb-2 mb-2 mt-2 border-y border-slate-100">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Lanjutan</span>
               </div>
-              <Tooltip content="Uji T (Independent, Paired) dan ANOVA untuk membandingkan rata-rata." position="right">
+              <Tooltip content="Uji T Independen untuk membandingkan rata-rata 2 kelompok." position="right">
                 <button 
                   className="w-full text-left px-4 py-2 text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 text-sm font-medium transition-colors flex items-center justify-between group"
                   onClick={() => { setActiveMenu(null); setModalType('ttest'); }}
                 >
-                  Bandingkan Rata-rata (T-Test)
+                  Uji T Independen
+                </button>
+              </Tooltip>
+              <Tooltip content="One-Way ANOVA untuk membandingkan rata-rata lebih dari 2 kelompok." position="right">
+                <button 
+                  className="w-full text-left px-4 py-2 text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 text-sm font-medium transition-colors flex items-center justify-between group"
+                  onClick={() => { setActiveMenu(null); setModalType('anova'); }}
+                >
+                  One-Way ANOVA
                 </button>
               </Tooltip>
               <Tooltip content="Analisis Regresi Linier untuk memprediksi nilai variabel dependen." position="right">
@@ -227,6 +268,7 @@ export function TopMenuBar() {
 
       </div>
       <AnalysisModal type={modalType} onClose={() => setModalType(null)} />
+      {showComputeModal && <ComputeVariableModal onClose={() => setShowComputeModal(false)} />}
     </div>
   );
 }

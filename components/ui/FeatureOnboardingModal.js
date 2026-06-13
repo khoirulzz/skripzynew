@@ -17,7 +17,6 @@ export default function FeatureOnboardingModal({ featureId }) {
 
   useEffect(() => {
     if (showModal && hasSteps) {
-      // Delay slightly for smooth entrance animation
       const timer = setTimeout(() => setIsVisible(true), 50);
       return () => clearTimeout(timer);
     } else {
@@ -31,7 +30,7 @@ export default function FeatureOnboardingModal({ featureId }) {
     setIsVisible(false);
     setTimeout(() => {
       dismissModal();
-    }, 300); // Wait for exit animation
+    }, 300);
   };
 
   const handleNext = () => {
@@ -84,13 +83,13 @@ export default function FeatureOnboardingModal({ featureId }) {
       <div 
         className={`relative overflow-hidden max-w-[460px] w-full transition-all duration-400 transform ${isVisible ? 'translate-y-0 scale-100' : 'translate-y-8 scale-95'}`}
         style={{ 
-          background: "linear-gradient(135deg, color-mix(in srgb, var(--surface, #ffffff) 95%, transparent), color-mix(in srgb, var(--background, #f8fafc) 85%, transparent))",
+          background: "linear-gradient(135deg, color-mix(in srgb, #ffffff 95%, transparent), color-mix(in srgb, #f8fafc 85%, transparent))",
           backdropFilter: "blur(20px)",
           WebkitBackdropFilter: "blur(20px)",
-          border: "1px solid color-mix(in srgb, var(--primary, #4f46e5) 20%, transparent)",
+          border: "1px solid color-mix(in srgb, #4f46e5 20%, transparent)",
           borderRadius: "24px",
           boxShadow: "0 28px 60px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.1)",
-          color: "var(--text-main, #0f172a)",
+          color: "#0f172a",
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -112,9 +111,9 @@ export default function FeatureOnboardingModal({ featureId }) {
               width: "64px",
               height: "64px",
               borderRadius: "50%",
-              backgroundColor: "color-mix(in srgb, var(--primary, #4f46e5) 8%, transparent)",
-              color: "var(--primary, #4f46e5)",
-              boxShadow: "0 8px 24px color-mix(in srgb, var(--primary, #4f46e5) 12%, transparent)",
+              backgroundColor: "color-mix(in srgb, #4f46e5 8%, transparent)",
+              color: "#4f46e5",
+              boxShadow: "0 8px 24px color-mix(in srgb, #4f46e5 12%, transparent)",
             }}
           >
             {currentData.icon}
@@ -125,7 +124,7 @@ export default function FeatureOnboardingModal({ featureId }) {
             fontSize: "1.35rem",
             fontWeight: 800,
             letterSpacing: "-0.01em",
-            color: "var(--text-main, #0f172a)",
+            color: "#0f172a",
             marginBottom: "0.75rem"
           }}>
             {currentData.title}
@@ -134,7 +133,7 @@ export default function FeatureOnboardingModal({ featureId }) {
           <p style={{
             margin: 0,
             fontSize: "0.86rem",
-            color: "var(--text-muted, #64748b)",
+            color: "#64748b",
             lineHeight: 1.6,
           }}>
             {currentData.description}
@@ -149,7 +148,7 @@ export default function FeatureOnboardingModal({ featureId }) {
               <div 
                 key={idx} 
                 className={`h-2 rounded-full transition-all duration-300 ${idx === currentStep ? 'w-6' : 'w-2 bg-slate-200'}`}
-                style={idx === currentStep ? { backgroundColor: 'var(--primary, #4f46e5)' } : {}}
+                style={idx === currentStep ? { backgroundColor: '#4f46e5' } : {}}
               />
             ))}
           </div>

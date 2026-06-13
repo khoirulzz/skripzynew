@@ -6,14 +6,16 @@ import * as XLSX from 'xlsx';
 import { useAppStore, Variable } from '@/lib/store';
 import { runDescriptives, runPearsonCorrelation } from '@/lib/stats-engine';
 import { Tooltip } from '@/components/Tooltip';
-import { ChevronDown, FileSpreadsheet, Activity, LogOut } from 'lucide-react';
+import { ChevronDown, FileSpreadsheet, Activity, LogOut, Info } from 'lucide-react';
 import { getCookie } from '@/lib/api';
+import { AnalysisModal } from './AnalysisModal';
 
 export function TopMenuBar() {
   const { dataset, variables, setDataset, setVariables, addOutput } = useAppStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  const [modalType, setModalType] = useState<'ttest' | 'anova' | 'regression' | 'reliability' | null>(null);
 
   const handleImportCSV = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -129,9 +131,13 @@ export function TopMenuBar() {
             <ChevronDown className="w-3 h-3 text-slate-400" />
           </button>
           {activeMenu === 'file' && (
-            <div className="absolute top-full left-0 sm:left-auto sm:right-0 mt-2 w-56 bg-white border border-slate-200 shadow-xl py-1 rounded-xl z-50">
+            <div className="absolute top-full left-0 sm:left-auto sm:right-0 mt-2 w-72 bg-white border border-slate-200 shadow-xl py-2 rounded-xl z-50">
+              <div className="px-4 pb-2 mb-2 border-b border-slate-100">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Format Data</span>
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">Pastikan baris pertama berisi <b>Nama Variabel</b> (contoh: Gender, Skor) dan baris selanjutnya adalah data murni. Kami akan otomatis mendeteksi tipe data.</p>
+              </div>
               <button 
-                className="w-full text-left px-4 py-2.5 text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 text-sm font-medium transition-colors"
+                className="w-full text-left px-4 py-2 text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 text-sm font-medium transition-colors flex items-center justify-between"
                 onClick={() => { fileInputRef.current?.click(); }}
               >
                 Impor Data (CSV/XLSX)
@@ -178,20 +184,29 @@ export function TopMenuBar() {
                 </button>
               </Tooltip>
               <div className="px-3 pt-3 pb-2 mb-2 mt-2 border-y border-slate-100">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Lanjutan (Segera Hadir)</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Lanjutan</span>
               </div>
-              <Tooltip content="Akan segera hadir. Uji T (Independent, Paired) dan ANOVA." position="right">
-                <button className="w-full text-left px-4 py-2 text-slate-400 hover:bg-slate-50 text-sm font-medium cursor-not-allowed transition-colors">
+              <Tooltip content="Uji T (Independent, Paired) dan ANOVA untuk membandingkan rata-rata." position="right">
+                <button 
+                  className="w-full text-left px-4 py-2 text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 text-sm font-medium transition-colors flex items-center justify-between group"
+                  onClick={() => { setActiveMenu(null); setModalType('ttest'); }}
+                >
                   Bandingkan Rata-rata (T-Test)
                 </button>
               </Tooltip>
-              <Tooltip content="Akan segera hadir. Regresi Linier Sederhana dan Berganda." position="right">
-                <button className="w-full text-left px-4 py-2 text-slate-400 hover:bg-slate-50 text-sm font-medium cursor-not-allowed transition-colors">
+              <Tooltip content="Analisis Regresi Linier untuk memprediksi nilai variabel dependen." position="right">
+                <button 
+                  className="w-full text-left px-4 py-2 text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 text-sm font-medium transition-colors flex items-center justify-between group"
+                  onClick={() => { setActiveMenu(null); setModalType('regression'); }}
+                >
                   Regresi Linier
                 </button>
               </Tooltip>
-              <Tooltip content="Akan segera hadir. Uji Validitas (Item-Total) dan Reliabilitas (Cronbach Alpha)." position="right">
-                <button className="w-full text-left px-4 py-2 text-slate-400 hover:bg-slate-50 text-sm font-medium cursor-not-allowed transition-colors">
+              <Tooltip content="Uji Validitas dan Reliabilitas (Cronbach Alpha)." position="right">
+                <button 
+                  className="w-full text-left px-4 py-2 text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 text-sm font-medium transition-colors flex items-center justify-between group"
+                  onClick={() => { setActiveMenu(null); setModalType('reliability'); }}
+                >
                   Validitas & Reliabilitas
                 </button>
               </Tooltip>
@@ -211,6 +226,7 @@ export function TopMenuBar() {
         </button>
 
       </div>
+      <AnalysisModal type={modalType} onClose={() => setModalType(null)} />
     </div>
   );
 }

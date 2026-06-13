@@ -2,12 +2,55 @@
 
 import React, { useState } from 'react';
 import { useAppStore } from '@/lib/store';
-import { Trash2, Sparkles, Loader2, Info } from 'lucide-react';
+import { Trash2, Sparkles, Loader2, Info, Copy, Check, FileText } from 'lucide-react';
 import { interpretWithAI } from '@/lib/ai-assistant';
+import { exportToDocx } from '../../lib/docxExport';
 
 export function OutputViewer() {
   const { outputs, clearOutputs, addOutput } = useAppStore();
   const [loadingAiId, setLoadingAiId] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const handleCopyTable = (output: any) => {
+    let tsv = output.content.columns.join('\t') + '\n';
+    output.content.data.forEach((row: any) => {
+      const rowData = output.content.columns.map((col: string) => {
+        const val = row[col];
+        return typeof val === 'number' && !Number.isInteger(val) ? val.toFixed(4) : val;
+      });
+      tsv += rowData.join('\t') + '\n';
+    });
+    navigator.clipboard.writeText(tsv);
+    setCopiedId(output.id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const handleExportWord = async (output: any) => {
+    // Convert text output to simple HTML
+    const lines = output.content.split('\n');
+    let html = '';
+    lines.forEach((line: string) => {
+      if (line.includes('**')) {
+        const parts = line.split('**');
+        let formatted = '';
+        parts.forEach((part, j) => {
+          if (j % 2 === 1) formatted += `<strong>${part}</strong>`;
+          else formatted += part;
+        });
+        html += `<p>${formatted}</p>`;
+      } else {
+        html += `<p>${line}</p>`;
+      }
+    });
+
+    try {
+      await exportToDocx(output.title, [
+        { title: output.title, html: html }
+      ]);
+    } catch (e: any) {
+      alert("Gagal mengekspor dokumen: " + e.message);
+    }
+  };
 
   const handleInterpretAI = async (output: any) => {
     if (!confirm("Fitur ini akan menggunakan 3 kredit Anda. Lanjutkan?")) return;
@@ -71,16 +114,32 @@ export function OutputViewer() {
               </h3>
               
               {output.type === 'table' && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleCopyTable(output)}
+                    className="shrink-0 flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold px-3 py-2 rounded-xl transition-all shadow-sm active:scale-95"
+                  >
+                    {copiedId === output.id ? <><Check className="w-4 h-4 text-emerald-600" /> Tersalin</> : <><Copy className="w-4 h-4" /> Salin Tabel</>}
+                  </button>
+                  <button
+                    onClick={() => handleInterpretAI(output)}
+                    disabled={loadingAiId === output.id}
+                    className="shrink-0 flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all shadow-sm hover:shadow active:scale-95 disabled:opacity-70 disabled:active:scale-100"
+                  >
+                    {loadingAiId === output.id ? (
+                      <><Loader2 className="w-4 h-4 animate-spin" /> Sedang Menganalisis...</>
+                    ) : (
+                      <><Sparkles className="w-4 h-4" /> Interpretasikan AI (3 Kredit)</>
+                    )}
+                  </button>
+                </div>
+              )}
+              {output.type === 'text' && (
                 <button
-                  onClick={() => handleInterpretAI(output)}
-                  disabled={loadingAiId === output.id}
-                  className="shrink-0 flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all shadow-sm hover:shadow active:scale-95 disabled:opacity-70 disabled:active:scale-100"
+                  onClick={() => handleExportWord(output)}
+                  className="shrink-0 flex items-center justify-center gap-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold px-3 py-2 rounded-xl transition-all shadow-sm active:scale-95"
                 >
-                  {loadingAiId === output.id ? (
-                    <><Loader2 className="w-4 h-4 animate-spin" /> Sedang Menganalisis...</>
-                  ) : (
-                    <><Sparkles className="w-4 h-4" /> Interpretasikan AI (3 Kredit)</>
-                  )}
+                  <FileText className="w-4 h-4" /> Ekspor ke Word
                 </button>
               )}
             </div>

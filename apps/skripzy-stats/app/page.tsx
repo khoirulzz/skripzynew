@@ -10,6 +10,8 @@ import { useAppStore } from '@/lib/store';
 import { Database, ListTree, PieChart, Loader2 } from 'lucide-react';
 import { getCookie } from '@/lib/api';
 
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
+
 export default function App() {
   const { activeTab, setActiveTab } = useAppStore();
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
@@ -29,7 +31,7 @@ export default function App() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="flex flex-col items-center gap-4">
-          <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
+          <LoadingSpinner sizePixel={32} className="text-indigo-600" />
           <p className="text-slate-500 font-medium animate-pulse">Memverifikasi akun...</p>
         </div>
       </div>

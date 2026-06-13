@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
 export type VariableType = 'Numeric' | 'String';
 export type MeasureLevel = 'Nominal' | 'Ordinal' | 'Scale';
@@ -41,30 +42,38 @@ interface AppState {
   advanceTutorial: () => void;
 }
 
-export const useAppStore = create<AppState>((set) => ({
-  dataset: [],
-  variables: [],
-  outputs: [],
-  activeTab: 'data',
-  showTutorial: true,
-  tutorialStep: 0,
+export const useAppStore = create<AppState>()(
+  persist(
+    (set) => ({
+      dataset: [],
+      variables: [],
+      outputs: [],
+      activeTab: 'data',
+      showTutorial: true,
+      tutorialStep: 0,
 
-  setDataset: (data) => set({ dataset: data }),
-  setVariables: (vars) => set({ variables: vars }),
-  addOutput: (output) => set((state) => ({ outputs: [...state.outputs, output], activeTab: 'output' })),
-  clearOutputs: () => set({ outputs: [] }),
-  setActiveTab: (tab) => set({ activeTab: tab }),
-  updateDataCell: (rowIndex, columnId, value) => set((state) => {
-    const newData = [...state.dataset];
-    newData[rowIndex] = { ...newData[rowIndex], [columnId]: value };
-    return { dataset: newData };
-  }),
-  updateVariable: (index, field, value) => set((state) => {
-    const newVars = [...state.variables];
-    newVars[index] = { ...newVars[index], [field]: value };
-    return { variables: newVars };
-  }),
-  setShowTutorial: (show) => set({ showTutorial: show }),
-  setTutorialStep: (step) => set({ tutorialStep: step }),
-  advanceTutorial: () => set((state) => ({ tutorialStep: state.tutorialStep + 1 }))
-}));
+      setDataset: (data) => set({ dataset: data }),
+      setVariables: (vars) => set({ variables: vars }),
+      addOutput: (output) => set((state) => ({ outputs: [...state.outputs, output], activeTab: 'output' })),
+      clearOutputs: () => set({ outputs: [] }),
+      setActiveTab: (tab) => set({ activeTab: tab }),
+      updateDataCell: (rowIndex, columnId, value) => set((state) => {
+        const newData = [...state.dataset];
+        newData[rowIndex] = { ...newData[rowIndex], [columnId]: value };
+        return { dataset: newData };
+      }),
+      updateVariable: (index, field, value) => set((state) => {
+        const newVars = [...state.variables];
+        newVars[index] = { ...newVars[index], [field]: value };
+        return { variables: newVars };
+      }),
+      setShowTutorial: (show) => set({ showTutorial: show }),
+      setTutorialStep: (step) => set({ tutorialStep: step }),
+      advanceTutorial: () => set((state) => ({ tutorialStep: state.tutorialStep + 1 }))
+    }),
+    {
+      name: 'statszy-storage', // name of item in the storage (must be unique)
+      partialize: (state) => ({ showTutorial: state.showTutorial }), // only persist showTutorial
+    }
+  )
+);

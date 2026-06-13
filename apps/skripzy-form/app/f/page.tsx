@@ -3,7 +3,8 @@
 import React, { useEffect, useState, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { fetchPublicFormBySlug, submitPublicFormResponse } from '@/lib/api';
-import { CheckCircle2, Loader2, AlertCircle } from 'lucide-react';
+import { CheckCircle2, AlertCircle } from 'lucide-react';
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
 
 const THEME_COLORS = [
   { id: 'indigo', hex: 'bg-indigo-600', text: 'text-indigo-600', border: 'border-indigo-600', hover: 'hover:bg-indigo-50', pale: 'bg-indigo-50/50' },
@@ -46,7 +47,7 @@ function PublicFormContent() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="flex flex-col items-center gap-4">
-          <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
+          <LoadingSpinner sizePixel={32} className="text-indigo-600" />
           <p className="text-slate-500 font-medium animate-pulse">Memuat kuesioner...</p>
         </div>
       </div>
@@ -234,7 +235,7 @@ function PublicFormContent() {
                className={`px-8 py-3 ${theme.hex} text-white font-bold rounded-xl hover:opacity-90 transition shadow-sm disabled:opacity-50 flex items-center gap-2`}
              >
                {submitting ? (
-                 <><Loader2 className="w-5 h-5 animate-spin" /> Mengirim...</>
+                 <><LoadingSpinner sizePixel={20} className="text-white mr-2" /> Mengirim...</>
                ) : (
                  'Kirim Tanggapan'
                )}
@@ -251,7 +252,7 @@ export default function PublicFormPage() {
     <Suspense fallback={
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="flex flex-col items-center gap-4">
-          <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
+          <LoadingSpinner sizePixel={32} className="text-indigo-600" />
           <p className="text-slate-500 font-medium animate-pulse">Memuat kuesioner...</p>
         </div>
       </div>

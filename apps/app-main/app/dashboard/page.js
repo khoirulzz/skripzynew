@@ -82,7 +82,7 @@ const QUICK_TOOLS = [
     pro: false,
     badge: null,
   },
-    {
+  {
     href: "/dashboard/tools/notebook",
     slug: "notebook-referensi",
     icon: "bookMarked",
@@ -149,7 +149,7 @@ const QUICK_TOOLS = [
     iconColor: "#F59E0B",
     iconBg: "rgba(245, 158, 11, 0.1)",
     title: "Data Analysis",
-    desc: "Olah data kuesioner, wawancara, dan observasi",
+    desc: "Olah data kuantitatif untuk penelitianmu",
     credit: 0,
     pro: false,
     badge: "NEW",
@@ -474,7 +474,7 @@ export default function DashboardPage() {
         // 1. Fetch workspaces
         const workspacesRes = await d1Request("workspaces");
         const workspaces = workspacesRes.data || [];
-        
+
         const skripsiProjects = workspaces.filter(w => w.type === "skripsi");
         const jurnalProjects = workspaces.filter(w => w.type === "jurnal");
 
@@ -576,9 +576,9 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
-        <div style={{ 
-          display: "grid", 
-          gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(300px, 1fr))", 
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(300px, 1fr))",
           gap: isMobile ? "0.85rem" : "1.5rem",
           margin: 0
         }}>
@@ -625,10 +625,10 @@ export default function DashboardPage() {
                 )}
               </div>
               <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", margin: "0 0 1.5rem 0" }}>
-                {latestSkripsi 
-                  ? (overallProgress >= 100 
-                      ? "Luar biasa! Draf skripsimu sudah lengkap." 
-                      : "Terus konsisten, sedikit lagi selesai!") 
+                {latestSkripsi
+                  ? (overallProgress >= 100
+                    ? "Luar biasa! Draf skripsimu sudah lengkap."
+                    : "Terus konsisten, sedikit lagi selesai!")
                   : "Mulai rancang skripsimu hari ini!"
                 }
               </p>
@@ -716,7 +716,7 @@ export default function DashboardPage() {
             <div>
               <h3 style={{ fontSize: "1.2rem", fontWeight: 800, margin: "0 0 1.25rem 0", color: "var(--text-main)" }}>Ringkasan</h3>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "0.85rem" }}>
-                
+
                 {/* 1. Projek Skripsi */}
                 <div style={{ padding: "0.85rem", border: "1px solid var(--border)", borderRadius: "16px", display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "var(--surface-hover)" }}>
                   <div>
@@ -813,9 +813,9 @@ export default function DashboardPage() {
           }}>
             <span style={{ color: "var(--success)" }}>✓</span> Tersedia untuk Semua Plan
           </p>
-          <div style={{ 
-            display: "grid", 
-            gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(240px, 1fr))", 
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(240px, 1fr))",
             gap: isMobile ? "0.85rem" : "1.25rem",
             margin: 0
           }}>
@@ -830,9 +830,9 @@ export default function DashboardPage() {
           <p style={{ fontSize: isMobile ? "0.65rem" : "0.75rem", fontWeight: 700, color: "var(--text-muted)", marginBottom: "1rem", textTransform: "uppercase", letterSpacing: "0.08em" }}>
             ★ Khusus Pro & Plus
           </p>
-          <div style={{ 
-            display: "grid", 
-            gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(240px, 1fr))", 
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(240px, 1fr))",
             gap: isMobile ? "0.85rem" : "1.25rem",
             margin: 0
           }}>

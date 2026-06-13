@@ -59,7 +59,6 @@ export default function FeatureOnboardingModal({ featureId }) {
 
   const modalContent = (
     <div 
-      className={`transition-all duration-300 ${isVisible ? 'opacity-100' : 'opacity-0'}`}
       style={{ 
         position: 'fixed',
         top: 0,
@@ -76,13 +75,20 @@ export default function FeatureOnboardingModal({ featureId }) {
         backgroundColor: 'rgba(15, 23, 42, 0.4)', 
         backdropFilter: 'blur(16px)', 
         WebkitBackdropFilter: 'blur(16px)',
-        pointerEvents: 'auto'
+        pointerEvents: 'auto',
+        opacity: isVisible ? 1 : 0,
+        transition: 'opacity 300ms ease-in-out'
       }}
       onClick={handleClose}
     >
       <div 
-        className={`relative overflow-hidden max-w-[460px] w-full transition-all duration-400 transform ${isVisible ? 'translate-y-0 scale-100' : 'translate-y-8 scale-95'}`}
         style={{ 
+          position: 'relative',
+          overflow: 'hidden',
+          maxWidth: '460px',
+          width: '100%',
+          transition: 'all 400ms cubic-bezier(0.16, 1, 0.3, 1)',
+          transform: isVisible ? 'translateY(0) scale(1)' : 'translateY(2rem) scale(0.95)',
           background: "linear-gradient(135deg, color-mix(in srgb, #ffffff 95%, transparent), color-mix(in srgb, #f8fafc 85%, transparent))",
           backdropFilter: "blur(20px)",
           WebkitBackdropFilter: "blur(20px)",
@@ -94,20 +100,44 @@ export default function FeatureOnboardingModal({ featureId }) {
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header / Close Button */}
-        <div className="flex justify-end p-4 absolute top-0 right-0 w-full z-10">
+        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '1rem', position: 'absolute', top: 0, right: 0, width: '100%', zIndex: 10, boxSizing: 'border-box' }}>
           <button 
             onClick={handleClose}
-            className="p-2 bg-slate-100/50 hover:bg-slate-200/80 rounded-full transition-colors text-slate-500"
+            style={{ 
+              padding: '0.5rem', 
+              backgroundColor: 'rgba(241, 245, 249, 0.5)', 
+              borderRadius: '9999px', 
+              color: '#64748b', 
+              border: 'none', 
+              cursor: 'pointer', 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              transition: 'background-color 0.2s'
+            }}
+            onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(226, 232, 240, 0.8)'}
+            onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'rgba(241, 245, 249, 0.5)'}
           >
             <X size={18} />
           </button>
         </div>
 
         {/* Content Area */}
-        <div className={`p-8 pt-12 pb-6 flex flex-col items-center text-center transition-opacity duration-200 ${isAnimating ? 'opacity-0' : 'opacity-100'}`}>
+        <div style={{ 
+          padding: '3rem 2rem 1.5rem', 
+          display: 'flex', 
+          flexDirection: 'column', 
+          alignItems: 'center', 
+          textAlign: 'center', 
+          transition: 'opacity 200ms ease-in-out', 
+          opacity: isAnimating ? 0 : 1 
+        }}>
           <div 
-            className="mb-6 flex items-center justify-center"
             style={{
+              marginBottom: '1.5rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
               width: "64px",
               height: "64px",
               borderRadius: "50%",
@@ -141,14 +171,19 @@ export default function FeatureOnboardingModal({ featureId }) {
         </div>
 
         {/* Footer Navigation */}
-        <div className="px-8 pb-8 pt-2">
+        <div style={{ padding: '0.5rem 2rem 2rem' }}>
           {/* Progress Dots */}
-          <div className="flex justify-center gap-2 mb-6">
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', marginBottom: '1.5rem' }}>
             {steps.map((_, idx) => (
               <div 
                 key={idx} 
-                className={`h-2 rounded-full transition-all duration-300 ${idx === currentStep ? 'w-6' : 'w-2 bg-slate-200'}`}
-                style={idx === currentStep ? { backgroundColor: '#4f46e5' } : {}}
+                style={{
+                  height: '8px',
+                  borderRadius: '9999px',
+                  transition: 'all 300ms ease-in-out',
+                  width: idx === currentStep ? '24px' : '8px',
+                  backgroundColor: idx === currentStep ? '#4f46e5' : '#e2e8f0'
+                }}
               />
             ))}
           </div>
@@ -164,19 +199,30 @@ export default function FeatureOnboardingModal({ featureId }) {
             {currentStep > 0 ? (
               <button 
                 onClick={handlePrev}
-                className="btn btn-outline"
                 style={{
                   flex: 1,
                   padding: "0.75rem 1.2rem",
-                  fontSize: "0.82rem",
+                  fontSize: "0.85rem",
+                  fontWeight: 600,
                   borderRadius: "12px",
-                  borderColor: "var(--border, #e2e8f0)",
-                  color: "var(--text-muted, #64748b)",
+                  border: "1px solid #e2e8f0",
+                  backgroundColor: "transparent",
+                  color: "#64748b",
                   transition: "all 0.2s",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  gap: "0.4rem"
+                  gap: "0.4rem",
+                  cursor: "pointer",
+                  fontFamily: "inherit"
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.backgroundColor = '#f8fafc';
+                  e.currentTarget.style.color = '#334155';
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                  e.currentTarget.style.color = '#64748b';
                 }}
               >
                 <ChevronLeft size={16} />
@@ -185,15 +231,26 @@ export default function FeatureOnboardingModal({ featureId }) {
             ) : (
               <button 
                 onClick={handleClose}
-                className="btn btn-outline"
                 style={{
                   flex: 1,
                   padding: "0.75rem 1.2rem",
-                  fontSize: "0.82rem",
+                  fontSize: "0.85rem",
+                  fontWeight: 600,
                   borderRadius: "12px",
-                  borderColor: "var(--border, #e2e8f0)",
-                  color: "var(--text-muted, #64748b)",
+                  border: "1px solid #e2e8f0",
+                  backgroundColor: "transparent",
+                  color: "#64748b",
                   transition: "all 0.2s",
+                  cursor: "pointer",
+                  fontFamily: "inherit"
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.backgroundColor = '#f8fafc';
+                  e.currentTarget.style.color = '#334155';
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                  e.currentTarget.style.color = '#64748b';
                 }}
               >
                 Skip Tour
@@ -202,18 +259,31 @@ export default function FeatureOnboardingModal({ featureId }) {
 
             <button 
               onClick={handleNext}
-              className="btn btn-primary"
               style={{
                 flex: 1,
                 padding: "0.75rem 1.2rem",
-                fontSize: "0.82rem",
+                fontSize: "0.85rem",
+                fontWeight: 600,
                 borderRadius: "12px",
+                border: "1px solid transparent",
+                backgroundColor: "#4f46e5",
+                color: "white",
                 boxShadow: "0 8px 20px rgba(79,70,229,0.25)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 gap: "0.4rem",
                 transition: "all 0.2s",
+                cursor: "pointer",
+                fontFamily: "inherit"
+              }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.backgroundColor = '#4338ca';
+                e.currentTarget.style.transform = 'translateY(-1px)';
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.backgroundColor = '#4f46e5';
+                e.currentTarget.style.transform = 'translateY(0)';
               }}
             >
               {currentStep === steps.length - 1 ? 'Mulai Sekarang' : 'Lanjut'}

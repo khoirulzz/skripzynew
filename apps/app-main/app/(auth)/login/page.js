@@ -56,7 +56,10 @@ export default function LoginPage() {
       let user;
 
       if (typeof window !== "undefined" && window.Capacitor && window.Capacitor.isNativePlatform()) {
-        const result = await FirebaseAuthentication.signInWithGoogle();
+        // useCredentialManager: false forces classic Google Sign-In popup
+        const result = await FirebaseAuthentication.signInWithGoogle({
+          useCredentialManager: false
+        });
         let idToken = result.credential?.idToken;
         
         if (!idToken) {

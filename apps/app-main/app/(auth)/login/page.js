@@ -56,9 +56,9 @@ export default function LoginPage() {
       let user;
 
       if (typeof window !== "undefined" && window.Capacitor && window.Capacitor.isNativePlatform()) {
-        // useCredentialManager: false forces classic Google Sign-In popup
         const result = await FirebaseAuthentication.signInWithGoogle({
-          useCredentialManager: false
+          useCredentialManager: false,
+          clientId: "614571470693-j2s54r02msvm90v770l6ff08l3ni2396.apps.googleusercontent.com"
         });
         let idToken = result.credential?.idToken;
         
@@ -101,9 +101,7 @@ export default function LoginPage() {
     } catch (err) {
       console.error(err);
       vibrateError();
-      if (err.code !== "auth/cancelled-popup-request" && err.message !== "User cancelled the login flow.") {
-        setError(`Gagal masuk dengan Google: ${err.message || err.code || "Terjadi kesalahan sistem."}`);
-      }
+      setError(`Gagal masuk: ${err.message || err.code || "Kesalahan sistem."}`);
     } finally {
       setLoading(false);
     }

@@ -97,7 +97,8 @@ export default function LoginPage() {
       }
 
       vibrateSuccess();
-      router.push("/dashboard");
+      // AuthGuard will detect the user and redirect to /dashboard automatically.
+      // Do NOT call router.push here — it conflicts with AuthGuard's own redirect.
     } catch (err) {
       console.error(err);
       vibrateError();

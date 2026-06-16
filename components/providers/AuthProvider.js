@@ -18,6 +18,7 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     let intervalId = null;
+    let initialLoadDone = false;
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
@@ -28,7 +29,9 @@ export function AuthProvider({ children }) {
       }
 
       if (firebaseUser) {
-        setLoading(true);
+        // Only show full-screen loader on the very first session check
+        // Subsequent auth state changes (e.g. token refresh) should NOT
+        // reset loading to true, which was causing dashboard reload loops.
         
         const fetchUserData = async () => {
           try {
@@ -41,7 +44,10 @@ export function AuthProvider({ children }) {
           } catch (err) {
             console.error("Failed to fetch user data:", err);
           } finally {
-            setLoading(false);
+            if (!initialLoadDone) {
+              initialLoadDone = true;
+              setLoading(false);
+            }
           }
         };
 
@@ -49,6 +55,9 @@ export function AuthProvider({ children }) {
         intervalId = setInterval(fetchUserData, 30000); // Poll every 30s for credit updates
       } else {
         setUserData(null);
+        if (!initialLoadDone) {
+          initialLoadDone = true;
+        }
         setLoading(false);
       }
     });

@@ -48,7 +48,7 @@ jobs:
         run: ./gradlew assembleRelease
 
       - name: Rename APK
-        run: cp android/app/build/outputs/apk/release/app-release.apk "Skripzy.Mobile.apk"
+        run: cp android/app/build/outputs/apk/release/app-release.apk "Skripzy-Mobile.apk"
 
       - name: Upload to GitHub Releases
         uses: softprops/action-gh-release@v2
@@ -60,5 +60,5 @@ jobs:
           body: |
             Versi terbaru aplikasi Android Skripzy.
             Install APK ini untuk pengalaman native di HP Android kamu.
-          files: "Skripzy.Mobile.apk"
+          files: "Skripzy-Mobile.apk"
           make_latest: true

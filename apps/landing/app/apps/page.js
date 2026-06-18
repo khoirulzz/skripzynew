@@ -42,7 +42,7 @@ const platforms = [
     desc: "Akses Skripzy langsung dari HP Android kamu dengan aplikasi native yang lebih ringan.",
     benefits: ["Notifikasi real-time", "Hemat data", "Akses cepat satu tap"],
     cta: "Download APK",
-    href: "/download/Skripzy-Mobile.apk",
+    href: "https://github.com/khoirulzz/skripzynew/releases/latest/download/Skripzy%20Mobile.apk",
     disabled: false,
   },
 ];

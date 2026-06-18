@@ -6,6 +6,8 @@ jobs:
   build:
     name: Build APK
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -45,8 +47,18 @@ jobs:
         working-directory: ./android
         run: ./gradlew assembleRelease
 
-      - name: Upload APK Artifact
-        uses: actions/upload-artifact@v4
+      - name: Rename APK
+        run: cp android/app/build/outputs/apk/release/app-release.apk "Skripzy Mobile.apk"
+
+      - name: Upload to GitHub Releases
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          name: skripzy-app-release
-          path: android/app/build/outputs/apk/release/app-release.apk
+          tag_name: android-latest
+          name: Skripzy Mobile - Latest Release
+          body: |
+            Versi terbaru aplikasi Android Skripzy.
+            Install APK ini untuk pengalaman native di HP Android kamu.
+          files: "Skripzy Mobile.apk"
+          make_latest: true
